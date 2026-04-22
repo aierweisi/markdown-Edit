@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3d5af1"/>
+      <stop offset="100%" stop-color="#2541c4"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="20.48" stdDeviation="30.72" flood-color="#1a2a8a" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Drop shadow layer -->
+  <rect x="41" y="56.36" width="430" height="430" rx="113" fill="#1a2a8a" opacity="0.25" filter="url(#shadow)"/>
+
+  <!-- Main background -->
+  <rect x="41" y="41" width="430" height="430" rx="113" fill="url(#bg)"/>
+
+  <!-- Inner shine -->
+  <rect x="41" y="41" width="430" height="215" rx="113" fill="url(#shine)"/>
+
+  <!-- "M" letter -->
+  <text
+    x="256"
+    y="286.72"
+    font-family="-apple-system, 'Segoe UI', Arial, sans-serif"
+    font-weight="800"
+    font-size="215.04"
+    fill="white"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    letter-spacing="-5.12"
+    opacity="1"
+  >M</text>
+
+  <!-- Down-arrow accent (↓ symbol) — small, bottom-right -->
+  <text
+    x="373.76"
+    y="404.48"
+    font-family="-apple-system, 'Segoe UI', Arial, sans-serif"
+    font-weight="700"
+    font-size="112.64"
+    fill="white"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    opacity="0.85"
+  >↓</text>
+
+  <!-- Subtle border -->
+  <rect x="41" y="41" width="430" height="430" rx="113" fill="none" stroke="white" stroke-width="6.144" stroke-opacity="0.15"/>
+</svg>

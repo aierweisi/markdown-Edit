@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(ELECTRON_MIRROR=\"https://npmmirror.com/mirrors/electron/\" ELECTRON_CUSTOM_DIR=\"{{ version }}\" npm install --save-dev electron@28 --registry https://registry.npmmirror.com)",
+      "Bash(npm config:*)",
+      "Bash(npm_config_ELECTRON_MIRROR=\"https://npmmirror.com/mirrors/electron/\" npm install --save-dev electron@28)",
+      "Bash(node node_modules/electron/install.js)",
+      "Bash(node:*)",
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri 'https://npmmirror.com/mirrors/electron/41.2.2/electron-v41.2.2-win32-x64.zip' -OutFile 'C:/Users/86176/Desktop/electron-win32-x64.zip' -UseBasicParsing\")",
+      "Bash(powershell:*)",
+      "Bash(node_modules/electron/dist/electron.exe .)",
+      "Bash(taskkill /F /IM electron.exe)",
+      "Bash(electron-builder --win --x64)",
+      "Read(//tmp/**)",
+      "Bash(node_modules/electron/dist/electron.exe make-ico.js)",
+      "Bash(start \"\" \"node_modules/electron/dist/electron.exe\" .)",
+      "Bash(exit 0)",
+      "Bash(node_modules/.bin/electron-builder --win)",
+      "Bash(\"node_modules/electron-builder/bin/electron-builder.js\" --win)",
+      "Bash(electron-builder --win)",
+      "Bash(npm run:*)"
+    ]
+  }
+}
