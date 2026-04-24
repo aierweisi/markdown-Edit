@@ -18,7 +18,10 @@ const EditorManager = (() => {
         'Enter': 'newlineAndIndentContinueMarkdownList',
         'Ctrl-B': () => insertFormat('bold'),
         'Ctrl-I': () => insertFormat('italic'),
-        'Ctrl-K': () => insertFormat('link')
+        'Ctrl-K': () => insertFormat('link'),
+        'Ctrl-F': 'findPersistent',
+        'Ctrl-H': 'replace',
+        'Ctrl-G': 'jumpToLine'
       },
       placeholder: '开始写作...',
       scrollbarStyle: 'native'
@@ -127,7 +130,20 @@ const EditorManager = (() => {
   }
 
   function getValue() { return cm ? cm.getValue() : '' }
-  function setValue(val) { if (cm) { cm.setValue(val || ''); cm.clearHistory() } }
+  function setValue(val) {
+    if (!cm) return
+    cm.setValue(val || '')
+    cm.clearHistory()
+  }
+  // setValue without losing cursor/scroll/history — used for in-place updates (e.g. task checkbox toggle)
+  function setValuePreserve(val) {
+    if (!cm) return
+    const cur = cm.getCursor()
+    const scroll = cm.getScrollInfo().top
+    cm.replaceRange(val, { line: 0, ch: 0 }, { line: cm.lineCount(), ch: 0 }, '+toggle')
+    cm.setCursor(cur)
+    cm.scrollTo(null, scroll)
+  }
   function getCursor() { return cm ? cm.getCursor() : { line: 0, ch: 0 } }
   function setCursor(pos) { if (cm) { cm.setCursor(pos); cm.focus() } }
   function getScrollTop() { return cm ? cm.getScrollInfo().top : 0 }
@@ -150,7 +166,25 @@ const EditorManager = (() => {
 
   function onChange(cb) { changeCallback = cb }
 
-  function focus() { if (cm) cm.focus() }
+  function focus() {
+    if (!cm) return
+    cm.focus()
+    // 同步再对内部隐藏 textarea 调用一次 focus，确保 OS 焦点真正落到输入框
+    const ta = cm.getInputField && cm.getInputField()
+    if (ta && typeof ta.focus === 'function') {
+      try { ta.focus({ preventScroll: true }) } catch (_) { ta.focus() }
+    }
+    // Double-RAF: recover from any async blur Chromium fires after DOM changes
+    requestAnimationFrame(() => {
+      if (cm && !cm.state.focused) {
+        cm.focus()
+        const ta2 = cm.getInputField && cm.getInputField()
+        if (ta2 && typeof ta2.focus === 'function') {
+          try { ta2.focus({ preventScroll: true }) } catch (_) { ta2.focus() }
+        }
+      }
+    })
+  }
 
   function getWordCount(text) {
     if (!text) return 0
@@ -160,7 +194,7 @@ const EditorManager = (() => {
   }
 
   return {
-    init, insertFormat, getValue, setValue,
+    init, insertFormat, getValue, setValue, setValuePreserve,
     getCursor, setCursor, getScrollTop, setScrollTop,
     setTheme, setFontSize, setFont, onChange, focus, getWordCount
   }

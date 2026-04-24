@@ -36,6 +36,7 @@
       "main": "main/main.js"
     },
     "win": {
+      "icon": "assets/icons/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -47,6 +48,9 @@
         }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}-portable.${ext}"
     },
     "mac": {
       "target": [
@@ -84,7 +88,7 @@
       "uninstallerIcon": "assets/icons/icon.ico",
       "language": "2052"
     },
-    "electronVersion": "41.2.2",
+    "electronVersion": "28.0.0",
     "electronDist": "node_modules/electron/dist"
   }
 }

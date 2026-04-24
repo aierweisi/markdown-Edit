@@ -1,10 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
 // electron-store ESM compatibility
 let Store
 let store
+let tray = null
+let isQuitting = false
 
 async function initStore() {
   const { default: S } = await import('electron-store')
@@ -14,7 +16,7 @@ async function initStore() {
       windowBounds: { width: 1280, height: 800 },
       theme: 'light',
       fontSize: 15,
-      editorFont: 'monospace',
+      editorFont: "'JetBrains Mono', 'Fira Code', monospace",
       autoSaveInterval: 10,
       exportDir: '',
       exportNamingRule: '{title}_{date}',
@@ -41,13 +43,14 @@ async function createWindow() {
     minWidth: 800,
     minHeight: 600,
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    frame: false,                // 完全无边框，标题栏由渲染进程自绘
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
     },
-    backgroundColor: '#1e1e2e',
+    backgroundColor: '#0a0a0c',
     show: false
   })
 
@@ -62,8 +65,52 @@ async function createWindow() {
     store.set('windowBounds', { width: w, height: h })
   })
 
+  mainWindow.on('maximize', () => mainWindow.webContents.send('win-maximized', true))
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('win-maximized', false))
+
+  // 关闭拦截：只隐藏窗口，应用继续后台运行（通过托盘可恢复）
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault()
+      mainWindow.hide()
+      return false
+    }
+  })
+
+  setupTray()
   setupMenu()
-  setupIPC()
+}
+
+function setupTray() {
+  if (tray) return
+  const iconPath = path.join(__dirname, '../assets/icons/icon.ico')
+  const image = fs.existsSync(iconPath)
+    ? nativeImage.createFromPath(iconPath)
+    : nativeImage.createEmpty()
+  tray = new Tray(image)
+  tray.setToolTip('Markdown Editor')
+
+  const showWindow = () => {
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  }
+
+  const menu = Menu.buildFromTemplate([
+    { label: '显示 Markdown Editor', click: showWindow },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true
+        app.quit()
+      }
+    }
+  ])
+  tray.setContextMenu(menu)
+  tray.on('click', showWindow)
+  tray.on('double-click', showWindow)
 }
 
 function setupMenu() {
@@ -110,7 +157,7 @@ function setupMenu() {
     {
       label: '模板',
       submenu: [
-        { label: '模板管理', click: () => mainWindow.webContents.send('menu-templates') }
+        { label: '模板库', click: () => mainWindow.webContents.send('menu-templates') }
       ]
     },
     {
@@ -197,12 +244,53 @@ function setupIPC() {
   ipcMain.handle('shell-show-item', (_, filePath) => {
     shell.showItemInFolder(filePath)
   })
+
+  // 聚焦窗口（用于模态关闭后恢复编辑器焦点）
+  // Windows 下 Electron 在原生对话框/模态关闭后不会自动把 OS 键盘焦点
+  // 回传到 webContents。单独调用 focus() 在已聚焦窗口上是 no-op，
+  // 必须先 blur 再 focus 才能真正重置 Win32 的 GetFocus() 状态。
+  ipcMain.handle('focus-window', () => {
+    if (!mainWindow) return
+    if (process.platform === 'win32') {
+      mainWindow.blur()
+    }
+    mainWindow.focus()
+    mainWindow.webContents.focus()
+  })
+
+  // 更新 Windows 标题栏 overlay 颜色（跟随主题）
+  ipcMain.handle('update-titlebar', (_, { color, symbolColor }) => {
+    if (!mainWindow) return
+    if (process.platform === 'win32' && mainWindow.setTitleBarOverlay) {
+      try {
+        mainWindow.setTitleBarOverlay({ color, symbolColor, height: 46 })
+      } catch (e) {}
+    }
+  })
+
+  // 自绘标题栏窗口控制
+  ipcMain.handle('win-minimize', () => mainWindow && mainWindow.minimize())
+  ipcMain.handle('win-toggle-maximize', () => {
+    if (!mainWindow) return false
+    if (mainWindow.isMaximized()) { mainWindow.unmaximize(); return false }
+    mainWindow.maximize(); return true
+  })
+  ipcMain.handle('win-close', () => mainWindow && mainWindow.close())
+  ipcMain.handle('win-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  setupIPC()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // 不退出：所有窗口关闭后留驻后台（通过托盘恢复 / 退出）
+  // macOS 保持原生行为
+})
+
+app.on('before-quit', () => {
+  isQuitting = true
 })
 
 app.on('activate', () => {

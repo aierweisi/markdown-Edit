@@ -21,6 +21,19 @@ contextBridge.exposeInMainWorld('api', {
   // Shell
   shellShowItem: (filePath) => ipcRenderer.invoke('shell-show-item', filePath),
 
+  // Focus window
+  focusWindow: () => ipcRenderer.invoke('focus-window'),
+
+  // Update native titlebar colors (Windows)
+  updateTitleBar: (opts) => ipcRenderer.invoke('update-titlebar', opts),
+
+  // Custom window controls (frameless)
+  winMinimize: () => ipcRenderer.invoke('win-minimize'),
+  winToggleMaximize: () => ipcRenderer.invoke('win-toggle-maximize'),
+  winClose: () => ipcRenderer.invoke('win-close'),
+  winIsMaximized: () => ipcRenderer.invoke('win-is-maximized'),
+  onWinMaximized: (cb) => ipcRenderer.on('win-maximized', (_, v) => cb(v)),
+
   // Menu events
   onMenuEvent: (callback) => {
     const events = [

@@ -19,24 +19,24 @@
   SettingsManager.init()
 
   // ─── Template apply callback ──────────────────────────────────
-  TemplateManager.onApply((content, templateName) => {
+  TemplateManager.onApply((content, name) => {
     const tab = TabManager.getActive()
     if (!tab) return
-    // Put content into current tab (or new tab if current has content)
-    const currentContent = EditorManager.getValue()
-    if (currentContent.trim().length > 0 && templateName !== '空白文档') {
-      if (!confirm(`当前标签页已有内容，是否覆盖？\n（取消则在新标签页打开）`)) {
-        const newTab = TabManager.createTab({ title: templateName, content })
-        TabManager.setActive(newTab.id)
+    const cur = EditorManager.getValue()
+    if (cur.trim().length > 0 && name !== '空白文档') {
+      if (!confirm(`当前标签页已有内容，是否覆盖？\n取消则在新标签页打开`)) {
+        const nt = TabManager.createTab({ title: name, content })
+        TabManager.setActive(nt.id)
         PreviewManager.render(content)
+        requestAnimationFrame(() => EditorManager.focus())
         return
       }
     }
     EditorManager.setValue(content)
-    TabManager.setTabTitle(tab.id, templateName)
+    TabManager.setTabTitle(tab.id, name)
     TabManager.markModified(tab.id, content.length > 0)
     PreviewManager.render(content)
-    EditorManager.focus()
+    requestAnimationFrame(() => EditorManager.focus())
   })
 
   // ─── Cache recovery ───────────────────────────────────────────
@@ -273,6 +273,18 @@
     TabManager.setActive(tab.id)
     TabManager.markModified(tab.id, false)
     PreviewManager.render(content)
+
+    // 原生对话框关闭后 Windows OS 焦点未回到 webContents。
+    // 必须 await 主进程 IPC（内部会 blur+focus 强制重置 Win32 焦点），
+    // 完成后再调用 cm.focus()，否则主进程的 webContents.focus() 会覆盖 cm.focus()
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur()
+    }
+    if (window.api && window.api.focusWindow) {
+      await window.api.focusWindow()
+    }
+    EditorManager.focus()
+    requestAnimationFrame(() => EditorManager.focus())
   }
 
   async function saveFile(saveAs = false) {
@@ -340,8 +352,8 @@
         setViewMode(viewModes[(idx + 1) % viewModes.length])
         break
       }
-      case 'menu-templates':  TemplateManager.open(); break
       case 'menu-settings':   SettingsManager.open(); break
+      case 'menu-templates':  TemplateManager.open(); break
     }
   })
 
@@ -385,4 +397,32 @@
   // Initial render
   PreviewManager.render(EditorManager.getValue())
   EditorManager.focus()
+
+  // ─── Custom window controls (frameless) ──────────────────────
+  const winMinBtn = document.getElementById('win-min')
+  const winMaxBtn = document.getElementById('win-max')
+  const winCloseBtn = document.getElementById('win-close')
+  const winMaxIcon = document.getElementById('win-max-icon')
+
+  if (winMinBtn) winMinBtn.addEventListener('click', () => window.api.winMinimize())
+  if (winMaxBtn) winMaxBtn.addEventListener('click', () => window.api.winToggleMaximize())
+  if (winCloseBtn) winCloseBtn.addEventListener('click', () => window.api.winClose())
+
+  function updateMaxIcon(isMax) {
+    if (!winMaxIcon) return
+    if (isMax) {
+      // Restore (two overlapping squares)
+      winMaxIcon.innerHTML = '<rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>'
+      winMaxBtn.title = '还原'
+    } else {
+      winMaxIcon.innerHTML = '<rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/>'
+      winMaxBtn.title = '最大化'
+    }
+  }
+  if (window.api && window.api.onWinMaximized) {
+    window.api.onWinMaximized(updateMaxIcon)
+  }
+  if (window.api && window.api.winIsMaximized) {
+    window.api.winIsMaximized().then(updateMaxIcon)
+  }
 })()

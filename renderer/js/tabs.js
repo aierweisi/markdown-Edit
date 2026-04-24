@@ -92,8 +92,12 @@ const TabManager = (() => {
   function updateTabEl(tab) {
     const el = document.querySelector(`.tab[data-id="${tab.id}"]`)
     if (!el) return
-    el.querySelector('.tab-title').textContent = tab.title
-    el.querySelector('.tab-title').title = tab.title
+    // Skip title update if a rename input is currently active
+    const titleEl = el.querySelector('.tab-title')
+    if (titleEl) {
+      titleEl.textContent = tab.title
+      titleEl.title = tab.title
+    }
     el.classList.toggle('modified', tab.modified)
   }
 

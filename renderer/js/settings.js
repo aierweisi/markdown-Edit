@@ -22,6 +22,14 @@ const SettingsManager = (() => {
     document.body.classList.add(`theme-${theme}`)
     EditorManager.setTheme(theme === 'dark')
     PreviewManager.updateTheme(theme === 'dark')
+    // Update native Windows titlebar overlay colors
+    if (window.api && window.api.updateTitleBar) {
+      if (theme === 'dark') {
+        window.api.updateTitleBar({ color: '#0d0d10', symbolColor: '#e8e8ec' })
+      } else {
+        window.api.updateTitleBar({ color: '#ffffff', symbolColor: '#1c1e21' })
+      }
+    }
     // Update toolbar theme button icon
     const btn = document.getElementById('btn-theme')
     if (btn) {
