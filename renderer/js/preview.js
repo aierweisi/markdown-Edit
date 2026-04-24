@@ -9,6 +9,17 @@ const PreviewManager = (() => {
   let mermaidSeq = 0
   let currentIsDark = false
 
+  // Line anchors: array of { line, el } sorted by line, built after each render
+  let lineAnchors = []
+  let scrollSource = null   // 'editor' | 'preview' | null — prevents echo loops
+  let scrollSourceTimer = null
+
+  function setScrollSource(src) {
+    scrollSource = src
+    clearTimeout(scrollSourceTimer)
+    scrollSourceTimer = setTimeout(() => { scrollSource = null }, 120)
+  }
+
   // ---- math placeholders (protect math from marked) ----
   const mathStore = []
   function stashMath(src) {
@@ -109,7 +120,19 @@ const PreviewManager = (() => {
     const syncToggle = document.getElementById('sync-scroll')
     syncToggle.addEventListener('change', () => { syncScroll = syncToggle.checked })
 
-    // Click on copy button
+    // Preview → Editor scroll sync
+    const pContainer = document.getElementById('preview-container')
+    if (pContainer) {
+      pContainer.addEventListener('scroll', () => {
+        syncPreviewScroll()
+      }, { passive: true })
+    }
+
+    // Click on copy button & task checkbox
+    previewBody.addEventListener('mousedown', (e) => {
+      const cb = e.target.closest('li > input[type="checkbox"]')
+      if (cb) { e.preventDefault() }
+    })
     previewBody.addEventListener('click', (e) => {
       const btn = e.target.closest('.code-copy-btn')
       if (btn) {
@@ -125,7 +148,7 @@ const PreviewManager = (() => {
         return
       }
       // Task list toggle
-      const cb = e.target.closest('input[type="checkbox"].task-list-checkbox, li > input[type="checkbox"]')
+      const cb = e.target.closest('li > input[type="checkbox"]')
       if (cb) {
         e.preventDefault()
         toggleTaskInSource(cb)
@@ -138,19 +161,63 @@ const PreviewManager = (() => {
     const all = previewBody.querySelectorAll('li > input[type="checkbox"]')
     const idx = Array.prototype.indexOf.call(all, checkbox)
     if (idx < 0) return
-    const src = EditorManager.getValue()
-    const re = /^(\s*[-*+]\s+)\[( |x|X)\]/gm
-    let m, count = 0, target = null
-    while ((m = re.exec(src)) !== null) {
-      if (count === idx) { target = m; break }
+    const cm = EditorManager.getCM && EditorManager.getCM()
+    if (!cm) return
+
+    // Walk source line-by-line to find the Nth task checkbox
+    const re = /^(\s*(?:[-*+]|\d+\.)\s+)\[( |x|X)\]/
+    let count = 0
+    const lineCount = cm.lineCount()
+    for (let ln = 0; ln < lineCount; ln++) {
+      const text = cm.getLine(ln)
+      const m = text.match(re)
+      if (!m) continue
+      if (count === idx) {
+        const startCh = m[1].length + 1  // position of space/x inside [ ]
+        const checked = m[2].toLowerCase() === 'x'
+        const newMark = checked ? ' ' : 'x'
+        cm.replaceRange(newMark, { line: ln, ch: startCh }, { line: ln, ch: startCh + 1 }, '+toggle')
+        // also flip the checkbox immediately for snappy feedback
+        checkbox.checked = !checked
+        return
+      }
       count++
     }
-    if (!target) return
-    const checked = target[2].toLowerCase() === 'x'
-    const newMark = checked ? ' ' : 'x'
-    const start = target.index + target[1].length
-    const newSrc = src.slice(0, start) + `[${newMark}]` + src.slice(start + 3)
-    EditorManager.setValuePreserve(newSrc)
+  }
+
+  function buildLineAnchors(markdown) {
+    lineAnchors = []
+    if (!previewBody) return
+    try {
+      const tokens = marked.lexer(markdown || '')
+      const blockEls = Array.from(previewBody.children)
+      let line = 0
+      let elIdx = 0
+      for (const tok of tokens) {
+        if (tok.type === 'space') {
+          line += (tok.raw.match(/\n/g) || []).length
+          continue
+        }
+        const el = blockEls[elIdx++]
+        if (el) lineAnchors.push({ line, el })
+        line += (tok.raw ? (tok.raw.match(/\n/g) || []).length : 0)
+      }
+    } catch (e) {
+      lineAnchors = []
+    }
+  }
+
+  function findAnchorForLine(line) {
+    if (!lineAnchors.length) return null
+    let lo = 0, hi = lineAnchors.length - 1, ans = 0
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      if (lineAnchors[mid].line <= line) { ans = mid; lo = mid + 1 }
+      else hi = mid - 1
+    }
+    const a = lineAnchors[ans]
+    const b = lineAnchors[ans + 1]
+    return { a, b }
   }
 
   function render(markdown) {
@@ -158,12 +225,30 @@ const PreviewManager = (() => {
     clearTimeout(renderTimer)
     renderTimer = setTimeout(() => {
       try {
+        // Preserve scroll position across re-render
+        const container = document.getElementById('preview-container')
+        const prevScrollTop = container ? container.scrollTop : 0
+
         // reset slug map by re-creating renderer state via marked's internal — easiest: parse fresh each call
         mermaidSeq = 0
         const stashed = stashMath(markdown || '')
         let html = marked.parse(stashed)
         html = restoreMath(html)
+        // Sanitize: allow KaTeX/Mermaid SVG + math classes; forbid scripts/event handlers
+        if (window.DOMPurify) {
+          html = DOMPurify.sanitize(html, {
+            ADD_TAGS: ['foreignObject', 'mtable', 'mtr', 'mtd', 'mrow', 'mi', 'mn', 'mo', 'msup', 'msub', 'mfrac', 'mspace', 'mstyle', 'msqrt', 'munder', 'mover', 'munderover', 'semantics', 'annotation'],
+            ADD_ATTR: ['target', 'data-mermaid-src'],
+            FORBID_TAGS: ['style']
+          })
+        }
         previewBody.innerHTML = html
+
+        // Restore scroll position
+        if (container) container.scrollTop = prevScrollTop
+
+        // Build line-to-element anchor map for sync scroll
+        buildLineAnchors(markdown || '')
 
         // Add task-list class to checkboxes/li
         previewBody.querySelectorAll('li > input[type="checkbox"]').forEach(cb => {
@@ -192,12 +277,63 @@ const PreviewManager = (() => {
     }, 100)
   }
 
-  function syncEditorScroll(editorScrollRatio) {
+  function syncEditorScroll(editorScrollRatio, topLine) {
     if (!syncScroll) return
+    if (scrollSource === 'preview') return
     const container = document.getElementById('preview-container')
     if (!container) return
+    setScrollSource('editor')
+
+    // Prefer line-anchor based sync if available
+    if (lineAnchors.length && typeof topLine === 'number') {
+      const pair = findAnchorForLine(topLine)
+      if (pair && pair.a) {
+        const { a, b } = pair
+        const aTop = a.el.offsetTop
+        let target = aTop
+        if (b) {
+          const frac = (topLine - a.line) / Math.max(1, b.line - a.line)
+          target = aTop + (b.el.offsetTop - aTop) * Math.min(1, Math.max(0, frac))
+        }
+        container.scrollTop = target
+        return
+      }
+    }
+    // Fallback: ratio-based
     const maxScroll = container.scrollHeight - container.clientHeight
     container.scrollTop = maxScroll * editorScrollRatio
+  }
+
+  function syncPreviewScroll() {
+    if (!syncScroll) return
+    if (scrollSource === 'editor') return
+    if (!window.EditorManager || !lineAnchors.length) return
+    const container = document.getElementById('preview-container')
+    if (!container) return
+    const cm = EditorManager.getCM && EditorManager.getCM()
+    if (!cm) return
+    setScrollSource('preview')
+
+    const scrollTop = container.scrollTop
+    // Find which anchor pair we're between in preview
+    let idx = 0
+    for (let i = 0; i < lineAnchors.length; i++) {
+      if (lineAnchors[i].el.offsetTop <= scrollTop) idx = i
+      else break
+    }
+    const a = lineAnchors[idx]
+    const b = lineAnchors[idx + 1]
+    let targetLine
+    if (b) {
+      const frac = (scrollTop - a.el.offsetTop) / Math.max(1, b.el.offsetTop - a.el.offsetTop)
+      targetLine = a.line + (b.line - a.line) * Math.min(1, Math.max(0, frac))
+    } else {
+      targetLine = a.line
+    }
+    // Convert line to pixel scroll in CM
+    const info = cm.getScrollInfo()
+    const charCoords = cm.charCoords({ line: Math.floor(targetLine), ch: 0 }, 'local')
+    cm.scrollTo(null, Math.max(0, charCoords.top))
   }
 
   function updateTheme(isDark) {
@@ -215,5 +351,5 @@ const PreviewManager = (() => {
     }
   }
 
-  return { init, render, syncEditorScroll, updateTheme }
+  return { init, render, syncEditorScroll, syncPreviewScroll, updateTheme }
 })()

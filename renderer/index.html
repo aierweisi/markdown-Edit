@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; font-src 'self' data: https://cdn.jsdelivr.net">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: file: https:; font-src 'self' data: https://cdn.jsdelivr.net">
   <title>Markdown Editor</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/dialog/dialog.min.css">
@@ -185,6 +185,42 @@
       <span class="word-count" id="word-count">0 字</span>
     </div>
     <div class="editor-container" id="editor-container"></div>
+
+    <!-- Find/Replace overlay -->
+    <div class="find-panel" id="find-panel" hidden>
+      <div class="find-row">
+        <div class="find-input-wrap">
+          <input type="text" id="find-input" placeholder="查找" spellcheck="false">
+          <span class="find-count" id="find-count"></span>
+        </div>
+        <div class="find-opts">
+          <button class="find-opt" id="find-opt-case" title="区分大小写 (Alt+C)">Aa</button>
+          <button class="find-opt" id="find-opt-word" title="全词匹配 (Alt+W)">Ab</button>
+          <button class="find-opt" id="find-opt-regex" title="正则表达式 (Alt+R)">.*</button>
+        </div>
+        <div class="find-actions">
+          <button class="find-btn" id="find-prev" title="上一个 (Shift+Enter)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+          </button>
+          <button class="find-btn" id="find-next" title="下一个 (Enter)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <button class="find-btn" id="find-toggle-replace" title="替换模式 (Ctrl+H)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          </button>
+          <button class="find-btn" id="find-close" title="关闭 (Esc)">✕</button>
+        </div>
+      </div>
+      <div class="find-row find-replace-row" hidden>
+        <div class="find-input-wrap">
+          <input type="text" id="replace-input" placeholder="替换为" spellcheck="false">
+        </div>
+        <div class="find-actions">
+          <button class="find-btn find-btn-text" id="replace-one">替换</button>
+          <button class="find-btn find-btn-text" id="replace-all">全部</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="divider" id="divider"></div>
@@ -211,8 +247,14 @@
     <span id="status-modified"></span>
     <span class="statusbar-sep" id="status-sep2">·</span>
     <span id="status-cursor">行 1, 列 1</span>
+    <span class="statusbar-sep">·</span>
+    <span id="status-selection"></span>
   </div>
   <div class="statusbar-right">
+    <span id="status-readtime"></span>
+    <span class="statusbar-sep" id="status-readtime-sep" style="display:none">·</span>
+    <span id="status-chars"></span>
+    <span class="statusbar-sep" id="status-chars-sep" style="display:none">·</span>
     <span id="status-autosave"></span>
     <span class="statusbar-sep" id="status-autosave-sep" style="display:none">·</span>
     <span id="status-encoding">UTF-8</span>
@@ -482,22 +524,16 @@
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/matchesonscrollbar.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/jump-to-line.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/css.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/xml.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/typescript.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/sql.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/java.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/cpp.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
 <script src="js/tabs.js"></script><script src="js/editor.js"></script>
 <script src="js/preview.js"></script>
+<script src="js/find.js"></script>
+<script src="js/recent.js"></script>
+<script src="js/palette.js"></script>
 <script src="js/templates.js"></script>
 <script src="js/export.js"></script>
 <script src="js/cache.js"></script>

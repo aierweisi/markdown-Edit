@@ -30,6 +30,7 @@ const TabManager = (() => {
     const el = document.createElement('div')
     el.className = 'tab'
     el.dataset.id = tab.id
+    el.draggable = true
     el.innerHTML = `
       <div class="tab-dot"></div>
       <div class="tab-title" title="${tab.title}">${tab.title}</div>
@@ -48,7 +49,127 @@ const TabManager = (() => {
       e.stopPropagation()
       TabManager.closeTab(tab.id)
     })
+    // Middle-click to close
+    el.addEventListener('mousedown', (e) => {
+      if (e.button === 1) {
+        e.preventDefault()
+        TabManager.closeTab(tab.id)
+      }
+    })
+    // Right-click context menu
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      showContextMenu(e, tab.id)
+    })
+    // Drag reorder
+    el.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/tab-id', tab.id)
+      el.classList.add('dragging')
+    })
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging')
+      document.querySelectorAll('.tab.drag-over').forEach(x => x.classList.remove('drag-over'))
+    })
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      document.querySelectorAll('.tab.drag-over').forEach(x => x.classList.remove('drag-over'))
+      if (tab.id !== dragSrcTabId()) el.classList.add('drag-over')
+    })
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'))
+    el.addEventListener('drop', (e) => {
+      e.preventDefault()
+      el.classList.remove('drag-over')
+      const srcId = e.dataTransfer.getData('text/tab-id')
+      if (!srcId || srcId === tab.id) return
+      reorderTab(srcId, tab.id)
+    })
     container.appendChild(el)
+  }
+
+  function dragSrcTabId() {
+    const dragging = document.querySelector('.tab.dragging')
+    return dragging ? dragging.dataset.id : null
+  }
+
+  function reorderTab(srcId, targetId) {
+    const fromIdx = tabs.findIndex(t => t.id === srcId)
+    const toIdx = tabs.findIndex(t => t.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) return
+    const [moved] = tabs.splice(fromIdx, 1)
+    tabs.splice(toIdx, 0, moved)
+    // Re-order DOM
+    const container = document.getElementById('tabs-container')
+    const srcEl = container.querySelector(`.tab[data-id="${srcId}"]`)
+    const tgtEl = container.querySelector(`.tab[data-id="${targetId}"]`)
+    if (srcEl && tgtEl) {
+      if (fromIdx < toIdx) tgtEl.after(srcEl)
+      else tgtEl.before(srcEl)
+    }
+  }
+
+  function showContextMenu(e, id) {
+    // Remove any existing
+    const old = document.getElementById('tab-ctx-menu')
+    if (old) old.remove()
+
+    const tab = getTab(id)
+    if (!tab) return
+    const idx = tabs.findIndex(t => t.id === id)
+
+    const menu = document.createElement('div')
+    menu.id = 'tab-ctx-menu'
+    menu.className = 'ctx-menu'
+    const items = [
+      { label: '关闭', action: () => closeTab(id) },
+      { label: '关闭其他', action: () => closeOthers(id), disabled: tabs.length <= 1 },
+      { label: '关闭右侧', action: () => closeRight(id), disabled: idx >= tabs.length - 1 },
+      { sep: true },
+      { label: '重命名', action: () => startRename(id) },
+      { label: '复制路径', action: () => tab.filePath && navigator.clipboard.writeText(tab.filePath), disabled: !tab.filePath },
+      { label: '在文件夹中显示', action: () => tab.filePath && window.api.shellShowItem(tab.filePath), disabled: !tab.filePath }
+    ]
+    items.forEach(it => {
+      if (it.sep) {
+        const s = document.createElement('div')
+        s.className = 'ctx-sep'
+        menu.appendChild(s)
+        return
+      }
+      const el = document.createElement('div')
+      el.className = 'ctx-item' + (it.disabled ? ' disabled' : '')
+      el.textContent = it.label
+      if (!it.disabled) {
+        el.addEventListener('click', () => { it.action(); menu.remove() })
+      }
+      menu.appendChild(el)
+    })
+
+    document.body.appendChild(menu)
+    // Position, clamp to viewport
+    const { innerWidth: vw, innerHeight: vh } = window
+    const rect = menu.getBoundingClientRect()
+    const x = Math.min(e.clientX, vw - rect.width - 4)
+    const y = Math.min(e.clientY, vh - rect.height - 4)
+    menu.style.left = x + 'px'
+    menu.style.top = y + 'px'
+
+    const dismiss = (ev) => {
+      if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', dismiss) }
+    }
+    setTimeout(() => document.addEventListener('mousedown', dismiss), 0)
+  }
+
+  async function closeOthers(keepId) {
+    const others = tabs.filter(t => t.id !== keepId).map(t => t.id)
+    for (const id of others) await closeTab(id)
+  }
+  async function closeRight(id) {
+    const idx = tabs.findIndex(t => t.id === id)
+    if (idx < 0) return
+    const ids = tabs.slice(idx + 1).map(t => t.id)
+    for (const rid of ids) await closeTab(rid)
   }
 
   function startRename(id) {

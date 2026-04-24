@@ -29,6 +29,35 @@ async function initStore() {
 }
 
 let mainWindow
+let pendingOpenFile = null
+
+// 从命令行参数中提取要打开的 .md/.markdown/.txt 文件路径
+function extractFileArg(argv) {
+  if (!argv || argv.length === 0) return null
+  // 跳过可执行文件本身（开发模式下还有 . 之类的参数）
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i]
+    if (!a || a.startsWith('-')) continue
+    if (a === '.' || a.endsWith('.js')) continue
+    if (/\.(md|markdown|txt)$/i.test(a)) {
+      try {
+        if (fs.existsSync(a)) return path.resolve(a)
+      } catch (e) {}
+    }
+  }
+  return null
+}
+
+function sendOpenFile(filePath) {
+  if (!filePath || !mainWindow) return
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const name = path.basename(filePath)
+    mainWindow.webContents.send('open-file-from-os', { filePath, content, name })
+  } catch (e) {
+    console.error('open-file-from-os failed:', e)
+  }
+}
 
 async function createWindow() {
   await initStore()
@@ -58,6 +87,15 @@ async function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  })
+
+  // 渲染进程加载完成后，如果有待打开文件则发送
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (pendingOpenFile) {
+      sendOpenFile(pendingOpenFile)
+      pendingOpenFile = null
+    }
   })
 
   mainWindow.on('resize', () => {
@@ -120,6 +158,7 @@ function setupMenu() {
       submenu: [
         { label: '新建', accelerator: 'CmdOrCtrl+N', click: () => mainWindow.webContents.send('menu-new') },
         { label: '打开', accelerator: 'CmdOrCtrl+O', click: () => mainWindow.webContents.send('menu-open') },
+        { label: '最近文件', accelerator: 'CmdOrCtrl+Shift+R', click: () => mainWindow.webContents.send('menu-recent') },
         { label: '保存', accelerator: 'CmdOrCtrl+S', click: () => mainWindow.webContents.send('menu-save') },
         { label: '另存为', accelerator: 'CmdOrCtrl+Shift+S', click: () => mainWindow.webContents.send('menu-save-as') },
         { type: 'separator' },
@@ -189,8 +228,43 @@ function setupIPC() {
   // 文件保存
   ipcMain.handle('file-save', async (_, filePath, content) => {
     try {
-      fs.writeFileSync(filePath, content, 'utf-8')
+      // 原子写：先写 .tmp，再 rename，避免崩溃损坏原文件
+      const tmp = filePath + '.tmp'
+      await fs.promises.writeFile(tmp, content, 'utf-8')
+      await fs.promises.rename(tmp, filePath)
       return { success: true }
+    } catch (e) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 保存图片（粘贴/拖拽）— 写入 baseDir/assets，返回相对路径
+  ipcMain.handle('image-save', async (_, { baseDir, fileName, dataBase64 }) => {
+    try {
+      // baseDir 为 null 时落到用户数据目录的 pasted-images 下
+      const dir = baseDir
+        ? path.join(baseDir, 'assets')
+        : path.join(app.getPath('userData'), 'pasted-images')
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+
+      // 防重名
+      let name = fileName
+      let absPath = path.join(dir, name)
+      let i = 1
+      while (fs.existsSync(absPath)) {
+        const ext = path.extname(fileName)
+        const stem = path.basename(fileName, ext)
+        name = `${stem}-${i}${ext}`
+        absPath = path.join(dir, name)
+        i++
+      }
+      fs.writeFileSync(absPath, Buffer.from(dataBase64, 'base64'))
+
+      // 返回相对路径（相对于 baseDir）；无 baseDir 时返回绝对路径（file:// 形式）
+      const relPath = baseDir
+        ? path.relative(baseDir, absPath).replace(/\\/g, '/')
+        : 'file:///' + absPath.replace(/\\/g, '/')
+      return { success: true, relPath, absPath }
     } catch (e) {
       return { success: false, error: e.message }
     }
@@ -279,10 +353,37 @@ function setupIPC() {
   ipcMain.handle('win-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
 }
 
-app.whenReady().then(() => {
-  setupIPC()
-  createWindow()
-})
+// 单实例锁：防止重复启动多个进程
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    // 第二次启动时，解析命令行参数打开文件
+    const fileArg = extractFileArg(argv)
+    if (fileArg) sendOpenFile(fileArg)
+
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      if (!mainWindow.isVisible()) mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+
+  // macOS: 通过 Finder/"打开方式" 触发
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault()
+    if (mainWindow) sendOpenFile(filePath)
+    else pendingOpenFile = filePath
+  })
+
+  app.whenReady().then(() => {
+    // 首次启动，记录命令行中要打开的文件
+    pendingOpenFile = extractFileArg(process.argv)
+    setupIPC()
+    createWindow()
+  })
+}
 
 app.on('window-all-closed', () => {
   // 不退出：所有窗口关闭后留驻后台（通过托盘恢复 / 退出）

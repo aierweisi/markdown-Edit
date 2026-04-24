@@ -35,6 +35,15 @@
     "extraMetadata": {
       "main": "main/main.js"
     },
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown"],
+        "name": "Markdown Document",
+        "description": "Markdown Document",
+        "role": "Editor",
+        "icon": "assets/icons/icon.ico"
+      }
+    ],
     "win": {
       "icon": "assets/icons/icon.ico",
       "target": [

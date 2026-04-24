@@ -19,8 +19,6 @@ const EditorManager = (() => {
         'Ctrl-B': () => insertFormat('bold'),
         'Ctrl-I': () => insertFormat('italic'),
         'Ctrl-K': () => insertFormat('link'),
-        'Ctrl-F': 'findPersistent',
-        'Ctrl-H': 'replace',
         'Ctrl-G': 'jumpToLine'
       },
       placeholder: '开始写作...',
@@ -37,12 +35,109 @@ const EditorManager = (() => {
       if (statusCursor) {
         statusCursor.textContent = `行 ${cur.line + 1}, 列 ${cur.ch + 1}`
       }
+      // Selection stats
+      const statusSel = document.getElementById('status-selection')
+      const sepBefore = statusSel ? statusSel.previousElementSibling : null
+      if (statusSel) {
+        const sels = cm.listSelections()
+        let chars = 0, lines = 0
+        for (const s of sels) {
+          const text = cm.getRange(s.anchor, s.head)
+          if (text) {
+            chars += text.length
+            lines += text.split('\n').length
+          }
+        }
+        if (chars > 0) {
+          statusSel.textContent = `已选 ${chars} 字符 / ${lines} 行`
+          if (sepBefore && sepBefore.classList.contains('statusbar-sep')) sepBefore.style.display = ''
+        } else {
+          statusSel.textContent = ''
+          if (sepBefore && sepBefore.classList.contains('statusbar-sep')) sepBefore.style.display = 'none'
+        }
+      }
     })
 
     cm.on('scroll', () => {
       const info = cm.getScrollInfo()
       const ratio = info.height <= info.clientHeight ? 0 : info.top / (info.height - info.clientHeight)
-      PreviewManager.syncEditorScroll(ratio)
+      // Top visible line
+      const topLine = cm.lineAtHeight(info.top, 'local')
+      PreviewManager.syncEditorScroll(ratio, topLine)
+    })
+
+    // ── 图片粘贴 / 拖拽 ───────────────────────────────────
+    const wrap = cm.getWrapperElement()
+
+    async function handleImageFile(file) {
+      if (!file || !file.type || !file.type.startsWith('image/')) return false
+      const buf = await file.arrayBuffer()
+      const base64 = arrayBufferToBase64(buf)
+
+      // 决定保存目录：当前 tab 的文件路径目录；否则落到 userData/pasted-images
+      let baseDir = null
+      if (window.TabManager) {
+        const tab = TabManager.getActive && TabManager.getActive()
+        if (tab && tab.filePath) {
+          baseDir = tab.filePath.replace(/[\\/][^\\/]*$/, '')
+        }
+      }
+
+      const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
+      const ts = new Date()
+      const stamp = `${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}-${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}${String(ts.getSeconds()).padStart(2,'0')}`
+      const fileName = `image-${stamp}.${ext}`
+
+      const res = await window.api.imageSave({ baseDir, fileName, dataBase64: base64 })
+      if (res && res.success) {
+        cm.replaceSelection(`![](${res.relPath})`)
+        if (!baseDir && window.ExportManager) {
+          ExportManager.showToast('未保存文档，图片已存到临时目录（建议先保存 .md）')
+        }
+      } else {
+        if (window.ExportManager) ExportManager.showToast('图片保存失败：' + (res && res.error))
+      }
+      return true
+    }
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer)
+      let binary = ''
+      const chunk = 0x8000
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
+      }
+      return btoa(binary)
+    }
+
+    wrap.addEventListener('paste', async (e) => {
+      const items = e.clipboardData && e.clipboardData.items
+      if (!items) return
+      for (const it of items) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          e.preventDefault()
+          await handleImageFile(it.getAsFile())
+          return
+        }
+      }
+    })
+
+    wrap.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+        e.preventDefault()
+      }
+    })
+    wrap.addEventListener('drop', async (e) => {
+      const files = e.dataTransfer && e.dataTransfer.files
+      if (!files || files.length === 0) return
+      let handled = false
+      for (const f of files) {
+        if (f.type && f.type.startsWith('image/')) {
+          if (!handled) e.preventDefault()
+          handled = true
+          await handleImageFile(f)
+        }
+      }
     })
 
     return cm
@@ -51,6 +146,47 @@ const EditorManager = (() => {
   function insertFormat(action) {
     if (!cm) return
     const sel = cm.getSelection()
+
+    // Apply a prefix to every line in current selection (or current line if no selection)
+    function applyLinePrefix(prefix, fallback) {
+      const from = cm.getCursor('from')
+      const to = cm.getCursor('to')
+      const startLine = from.line
+      const endLine = to.line === from.line || to.ch > 0 ? to.line : to.line - 1
+      const lines = []
+      for (let i = startLine; i <= endLine; i++) lines.push(cm.getLine(i))
+      const allHave = lines.every(l => l.startsWith(prefix))
+      const newLines = lines.map(l => {
+        if (allHave) return l.slice(prefix.length)
+        if (l.length === 0 && fallback) return prefix + fallback
+        return prefix + l
+      })
+      cm.replaceRange(
+        newLines.join('\n'),
+        { line: startLine, ch: 0 },
+        { line: endLine, ch: cm.getLine(endLine).length }
+      )
+    }
+
+    function applyLinePrefixOrdered(fallback) {
+      const from = cm.getCursor('from')
+      const to = cm.getCursor('to')
+      const startLine = from.line
+      const endLine = to.line === from.line || to.ch > 0 ? to.line : to.line - 1
+      const lines = []
+      for (let i = startLine; i <= endLine; i++) lines.push(cm.getLine(i))
+      const allHave = lines.every(l => /^\d+\.\s/.test(l))
+      const newLines = lines.map((l, i) => {
+        if (allHave) return l.replace(/^\d+\.\s/, '')
+        const body = l.length === 0 && fallback ? fallback : l
+        return `${i + 1}. ${body}`
+      })
+      cm.replaceRange(
+        newLines.join('\n'),
+        { line: startLine, ch: 0 },
+        { line: endLine, ch: cm.getLine(endLine).length }
+      )
+    }
 
     const formats = {
       bold:          { wrap: '**',  default: '粗体文字' },
@@ -97,12 +233,13 @@ const EditorManager = (() => {
       }
       case 'heading': {
         const line = cm.getLine(cursor.line)
-        if (line.startsWith('##### ')) cm.replaceRange(line.slice(6), { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
-        else if (line.startsWith('#### ')) cm.replaceRange('##### ' + line.slice(5), { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
-        else if (line.startsWith('### ')) cm.replaceRange('#### ' + line.slice(4), { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
-        else if (line.startsWith('## ')) cm.replaceRange('### ' + line.slice(3), { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
-        else if (line.startsWith('# ')) cm.replaceRange('## ' + line.slice(2), { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
-        else cm.replaceRange('# ' + line, { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
+        // H1→H2→H3→H4→H5→H6→plain→H1
+        const m = line.match(/^(#{1,6})\s(.*)$/)
+        let next
+        if (!m) next = '# ' + line
+        else if (m[1].length < 6) next = '#'.repeat(m[1].length + 1) + ' ' + m[2]
+        else next = m[2]
+        cm.replaceRange(next, { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
         break
       }
       case 'codeblock':
@@ -112,15 +249,14 @@ const EditorManager = (() => {
         cm.replaceSelection(`| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |`)
         break
       case 'quote': {
-        const line = cm.getLine(cursor.line)
-        cm.replaceRange('> ' + line, { line: cursor.line, ch: 0 }, { line: cursor.line, ch: line.length })
+        applyLinePrefix('> ')
         break
       }
       case 'ul':
-        cm.replaceSelection(`- ${sel || '列表项'}`)
+        applyLinePrefix('- ', '列表项')
         break
       case 'ol':
-        cm.replaceSelection(`1. ${sel || '列表项'}`)
+        applyLinePrefixOrdered('列表项')
         break
       case 'hr':
         cm.replaceSelection('\n---\n')
@@ -130,6 +266,7 @@ const EditorManager = (() => {
   }
 
   function getValue() { return cm ? cm.getValue() : '' }
+  function getCM() { return cm }
   function setValue(val) {
     if (!cm) return
     cm.setValue(val || '')
@@ -140,7 +277,9 @@ const EditorManager = (() => {
     if (!cm) return
     const cur = cm.getCursor()
     const scroll = cm.getScrollInfo().top
-    cm.replaceRange(val, { line: 0, ch: 0 }, { line: cm.lineCount(), ch: 0 }, '+toggle')
+    const lastLine = cm.lastLine()
+    const endCh = cm.getLine(lastLine).length
+    cm.replaceRange(val, { line: 0, ch: 0 }, { line: lastLine, ch: endCh }, '+toggle')
     cm.setCursor(cur)
     cm.scrollTo(null, scroll)
   }
@@ -194,7 +333,7 @@ const EditorManager = (() => {
   }
 
   return {
-    init, insertFormat, getValue, setValue, setValuePreserve,
+    init, insertFormat, getValue, getCM, setValue, setValuePreserve,
     getCursor, setCursor, getScrollTop, setScrollTop,
     setTheme, setFontSize, setFont, onChange, focus, getWordCount
   }

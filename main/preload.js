@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   // File
   fileRead: (filePath) => ipcRenderer.invoke('file-read', filePath),
   fileSave: (filePath, content) => ipcRenderer.invoke('file-save', filePath, content),
+  imageSave: (payload) => ipcRenderer.invoke('image-save', payload),
 
   // Dialogs
   dialogOpenFile: () => ipcRenderer.invoke('dialog-open-file'),
@@ -34,12 +35,16 @@ contextBridge.exposeInMainWorld('api', {
   winIsMaximized: () => ipcRenderer.invoke('win-is-maximized'),
   onWinMaximized: (cb) => ipcRenderer.on('win-maximized', (_, v) => cb(v)),
 
+  // OS 打开文件（命令行/双击/拖拽到 exe）
+  onOpenFileFromOS: (cb) => ipcRenderer.on('open-file-from-os', (_, payload) => cb(payload)),
+
   // Menu events
   onMenuEvent: (callback) => {
     const events = [
       'menu-new', 'menu-open', 'menu-save', 'menu-save-as',
       'menu-import', 'menu-export-md', 'menu-export-html', 'menu-export-pdf',
-      'menu-toggle-theme', 'menu-toggle-view', 'menu-templates', 'menu-settings'
+      'menu-toggle-theme', 'menu-toggle-view', 'menu-templates', 'menu-settings',
+      'menu-recent'
     ]
     events.forEach(event => {
       ipcRenderer.on(event, () => callback(event))
