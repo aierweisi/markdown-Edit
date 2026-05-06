@@ -19,7 +19,9 @@ const EditorManager = (() => {
         'Ctrl-B': () => insertFormat('bold'),
         'Ctrl-I': () => insertFormat('italic'),
         'Ctrl-K': () => insertFormat('link'),
-        'Ctrl-G': 'jumpToLine'
+        'Ctrl-G': 'jumpToLine',
+        'Ctrl-F': () => { if (window.FindManager) FindManager.show(false) },
+        'Ctrl-H': () => { if (window.FindManager) FindManager.show(true) }
       },
       placeholder: '开始写作...',
       scrollbarStyle: 'native'
@@ -69,6 +71,13 @@ const EditorManager = (() => {
     // ── 图片粘贴 / 拖拽 ───────────────────────────────────
     const wrap = cm.getWrapperElement()
 
+    async function getImageDirSetting() {
+      try {
+        const v = await window.api.storeGet('imageSaveDir')
+        return (v && String(v).trim()) || 'assets'
+      } catch { return 'assets' }
+    }
+
     async function handleImageFile(file) {
       if (!file || !file.type || !file.type.startsWith('image/')) return false
       const buf = await file.arrayBuffer()
@@ -88,7 +97,7 @@ const EditorManager = (() => {
       const stamp = `${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}-${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}${String(ts.getSeconds()).padStart(2,'0')}`
       const fileName = `image-${stamp}.${ext}`
 
-      const res = await window.api.imageSave({ baseDir, fileName, dataBase64: base64 })
+      const res = await window.api.imageSave({ baseDir, fileName, dataBase64: base64, imageDir: await getImageDirSetting() })
       if (res && res.success) {
         cm.replaceSelection(`![](${res.relPath})`)
         if (!baseDir && window.ExportManager) {

@@ -87,7 +87,9 @@ async function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
+    if (!app.isPackaged) {
+      // mainWindow.webContents.openDevTools({ mode: 'detach' })
+    }
   })
 
   // 渲染进程加载完成后，如果有待打开文件则发送
@@ -238,13 +240,39 @@ function setupIPC() {
     }
   })
 
-  // 保存图片（粘贴/拖拽）— 写入 baseDir/assets，返回相对路径
-  ipcMain.handle('image-save', async (_, { baseDir, fileName, dataBase64 }) => {
+  // 重命名磁盘上的文件（用于标签重命名同步到文件系统）
+  ipcMain.handle('file-rename', async (_, oldPath, newPath) => {
     try {
-      // baseDir 为 null 时落到用户数据目录的 pasted-images 下
-      const dir = baseDir
-        ? path.join(baseDir, 'assets')
-        : path.join(app.getPath('userData'), 'pasted-images')
+      if (!oldPath || !newPath) return { success: false, error: 'invalid path' }
+      if (oldPath === newPath) return { success: true, newPath }
+      // 防止覆盖已存在文件
+      if (fs.existsSync(newPath)) {
+        return { success: false, error: 'target exists' }
+      }
+      await fs.promises.rename(oldPath, newPath)
+      return { success: true, newPath }
+    } catch (e) {
+      return { success: false, error: e.message }
+    }
+  })
+
+  // 保存图片（粘贴/拖拽）— 写入用户配置的图片目录
+  ipcMain.handle('image-save', async (_, { baseDir, fileName, dataBase64, imageDir }) => {
+    try {
+      // 解析图片保存目录：
+      //   - imageDir 为绝对路径 → 直接使用
+      //   - imageDir 为相对路径 → 相对当前文档目录（无文档时落到 userData/pasted-images）
+      //   - imageDir 留空 → 默认 "assets"（兼容旧版）
+      const sub = (imageDir && String(imageDir).trim()) || 'assets'
+      const isAbs = path.isAbsolute(sub)
+      let dir
+      if (isAbs) {
+        dir = sub
+      } else if (baseDir) {
+        dir = path.join(baseDir, sub)
+      } else {
+        dir = path.join(app.getPath('userData'), 'pasted-images')
+      }
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
       // 防重名
@@ -260,8 +288,10 @@ function setupIPC() {
       }
       fs.writeFileSync(absPath, Buffer.from(dataBase64, 'base64'))
 
-      // 返回相对路径（相对于 baseDir）；无 baseDir 时返回绝对路径（file:// 形式）
-      const relPath = baseDir
+      // 返回路径：
+      //   - 绝对图片目录或无 baseDir：返回 file:// 绝对 URL（预览端直接可用）
+      //   - 相对模式且有文档：返回相对 baseDir 的相对路径（便于跟随文档移动）
+      const relPath = (!isAbs && baseDir)
         ? path.relative(baseDir, absPath).replace(/\\/g, '/')
         : 'file:///' + absPath.replace(/\\/g, '/')
       return { success: true, relPath, absPath }
@@ -317,6 +347,23 @@ function setupIPC() {
   // 在文件管理器中显示
   ipcMain.handle('shell-show-item', (_, filePath) => {
     shell.showItemInFolder(filePath)
+  })
+
+  // 清空应用缓存（HTTP / Code / GPU / Storage 等），保留 electron-store 设置
+  ipcMain.handle('clear-cache', async () => {
+    try {
+      const { session } = require('electron')
+      const ses = session.defaultSession
+      const before = await ses.getCacheSize().catch(() => 0)
+      await ses.clearCache()
+      await ses.clearStorageData({
+        storages: ['cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage']
+      })
+      // electron-store 设置存放于 userData/config.json，未触碰
+      return { success: true, freed: before }
+    } catch (e) {
+      return { success: false, error: e.message }
+    }
   })
 
   // 聚焦窗口（用于模态关闭后恢复编辑器焦点）

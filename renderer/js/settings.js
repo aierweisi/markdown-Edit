@@ -12,7 +12,8 @@ const SettingsManager = (() => {
       editorFont: (await window.api.storeGet('editorFont')) || "'JetBrains Mono', 'Fira Code', monospace",
       autoSaveInterval: (await window.api.storeGet('autoSaveInterval')) || 10,
       exportDir: (await window.api.storeGet('exportDir')) || '',
-      exportNamingRule: (await window.api.storeGet('exportNamingRule')) || '{title}_{date}'
+      exportNamingRule: (await window.api.storeGet('exportNamingRule')) || '{title}_{date}',
+      imageSaveDir: (await window.api.storeGet('imageSaveDir')) || 'assets'
     }
     return settings
   }
@@ -83,6 +84,7 @@ const SettingsManager = (() => {
     // Populate export panel
     document.getElementById('setting-exportdir').value = settings.exportDir
     document.getElementById('setting-namingrule').value = settings.exportNamingRule
+    document.getElementById('setting-imagedir').value = settings.imageSaveDir
 
     // Sync theme toggle buttons
     syncThemeButtons(settings.theme)
@@ -110,6 +112,7 @@ const SettingsManager = (() => {
     const autoSaveInterval = parseInt(document.getElementById('setting-autosave').value)
     const exportDir = document.getElementById('setting-exportdir').value
     const exportNamingRule = document.getElementById('setting-namingrule').value.trim() || '{title}_{date}'
+    const imageSaveDir = document.getElementById('setting-imagedir').value.trim() || 'assets'
 
     await window.api.storeSet('theme', theme)
     await window.api.storeSet('fontSize', fontSize)
@@ -117,6 +120,7 @@ const SettingsManager = (() => {
     await window.api.storeSet('autoSaveInterval', autoSaveInterval)
     await window.api.storeSet('exportDir', exportDir)
     await window.api.storeSet('exportNamingRule', exportNamingRule)
+    await window.api.storeSet('imageSaveDir', imageSaveDir)
 
     applyTheme(theme)
     applyFontSize(fontSize)
@@ -183,6 +187,38 @@ const SettingsManager = (() => {
         document.getElementById('setting-exportdir').value = result.filePaths[0]
       }
     })
+
+    // 图片保存目录：选择按钮（写入绝对路径）
+    document.getElementById('setting-imagedir-btn').addEventListener('click', async () => {
+      const result = await window.api.dialogSelectDir()
+      if (!result.canceled && result.filePaths.length) {
+        document.getElementById('setting-imagedir').value = result.filePaths[0]
+      }
+    })
+
+    // 清空缓存
+    const clearBtn = document.getElementById('setting-clear-cache-btn')
+    if (clearBtn) {
+      clearBtn.addEventListener('click', async () => {
+        if (!confirm('确定清空缓存？将清理 HTTP/代码/GPU 缓存与本地存储，不影响您的设置和文档。')) return
+        const orig = clearBtn.textContent
+        clearBtn.disabled = true
+        clearBtn.textContent = '清理中...'
+        const res = await window.api.clearCache()
+        clearBtn.disabled = false
+        if (res && res.success) {
+          const mb = res.freed ? ` (释放 ${(res.freed / 1024 / 1024).toFixed(1)} MB)` : ''
+          clearBtn.textContent = '已清空' + mb
+          if (window.ExportManager && ExportManager.showToast) {
+            ExportManager.showToast('缓存已清空' + mb)
+          }
+        } else {
+          clearBtn.textContent = '清空失败'
+          alert('清空缓存失败：' + (res && res.error || '未知错误'))
+        }
+        setTimeout(() => { clearBtn.textContent = orig }, 2200)
+      })
+    }
   }
 
   return { init, load, open, close, save, applyTheme, applyFontSize, applyEditorFont, toggleTheme }

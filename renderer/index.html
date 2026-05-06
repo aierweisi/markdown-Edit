@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: file: https:; font-src 'self' data: https://cdn.jsdelivr.net">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: https:; font-src 'self' data:">
   <title>Markdown Editor</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/dialog/dialog.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/matchesonscrollbar.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css" id="hljs-light">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css" id="hljs-dark" disabled>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css">
+  <link rel="stylesheet" href="vendor/codemirror/dialog.min.css">
+  <link rel="stylesheet" href="vendor/codemirror/matchesonscrollbar.min.css">
+  <link rel="stylesheet" href="vendor/hljs/styles/github.min.css" id="hljs-light">
+  <link rel="stylesheet" href="vendor/hljs/styles/github-dark.min.css" id="hljs-dark" disabled>
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body class="theme-light">
@@ -190,7 +190,7 @@
     <div class="find-panel" id="find-panel" hidden>
       <div class="find-row">
         <div class="find-input-wrap">
-          <input type="text" id="find-input" placeholder="查找" spellcheck="false">
+          <input type="text" id="find-input" placeholder="输入要查找的内容" spellcheck="false">
           <span class="find-count" id="find-count"></span>
         </div>
         <div class="find-opts">
@@ -199,10 +199,10 @@
           <button class="find-opt" id="find-opt-regex" title="正则表达式 (Alt+R)">.*</button>
         </div>
         <div class="find-actions">
-          <button class="find-btn" id="find-prev" title="上一个 (Shift+Enter)">
+          <button class="find-btn" id="find-prev" title="上一个 (Shift+Enter / Shift+F3)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
           </button>
-          <button class="find-btn" id="find-next" title="下一个 (Enter)">
+          <button class="find-btn" id="find-next" title="下一个 (Enter / F3)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <button class="find-btn" id="find-toggle-replace" title="替换模式 (Ctrl+H)">
@@ -219,6 +219,11 @@
           <button class="find-btn find-btn-text" id="replace-one">替换</button>
           <button class="find-btn find-btn-text" id="replace-all">全部</button>
         </div>
+      </div>
+      <div class="find-hints">
+        <span class="find-hint"><kbd>Enter</kbd> 下一个</span>
+        <span class="find-hint"><kbd>Shift</kbd>+<kbd>Enter</kbd> 上一个</span>
+        <span class="find-hint"><kbd>Esc</kbd> 关闭</span>
       </div>
     </div>
   </div>
@@ -464,6 +469,19 @@
             </div>
           </div>
 
+          <div class="setting-item">
+            <div class="setting-item-info">
+              <div class="setting-item-label">粘贴图片保存目录</div>
+              <div class="setting-item-desc">相对路径（如 assets / images）相对当前文档；填绝对路径则所有图片统一存到该目录</div>
+            </div>
+            <div class="setting-item-control">
+              <div class="setting-dir-row">
+                <input type="text" id="setting-imagedir" placeholder="assets" style="width:180px">
+                <button class="btn-secondary" id="setting-imagedir-btn">选择</button>
+              </div>
+            </div>
+          </div>
+
           <div class="setting-item" style="flex-direction:column;align-items:flex-start;gap:10px">
             <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
               <div class="setting-item-info">
@@ -479,6 +497,16 @@
               <span class="naming-var-chip" data-var="{date}">{date}</span>
               <span class="naming-var-chip" data-var="{time}">{time}</span>
               <span class="naming-var-chip" data-var="{datetime}">{datetime}</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-item-info">
+              <div class="setting-item-label">清空缓存</div>
+              <div class="setting-item-desc">清理渲染器 HTTP/代码/GPU 缓存与本地存储（不影响您的设置和文档）</div>
+            </div>
+            <div class="setting-item-control">
+              <button class="btn-secondary" id="setting-clear-cache-btn">清空</button>
             </div>
           </div>
         </div>
@@ -511,24 +539,23 @@
 </div>
 
 <!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/markdown/markdown.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/edit/continuelist.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/selection/active-line.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/display/placeholder.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/dialog/dialog.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/searchcursor.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/search.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/match-highlighter.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/scroll/annotatescrollbar.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/matchesonscrollbar.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/addon/search/jump-to-line.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
+<script src="vendor/codemirror/codemirror.min.js"></script>
+<script src="vendor/codemirror/mode/markdown/markdown.min.js"></script>
+<script src="vendor/codemirror/addon/edit/continuelist.min.js"></script>
+<script src="vendor/codemirror/addon/selection/active-line.min.js"></script>
+<script src="vendor/codemirror/addon/display/placeholder.min.js"></script>
+<script src="vendor/codemirror/addon/dialog/dialog.min.js"></script>
+<script src="vendor/codemirror/addon/search/searchcursor.min.js"></script>
+<script src="vendor/codemirror/addon/search/match-highlighter.min.js"></script>
+<script src="vendor/codemirror/addon/scroll/annotatescrollbar.min.js"></script>
+<script src="vendor/codemirror/addon/search/matchesonscrollbar.min.js"></script>
+<script src="vendor/codemirror/addon/search/jump-to-line.min.js"></script>
+<script src="vendor/marked/marked.min.js"></script>
+<script src="vendor/dompurify/purify.min.js"></script>
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/katex/contrib/auto-render.min.js"></script>
+<script src="vendor/mermaid/mermaid.min.js"></script>
+<script src="vendor/hljs/highlight.min.js"></script>
 <script src="js/tabs.js"></script><script src="js/editor.js"></script>
 <script src="js/preview.js"></script>
 <script src="js/find.js"></script>

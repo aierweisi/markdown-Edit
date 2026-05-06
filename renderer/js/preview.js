@@ -56,6 +56,28 @@ const PreviewManager = (() => {
     return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
   }
 
+  // 将活动文档目录下的相对路径转换成 file:// 绝对 URL
+  function rewriteRelativeImages() {
+    if (!previewBody || !window.TabManager) return
+    const tab = TabManager.getActive && TabManager.getActive()
+    if (!tab || !tab.filePath) return
+    // 取文档所在目录（兼容 \ 与 /）
+    const lastSep = Math.max(tab.filePath.lastIndexOf('\\'), tab.filePath.lastIndexOf('/'))
+    if (lastSep < 0) return
+    const dir = tab.filePath.slice(0, lastSep).replace(/\\/g, '/')
+    const baseUrl = 'file:///' + dir.replace(/^\/+/, '') + '/'
+
+    // 仅重写"裸相对路径"——既不是绝对 URL，也不是 data:/file:/http(s):/blob:
+    const skip = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|data:|blob:)/i
+    previewBody.querySelectorAll('img').forEach(img => {
+      const src = img.getAttribute('src')
+      if (!src || skip.test(src)) return
+      try {
+        img.src = new URL(src, baseUrl).href
+      } catch (e) {}
+    })
+  }
+
   function slugify(text) {
     return String(text).toLowerCase().trim()
       .replace(/[\s\u3000]+/g, '-')
@@ -152,8 +174,115 @@ const PreviewManager = (() => {
       if (cb) {
         e.preventDefault()
         toggleTaskInSource(cb)
+        return
+      }
+      // Image lightbox: 点击图片弹出大图预览
+      const img = e.target.closest('img')
+      if (img && !e.target.closest('a')) {
+        e.preventDefault()
+        openImageLightbox(img.src, img.alt || '')
       }
     })
+  }
+
+  // ==== 图片预览 (lightbox) ====
+  let _lightboxEl = null
+  let _lbState = null
+
+  function openImageLightbox(src, alt) {
+    closeImageLightbox()
+    const overlay = document.createElement('div')
+    overlay.className = 'image-lightbox'
+    overlay.innerHTML = `
+      <button class="image-lightbox-close" type="button" title="关闭 (Esc)">✕</button>
+      <div class="image-lightbox-hint">100%</div>
+      <img alt="${escapeHtml(alt)}" draggable="false">
+    `
+    const imgEl = overlay.querySelector('img')
+    imgEl.src = src
+    document.body.appendChild(overlay)
+    document.body.style.overflow = 'hidden'
+    _lightboxEl = overlay
+
+    const hintEl = overlay.querySelector('.image-lightbox-hint')
+    _lbState = { scale: 1, tx: 0, ty: 0, dragging: false, sx: 0, sy: 0 }
+
+    const apply = () => {
+      imgEl.style.transform =
+        `translate(${_lbState.tx}px, ${_lbState.ty}px) scale(${_lbState.scale})`
+      hintEl.textContent = Math.round(_lbState.scale * 100) + '%'
+      hintEl.classList.add('show')
+      clearTimeout(hintEl._t)
+      hintEl._t = setTimeout(() => hintEl.classList.remove('show'), 800)
+    }
+
+    // 滚轮缩放（以鼠标位置为锚点）
+    overlay.addEventListener('wheel', (ev) => {
+      ev.preventDefault()
+      const rect = imgEl.getBoundingClientRect()
+      const cx = ev.clientX - (rect.left + rect.width / 2)
+      const cy = ev.clientY - (rect.top + rect.height / 2)
+      const factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1
+      const newScale = Math.min(8, Math.max(0.2, _lbState.scale * factor))
+      const ratio = newScale / _lbState.scale
+      _lbState.tx = (_lbState.tx - cx) * ratio + cx
+      _lbState.ty = (_lbState.ty - cy) * ratio + cy
+      _lbState.scale = newScale
+      apply()
+    }, { passive: false })
+
+    // 拖拽
+    const onMove = (ev) => {
+      if (!_lbState || !_lbState.dragging) return
+      _lbState.tx = ev.clientX - _lbState.sx
+      _lbState.ty = ev.clientY - _lbState.sy
+      apply()
+    }
+    const onUp = () => {
+      if (_lbState) _lbState.dragging = false
+      if (imgEl) imgEl.classList.remove('dragging')
+    }
+    imgEl.addEventListener('mousedown', (ev) => {
+      ev.preventDefault()
+      _lbState.dragging = true
+      _lbState.sx = ev.clientX - _lbState.tx
+      _lbState.sy = ev.clientY - _lbState.ty
+      imgEl.classList.add('dragging')
+    })
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+
+    // 双击复位
+    imgEl.addEventListener('dblclick', () => {
+      _lbState.scale = 1; _lbState.tx = 0; _lbState.ty = 0; apply()
+    })
+
+    // 点击空白 / 关闭按钮
+    overlay.addEventListener('click', (ev) => {
+      if (ev.target === overlay || ev.target.closest('.image-lightbox-close')) {
+        closeImageLightbox()
+      }
+    })
+
+    // ESC 关闭
+    const onKey = (ev) => { if (ev.key === 'Escape') closeImageLightbox() }
+    document.addEventListener('keydown', onKey)
+
+    overlay._cleanup = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.removeEventListener('keydown', onKey)
+    }
+  }
+
+  function closeImageLightbox() {
+    if (_lightboxEl) {
+      if (_lightboxEl._cleanup) _lightboxEl._cleanup()
+      _lightboxEl.remove()
+      _lightboxEl = null
+      _lbState = null
+      document.body.style.overflow = ''
+    }
   }
 
   function toggleTaskInSource(checkbox) {
@@ -239,10 +368,19 @@ const PreviewManager = (() => {
           html = DOMPurify.sanitize(html, {
             ADD_TAGS: ['foreignObject', 'mtable', 'mtr', 'mtd', 'mrow', 'mi', 'mn', 'mo', 'msup', 'msub', 'mfrac', 'mspace', 'mstyle', 'msqrt', 'munder', 'mover', 'munderover', 'semantics', 'annotation'],
             ADD_ATTR: ['target', 'data-mermaid-src'],
-            FORBID_TAGS: ['style']
+            FORBID_TAGS: ['style'],
+            // 默认 ALLOWED_URI_REGEXP 不放行 file:，会把粘贴/拖拽生成的
+            // <img src="file:///..."> 的 src 直接清空，导致本地图片无法预览。
+            // 这里在默认协议白名单基础上加上 file:。
+            ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|file):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
           })
         }
         previewBody.innerHTML = html
+
+        // 把相对路径的图片重写为 file:// 绝对 URL，
+        // 否则浏览器会按渲染器自身的目录解析（renderer/...），
+        // 导致粘贴的图片（保存到文档同级 assets 目录）无法预览。
+        rewriteRelativeImages()
 
         // Restore scroll position
         if (container) container.scrollTop = prevScrollTop

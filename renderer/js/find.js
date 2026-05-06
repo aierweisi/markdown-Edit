@@ -11,6 +11,7 @@ const FindManager = (() => {
   let curIdx = -1
 
   function init() {
+    if (panel) return  // 幂等：已初始化则跳过，避免重复绑定
     panel = document.getElementById('find-panel')
     input = document.getElementById('find-input')
     replaceInput = document.getElementById('replace-input')
@@ -55,10 +56,47 @@ const FindManager = (() => {
       if (ctrl && e.key === 'f') {
         e.preventDefault()
         show(false)
-      } else if (ctrl && e.key === 'h') {
+        return
+      }
+      if (ctrl && e.key === 'h') {
         e.preventDefault()
         show(true)
+        return
       }
+      // F3 / Shift+F3 / Ctrl+G: 跳转下一个/上一个匹配，不需要焦点在输入框
+      if (visible && (e.key === 'F3' || (ctrl && (e.key === 'g' || e.key === 'G')))) {
+        e.preventDefault()
+        step(e.shiftKey ? -1 : 1)
+        return
+      }
+      // 当查找面板可见且光标停在某个匹配上时，回车跳到下一个
+      // （即使焦点在编辑器里）。Shift+Enter = 上一个。
+      if (visible && e.key === 'Enter' && marks.length > 0) {
+        const ae = document.activeElement
+        const inFindUI = ae === input || ae === replaceInput
+        if (inFindUI) return  // 输入框自己的 keydown 已处理
+        if (cm && isCursorInsideMatch()) {
+          e.preventDefault()
+          e.stopPropagation()
+          step(e.shiftKey ? -1 : 1)
+        }
+      }
+    }, true)
+  }
+
+  // 判断当前 CodeMirror 光标是否落在某个匹配区间内
+  function isCursorInsideMatch() {
+    if (!cm || marks.length === 0) return false
+    const cur = cm.getCursor()
+    const inSide = (p, from, to) => {
+      if (p.line < from.line || p.line > to.line) return false
+      if (p.line === from.line && p.ch < from.ch) return false
+      if (p.line === to.line && p.ch > to.ch) return false
+      return true
+    }
+    return marks.some(m => {
+      const r = m.find(); if (!r) return false
+      return inSide(cur, r.from, r.to)
     })
   }
 
@@ -148,8 +186,19 @@ const FindManager = (() => {
     if (r) {
       marks[curIdx].clear()
       marks[curIdx] = cm.markText(r.from, r.to, { className: 'cm-find-match cm-find-current' })
-      cm.setSelection(r.from, r.to)
+      // 把光标移到匹配处但不抢焦点（CM5 的 setSelection 默认会聚焦编辑器，
+      // 导致查找输入框失焦，看起来像是"弹框关闭了"）。
+      // 这里手动定位 + 滚动可见，保持焦点在 find 输入框。
+      const wasFindFocused = document.activeElement === input || document.activeElement === replaceInput
+      cm.setSelection(r.from, r.to, { scroll: false })
       cm.scrollIntoView({ from: r.from, to: r.to }, 80)
+      if (wasFindFocused) {
+        // CM 内部聚焦是异步的，下一帧把焦点抢回来
+        const ae = document.activeElement
+        requestAnimationFrame(() => {
+          if (visible && ae && ae.focus) ae.focus()
+        })
+      }
     }
     countEl.textContent = `${curIdx + 1} / ${marks.length}`
   }
@@ -185,4 +234,23 @@ const FindManager = (() => {
   }
 
   return { init, show, hide, isVisible: () => visible }
+})()
+
+// 自动初始化兜底：避免依赖 app.js 的初始化顺序失败导致 FindManager 未启动
+;(function autoInit() {
+  let inited = false
+  const safeInit = () => {
+    if (inited) return
+    try {
+      FindManager.init()
+      inited = true
+    } catch (e) {
+      console.error('[FindManager] init failed:', e)
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', safeInit, { once: true })
+  } else {
+    setTimeout(safeInit, 0)
+  }
 })()

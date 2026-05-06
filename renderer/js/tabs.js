@@ -27,6 +27,14 @@ const TabManager = (() => {
 
   function renderTab(tab) {
     const container = document.getElementById('tabs-container')
+    if (container && !container.dataset.wheelBound) {
+      container.dataset.wheelBound = '1'
+      container.addEventListener('wheel', (e) => {
+        if (e.deltaY === 0) return
+        container.scrollLeft += e.deltaY
+        e.preventDefault()
+      }, { passive: false })
+    }
     const el = document.createElement('div')
     el.className = 'tab'
     el.dataset.id = tab.id
@@ -189,14 +197,42 @@ const TabManager = (() => {
     input.select()
 
     let committed = false
-    function commit() {
+    async function commit() {
       if (committed) return
       committed = true
       const newTitle = input.value.trim() || tab.title
       // Restore title element first
       input.replaceWith(titleEl)
-      // Then update title
-      TabManager.setTabTitle(id, newTitle)
+
+      if (newTitle === tab.title) {
+        TabManager.setTabTitle(id, newTitle)
+        return
+      }
+
+      // 已保存的文件：同步重命名磁盘文件，保持扩展名不变
+      if (tab.filePath && window.api && window.api.fileRename) {
+        const oldPath = tab.filePath
+        const sep = oldPath.includes('\\') ? '\\' : '/'
+        const lastSep = Math.max(oldPath.lastIndexOf('\\'), oldPath.lastIndexOf('/'))
+        const dir = lastSep >= 0 ? oldPath.slice(0, lastSep) : ''
+        const oldBase = lastSep >= 0 ? oldPath.slice(lastSep + 1) : oldPath
+        const extMatch = oldBase.match(/\.(md|markdown|txt)$/i)
+        const ext = extMatch ? extMatch[0] : '.md'
+        // 清理新名中的非法文件名字符
+        const safeTitle = newTitle.replace(/[\\/:*?"<>|]/g, '_').trim() || tab.title
+        const newPath = (dir ? dir + sep : '') + safeTitle + ext
+        const res = await window.api.fileRename(oldPath, newPath)
+        if (res && res.success) {
+          TabManager.setTabTitle(id, safeTitle, res.newPath || newPath)
+        } else {
+          alert('重命名失败：' + (res && res.error ? res.error : '未知错误'))
+          // 回滚标题（保持磁盘真实情况）
+          TabManager.setTabTitle(id, tab.title)
+        }
+      } else {
+        // 未保存的草稿：仅更新标题，下次保存时以此为默认文件名
+        TabManager.setTabTitle(id, newTitle)
+      }
     }
 
     input.addEventListener('blur', commit)
@@ -271,6 +307,7 @@ const TabManager = (() => {
     }
 
     const idx = tabs.findIndex(t => t.id === id)
+    const wasActive = id === activeTabId
     tabs.splice(idx, 1)
 
     const el = document.querySelector(`.tab[data-id="${id}"]`)
@@ -281,10 +318,12 @@ const TabManager = (() => {
 
     if (tabs.length === 0) {
       // Open new empty tab
+      activeTabId = null
       const newTab = createTab()
       setActive(newTab.id)
-    } else {
+    } else if (wasActive) {
       const nextTab = tabs[Math.min(idx, tabs.length - 1)]
+      activeTabId = null  // prevent saving editor state into the closed tab
       setActive(nextTab.id)
     }
   }

@@ -380,10 +380,17 @@
     let filePath = tab.filePath
 
     if (!filePath || saveAs) {
-      const rule = (await window.api.storeGet('exportNamingRule')) || '{title}_{date}'
       const exportDir = (await window.api.storeGet('exportDir')) || ''
-      const filename = resolveNamingRuleLocal(rule, content)
-      const defaultPath = exportDir ? exportDir + '/' + filename + '.md' : filename + '.md'
+      // 优先使用用户设置的标签标题作为默认文件名；
+      // 若仍是默认 "未命名" 则回退到命名规则模板。
+      let baseName
+      if (tab.title && tab.title !== '未命名') {
+        baseName = tab.title.replace(/[\\/:*?"<>|]/g, '_')
+      } else {
+        const rule = (await window.api.storeGet('exportNamingRule')) || '{title}_{date}'
+        baseName = resolveNamingRuleLocal(rule, content)
+      }
+      const defaultPath = exportDir ? exportDir + '/' + baseName + '.md' : baseName + '.md'
 
       const result = await window.api.dialogSaveFile({
         defaultPath,
@@ -399,8 +406,13 @@
 
     const res = await window.api.fileSave(filePath, content)
     if (res.success) {
-      const name = filePath.split(/[/\\]/).pop().replace(/\.(md|markdown)$/i, '')
-      TabManager.setTabTitle(tab.id, name, filePath)
+      const baseName = filePath.split(/[/\\]/).pop().replace(/\.(md|markdown)$/i, '')
+      // 若用户在另存对话框里改了文件名，以磁盘上的为准；
+      // 否则保留 tab.title（含用户重命名）—— 仅更新 filePath。
+      const titleToUse = (tab.filePath && tab.filePath === filePath)
+        ? tab.title
+        : baseName
+      TabManager.setTabTitle(tab.id, titleToUse, filePath)
       TabManager.markModified(tab.id, false)
       if (window.RecentFiles) await RecentFiles.add(filePath)
       ExportManager.showToast(`已保存: ${filePath.split(/[/\\]/).pop()}`)
@@ -608,6 +620,7 @@
   if (winCloseBtn) winCloseBtn.addEventListener('click', () => window.api.winClose())
 
   function updateMaxIcon(isMax) {
+    document.body.classList.toggle('is-maximized', !!isMax)
     if (!winMaxIcon) return
     if (isMax) {
       // Restore (two overlapping squares)
@@ -624,4 +637,16 @@
   if (window.api && window.api.winIsMaximized) {
     window.api.winIsMaximized().then(updateMaxIcon)
   }
+
+  // Aero Snap / 最小化恢复 / 拖拽脱离最大化 等场景下 maximize/unmaximize 事件
+  // 不一定触发；窗口尺寸变化后再主动查询一次状态，确保顶部 padding 与窗口
+  // 真实状态同步，避免顶部间距偶发消失。
+  let resizeStateTimer = null
+  window.addEventListener('resize', () => {
+    if (!window.api || !window.api.winIsMaximized) return
+    clearTimeout(resizeStateTimer)
+    resizeStateTimer = setTimeout(() => {
+      window.api.winIsMaximized().then(updateMaxIcon)
+    }, 50)
+  })
 })()

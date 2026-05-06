@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   // File
   fileRead: (filePath) => ipcRenderer.invoke('file-read', filePath),
   fileSave: (filePath, content) => ipcRenderer.invoke('file-save', filePath, content),
+  fileRename: (oldPath, newPath) => ipcRenderer.invoke('file-rename', oldPath, newPath),
   imageSave: (payload) => ipcRenderer.invoke('image-save', payload),
 
   // Dialogs
@@ -21,6 +22,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // Shell
   shellShowItem: (filePath) => ipcRenderer.invoke('shell-show-item', filePath),
+
+  // Cache
+  clearCache: () => ipcRenderer.invoke('clear-cache'),
 
   // Focus window
   focusWindow: () => ipcRenderer.invoke('focus-window'),
