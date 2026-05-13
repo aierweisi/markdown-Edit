@@ -222,14 +222,26 @@ const FindManager = (() => {
     if (!re) return
     const text = cm.getValue()
     const replaced = text.replace(re, replaceInput.value)
-    if (replaced !== text) {
-      cm.operation(() => {
-        cm.setValue(replaced)
-      })
-      // Notify modification
-      const cb = cm._handlers && cm._handlers.change
-      // also trigger normal change handlers via setValue (already triggers 'change')
-    }
+    if (replaced === text) { refresh(); return }
+
+    // 保存光标和滚动位置，替换后恢复
+    const savedScroll = cm.getScrollInfo().top
+    const savedCursor = cm.getCursor()
+
+    cm.operation(() => {
+      const lastLine = cm.lastLine()
+      const lastCh = cm.getLine(lastLine).length
+      // 用 replaceRange 保留撤销栈（cm.setValue 会清掉光标且产生不可撤销操作）
+      cm.replaceRange(replaced, { line: 0, ch: 0 }, { line: lastLine, ch: lastCh })
+    })
+
+    // 把光标限制在新文档范围内
+    const newLastLine = cm.lastLine()
+    const safeLine = Math.min(savedCursor.line, newLastLine)
+    const safeLineLen = cm.getLine(safeLine).length
+    cm.setCursor({ line: safeLine, ch: Math.min(savedCursor.ch, safeLineLen) })
+    cm.scrollTo(null, savedScroll)
+
     refresh()
   }
 

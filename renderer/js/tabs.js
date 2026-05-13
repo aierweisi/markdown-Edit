@@ -6,19 +6,79 @@ const TabManager = (() => {
   let tabs = []
   let activeTabId = null
   let tabCounter = 0
+  let switchCallback = null
 
   function genId() { return `tab_${++tabCounter}` }
+  function onSwitch(cb) { switchCallback = cb }
+
+  // 应用风格的确认框,返回 Promise<boolean>
+  // 替代原生 confirm() 的视觉割裂感
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))
+  }
+  function showConfirm(message, opts = {}) {
+    return new Promise(resolve => {
+      const title = opts.title || '确认'
+      const okText = opts.okText || '确定'
+      const cancelText = opts.cancelText || '取消'
+      const danger = !!opts.danger
+
+      const overlay = document.createElement('div')
+      overlay.className = 'modal-overlay confirm-overlay'
+      overlay.innerHTML = `
+        <div class="modal modal-small">
+          <div class="modal-header"><h2>${escHtml(title)}</h2></div>
+          <div class="modal-body">
+            <p class="confirm-message">${escHtml(message)}</p>
+            <div class="modal-actions">
+              <button class="btn-secondary confirm-cancel">${escHtml(cancelText)}</button>
+              <button class="${danger ? 'btn-danger' : 'btn-primary'} confirm-ok">${escHtml(okText)}</button>
+            </div>
+          </div>
+        </div>
+      `
+      document.body.appendChild(overlay)
+      // 触发 transition / animation
+      requestAnimationFrame(() => overlay.classList.add('open'))
+
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); finish(false) }
+        else if (e.key === 'Enter') { e.preventDefault(); finish(true) }
+      }
+      const finish = (val) => {
+        overlay.classList.remove('open')
+        overlay.classList.add('closing')
+        document.removeEventListener('keydown', onKey, true)
+        setTimeout(() => overlay.remove(), 220)
+        resolve(val)
+      }
+      overlay.querySelector('.confirm-ok').addEventListener('click', () => finish(true))
+      overlay.querySelector('.confirm-cancel').addEventListener('click', () => finish(false))
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false) })
+      document.addEventListener('keydown', onKey, true)
+      setTimeout(() => {
+        const ok = overlay.querySelector('.confirm-ok')
+        if (ok) ok.focus()
+      }, 60)
+    })
+  }
+  // 暴露到全局, 让其它模块也能调用应用风格的确认框
+  window.showConfirm = showConfirm
 
   function createTab(options = {}) {
     const id = genId()
+    const content = options.content || ''
     const tab = {
       id,
       title: options.title || '未命名',
       filePath: options.filePath || null,
-      content: options.content || '',
+      // content 仅用于缓存序列化的兜底；运行时真实内容由 doc 持有
+      content,
       modified: false,
       scrollTop: 0,
-      cursorPos: { line: 0, ch: 0 }
+      // 每个 tab 拥有独立 CodeMirror Doc,包含自己的撤销栈和光标
+      doc: window.EditorManager ? EditorManager.createDoc(content) : null
     }
     tabs.push(tab)
     renderTab(tab)
@@ -52,6 +112,14 @@ const TabManager = (() => {
       } else {
         TabManager.setActive(tab.id)
       }
+    })
+    // 双击标签名快速进入重命名模式（无论激活状态）
+    el.addEventListener('dblclick', (e) => {
+      if (e.target.classList.contains('tab-close')) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (tab.id !== activeTabId) TabManager.setActive(tab.id)
+      startRename(tab.id)
     })
     el.querySelector('.tab-close').addEventListener('click', (e) => {
       e.stopPropagation()
@@ -259,13 +327,11 @@ const TabManager = (() => {
   }
 
   function setActive(id) {
-    // Save current editor state to current tab
+    // 保存当前 tab 的滚动位置（光标和内容由 Doc 自己持有,不需要额外存）
     if (activeTabId) {
       const current = getTab(activeTabId)
       if (current) {
-        current.content = EditorManager.getValue()
         current.scrollTop = EditorManager.getScrollTop()
-        current.cursorPos = EditorManager.getCursor()
       }
     }
 
@@ -277,10 +343,20 @@ const TabManager = (() => {
 
     const tab = getTab(id)
     if (tab) {
-      EditorManager.setValue(tab.content)
-      EditorManager.setCursor(tab.cursorPos)
-      EditorManager.setScrollTop(tab.scrollTop)
+      // swapDoc 不触发 change 事件,也不清空撤销栈
+      if (tab.doc) {
+        EditorManager.swapDoc(tab.doc)
+      } else {
+        // 兜底：旧缓存还原的 tab 可能没有 doc,补建一个
+        tab.doc = EditorManager.createDoc(tab.content || '')
+        EditorManager.swapDoc(tab.doc)
+      }
+      EditorManager.setScrollTop(tab.scrollTop || 0)
       updateStatusFile(tab)
+      // 因为 swapDoc 不触发 change,这里通知外部刷新预览/字数/状态栏
+      if (switchCallback) {
+        try { switchCallback(tab) } catch (e) { console.error('tab switch cb failed:', e) }
+      }
     }
   }
 
@@ -302,8 +378,13 @@ const TabManager = (() => {
     if (!tab) return
 
     if (tab.modified) {
-      // Simple confirm via native dialog would require IPC, use simple check
-      if (!confirm(`"${tab.title}" 有未保存的更改，确定要关闭吗？`)) return
+      const ok = await showConfirm(`"${tab.title}" 有未保存的更改,确定要关闭吗?`, {
+        title: '关闭未保存文档',
+        okText: '关闭',
+        cancelText: '取消',
+        danger: true
+      })
+      if (!ok) return
     }
 
     const idx = tabs.findIndex(t => t.id === id)
@@ -315,6 +396,7 @@ const TabManager = (() => {
 
     // Remove from cache
     CacheManager.removeTab(id)
+    syncUnsavedClass()
 
     if (tabs.length === 0) {
       // Open new empty tab
@@ -344,6 +426,13 @@ const TabManager = (() => {
     tab.modified = modified
     updateTabEl(tab)
     updateStatusFile(tab)
+    syncUnsavedClass()
+  }
+  // 任意一个 tab 处于 modified 时, 给 body 加 has-unsaved 类
+  // 配合 CSS 上的"保存按钮脉冲提示"
+  function syncUnsavedClass() {
+    const any = tabs.some(t => t.modified)
+    document.body.classList.toggle('has-unsaved', any)
   }
 
   function setTabTitle(id, title, filePath) {
@@ -372,6 +461,7 @@ const TabManager = (() => {
     createTab, setActive, closeTab,
     getActive, getTab, getAllTabs,
     markModified, setTabTitle, restoreFromCache,
+    onSwitch, syncUnsavedClass,
     get activeTabId() { return activeTabId }
   }
 })()

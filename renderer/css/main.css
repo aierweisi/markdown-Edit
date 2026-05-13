@@ -410,7 +410,7 @@ body.is-maximized { padding-top: 8px; }
    =========================== */
 .main-area {
   display: flex; flex: 1; overflow: hidden;
-  height: calc(100vh - 46px - 34px - 24px);
+  height: calc(100vh - 46px - 40px - 34px - 24px);
 }
 
 .editor-pane, .preview-pane {
@@ -1967,3 +1967,854 @@ input[type=text]:focus, input[type=number]:focus, textarea:focus, select:focus {
   pointer-events: none;
 }
 .image-lightbox-hint.show { opacity: 1; }
+
+/* ===========================
+   PDF 导出 / 打印
+   printToPDF 会启用 @media print，这里把工具栏、tab、状态栏、编辑区都隐藏，
+   让 PDF 只包含预览内容；同时让预览容器占满页面、可见溢出，避免内容被裁切。
+   =========================== */
+@media print {
+  .toolbar,
+  .format-toolbar,
+  .tabbar,
+  .statusbar,
+  .editor-pane,
+  .divider,
+  .find-panel,
+  .pane-header,
+  .modal-overlay,
+  .toast,
+  .image-lightbox,
+  #window-controls {
+    display: none !important;
+  }
+  body, html { background: #fff !important; color: #1a1a1a !important; overflow: visible !important; height: auto !important; }
+  .main-area { display: block !important; height: auto !important; overflow: visible !important; padding: 0 !important; }
+  .preview-pane {
+    display: flex !important;
+    width: 100% !important;
+    flex: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    border: none !important;
+  }
+  .preview-container {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  .markdown-body { color: #1a1a1a !important; background: #fff !important; }
+  /* 代码块允许换行避免被切断 */
+  .markdown-body pre, .markdown-body code { white-space: pre-wrap !important; word-break: break-word !important; }
+}
+
+/* =====================================================
+   ✨ Glassmorphism Upgrade
+   覆盖原有扁平样式: 引入磨砂玻璃、渐变 accent、柔和深度
+   原则: 仅覆盖视觉层, 不改变布局
+   ===================================================== */
+
+/* ── 新增 token (主题相关) ───────────────────────────── */
+.theme-light {
+  --glass-bg:        rgba(255, 255, 255, 0.62);
+  --glass-bg-strong: rgba(255, 255, 255, 0.86);
+  --glass-bg-soft:   rgba(255, 255, 255, 0.40);
+  --glass-border:    rgba(15, 23, 42, 0.08);
+  --glass-stroke:    rgba(255, 255, 255, 0.55);
+  --bg-mesh:
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.10) 0%, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.08) 0%, transparent 55%),
+    radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.10) 0%, transparent 55%),
+    radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.06) 0%, transparent 55%),
+    linear-gradient(180deg, #f4f6fb 0%, #ecf0f7 100%);
+  --accent-grad:    linear-gradient(135deg, #6366f1 0%, #8b5cf6 55%, #ec4899 100%);
+  --accent-grad-h:  linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #db2777 100%);
+  --accent-glow:    0 0 24px rgba(99, 102, 241, 0.28);
+  --accent-soft:    rgba(99, 102, 241, 0.10);
+  --accent-soft-h:  rgba(99, 102, 241, 0.16);
+  --shadow-lift:    0 6px 24px rgba(31, 41, 55, 0.10), 0 2px 6px rgba(31, 41, 55, 0.06);
+  --shadow-glass:   0 10px 40px rgba(31, 41, 55, 0.10), 0 2px 8px rgba(31, 41, 55, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --ease:           cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:       cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.theme-dark {
+  --glass-bg:        rgba(22, 25, 33, 0.55);
+  --glass-bg-strong: rgba(16, 19, 27, 0.86);
+  --glass-bg-soft:   rgba(28, 32, 42, 0.40);
+  --glass-border:    rgba(255, 255, 255, 0.08);
+  --glass-stroke:    rgba(255, 255, 255, 0.06);
+  --bg-mesh:
+    radial-gradient(at 8% 0%, rgba(99, 102, 241, 0.20) 0%, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(34, 211, 238, 0.10) 0%, transparent 55%),
+    radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.16) 0%, transparent 60%),
+    radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.10) 0%, transparent 60%),
+    linear-gradient(180deg, #0a0c14 0%, #060810 100%);
+  --accent-grad:    linear-gradient(135deg, #818cf8 0%, #a78bfa 55%, #f472b6 100%);
+  --accent-grad-h:  linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 55%, #f9a8d4 100%);
+  --accent-glow:    0 0 32px rgba(129, 140, 248, 0.42);
+  --accent-soft:    rgba(129, 140, 248, 0.16);
+  --accent-soft-h:  rgba(129, 140, 248, 0.24);
+  --shadow-lift:    0 6px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-glass:   0 10px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --ease:           cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out:       cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── 全局 body: 网格状渐变背景 ────────────────────────── */
+html, body { background: var(--bg-mesh) !important; }
+
+/* ── 顶层 surfaces: 磨砂玻璃 ─────────────────────────── */
+.toolbar,
+.format-toolbar,
+.tabbar,
+.pane-header {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border-bottom: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 -1px 0 var(--glass-stroke);
+}
+.statusbar {
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border-top: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 var(--glass-stroke);
+}
+
+/* ── App logo: 渐变 + 辉光 ──────────────────────────── */
+.app-logo-icon {
+  background: var(--accent-grad) !important;
+  box-shadow: var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border-radius: 7px !important;
+}
+.app-logo span {
+  background: var(--accent-grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  font-weight: 700;
+}
+
+/* ── 工具栏按钮: 悬停轻浮 + 渐变激活 ──────────────────── */
+.toolbar-btn {
+  transition: background 0.18s var(--ease), color 0.18s var(--ease),
+              transform 0.18s var(--ease), box-shadow 0.2s var(--ease) !important;
+}
+.theme-light .toolbar-btn:hover {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+.theme-dark .toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--text-primary) !important;
+}
+.toolbar-btn:active { transform: scale(0.94); }
+.toolbar-btn.active {
+  background: var(--accent-grad) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* ── 右侧操作按钮 (模板/导出): 玻璃药丸 ───────────────── */
+.toolbar-action-btn {
+  background: var(--glass-bg-soft) !important;
+  border: 1px solid var(--glass-border) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s var(--ease) !important;
+}
+.toolbar-action-btn:hover {
+  background: var(--accent-soft) !important;
+  border-color: var(--border-focus) !important;
+  color: var(--accent) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.14);
+}
+
+/* ── 窗口控制: 关闭按钮渐变 ─────────────────────────── */
+.win-ctrl { transition: background 0.18s var(--ease), color 0.18s var(--ease) !important; }
+.win-ctrl:hover { background: rgba(127, 127, 127, 0.08) !important; }
+.win-ctrl-close:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #ec4899 100%) !important;
+  color: #fff !important;
+}
+
+/* ── Tab: 透明背景 + 渐变激活指示 ─────────────────────── */
+.tab {
+  background: transparent !important;
+  border-right: 1px solid var(--glass-border) !important;
+  transition: background 0.2s var(--ease), color 0.18s var(--ease) !important;
+}
+.theme-light .tab:hover:not(.active) { background: rgba(99, 102, 241, 0.06) !important; }
+.theme-dark .tab:hover:not(.active)  { background: rgba(255, 255, 255, 0.04) !important; }
+.tab.active {
+  background: var(--bg-tab-active) !important;
+  color: var(--text-tab-active) !important;
+  box-shadow: inset 0 1px 0 var(--glass-stroke);
+}
+.tab.active::after {
+  background: var(--accent-grad) !important;
+  height: 2px !important;
+  border-radius: 2px 2px 0 0;
+  box-shadow: 0 -1px 10px rgba(99, 102, 241, 0.5);
+}
+.tab-dot {
+  background: var(--accent-grad) !important;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+}
+.tab-close { transition: all 0.18s var(--ease) !important; }
+.tab-close:hover {
+  background: linear-gradient(135deg, #ef4444 0%, #ec4899 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(229, 72, 77, 0.45);
+}
+.tab-new-btn {
+  border-left: 1px solid var(--glass-border) !important;
+  transition: all 0.18s var(--ease);
+}
+.tab-new-btn:hover {
+  color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+
+/* ── 编辑/预览面板: 微透明,让背景渐变透出 ─────────────── */
+.editor-pane  { background: rgba(255, 255, 255, 0.02) !important; }
+.preview-pane { background: rgba(255, 255, 255, 0.04) !important; }
+.theme-dark .editor-pane  { background: rgba(18, 21, 28, 0.35) !important; }
+.theme-dark .preview-pane { background: rgba(14, 17, 24, 0.50) !important; }
+.CodeMirror { background: transparent !important; }
+.CodeMirror-gutters { background: transparent !important; }
+.markdown-body { background: transparent !important; }
+
+/* ── 分隔条: 静态低调,激活时渐变辉光 ──────────────────── */
+.divider {
+  background: var(--glass-border) !important;
+  transition: all 0.18s var(--ease);
+}
+.divider:hover, .divider.dragging {
+  background: var(--accent-grad) !important;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.45);
+}
+
+/* ── 面板标题与字数胶囊 ────────────────────────────── */
+.pane-label::before {
+  background: var(--accent-grad) !important;
+  opacity: 1 !important;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.55);
+}
+.word-count {
+  background: var(--glass-bg-soft) !important;
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+/* ── Modal: 重度磨砂 + 渐变描边 ───────────────────────── */
+.modal-overlay {
+  background: rgba(8, 11, 18, 0.45) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.modal {
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
+  backdrop-filter: blur(40px) saturate(1.5) !important;
+  box-shadow: var(--shadow-glass) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+
+/* ── 主操作按钮: 渐变填充 + 浮起 ──────────────────────── */
+.btn-primary, .btn-apply {
+  background: var(--accent-grad) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.22s var(--ease) !important;
+  position: relative; overflow: hidden;
+}
+.btn-primary:hover, .btn-apply:hover {
+  background: var(--accent-grad-h) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.btn-primary:active, .btn-apply:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ── Toast: 玻璃药丸 ──────────────────────────────── */
+.toast {
+  background: var(--glass-bg-strong) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--glass-border);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--glass-stroke) !important;
+  border-radius: 10px !important;
+}
+
+/* ── Find 面板: 浮动玻璃 ──────────────────────────── */
+.find-panel {
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28), inset 0 1px 0 var(--glass-stroke) !important;
+  border-radius: 12px !important;
+}
+
+/* ── Export 下拉 ──────────────────────────────────── */
+.export-menu {
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  backdrop-filter: blur(28px) saturate(1.5);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22), inset 0 1px 0 var(--glass-stroke) !important;
+  border-radius: 10px !important;
+}
+
+/* ── 输入框聚焦: 柔和辉光 ──────────────────────────── */
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18) !important;
+}
+.tab-rename-input {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22), 0 0 18px rgba(99, 102, 241, 0.18) !important;
+}
+
+/* ── 自定义滚动条 ─────────────────────────────────── */
+.CodeMirror-scroll::-webkit-scrollbar,
+.preview-container::-webkit-scrollbar {
+  width: 10px !important; height: 10px;
+}
+.CodeMirror-scroll::-webkit-scrollbar-thumb,
+.preview-container::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.25) !important;
+  border-radius: 99px !important;
+  border: 2px solid transparent !important;
+  background-clip: padding-box !important;
+  transition: background 0.18s var(--ease);
+}
+.CodeMirror-scroll::-webkit-scrollbar-thumb:hover,
+.preview-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.45) !important;
+  background-clip: padding-box !important;
+}
+.CodeMirror-scroll::-webkit-scrollbar-track,
+.preview-container::-webkit-scrollbar-track { background: transparent !important; }
+
+/* ── CodeMirror 激活行: 极轻 ──────────────────────── */
+.theme-light .CodeMirror-activeline-background { background: rgba(99, 102, 241, 0.05) !important; }
+.theme-dark  .CodeMirror-activeline-background { background: rgba(129, 140, 248, 0.08) !important; }
+
+/* ── Settings nav 激活项 ─────────────────────────── */
+.settings-nav-item.active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border-radius: 8px;
+}
+
+/* ── 模板 list active: 玻璃 + 渐变左条 ────────────── */
+.tpl-item.active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  position: relative;
+}
+.tpl-item.active::before {
+  content: '';
+  position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px;
+  background: var(--accent-grad); border-radius: 2px;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+}
+
+/* ── 命令面板 / 最近文件: 也用玻璃 ─────────────────── */
+.palette-overlay, .recent-overlay {
+  background: rgba(8, 11, 18, 0.45) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.palette-modal, .recent-modal {
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
+  backdrop-filter: blur(40px) saturate(1.5) !important;
+  box-shadow: var(--shadow-glass) !important;
+  border-radius: 14px !important;
+}
+.palette-item.active, .recent-item.active {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+
+/* ── 主题切换按钮选中态 ────────────────────────── */
+.theme-toggle-btn.active {
+  background: var(--accent-grad) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.30);
+}
+
+/* ── 选择/checkbox accent-color ─────────────────── */
+.sync-scroll-toggle input { accent-color: var(--accent) !important; }
+
+/* ── Palette / Recent 弹出动画 (modal-overlay 已有自己的) ─── */
+.palette-overlay:not([hidden]) .palette-modal,
+.recent-overlay:not([hidden]) .recent-modal {
+  animation: glass-pop 0.22s var(--ease-spring);
+}
+@keyframes glass-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── 让 markdown 预览正文略带柔和的卡片感 ─────────── */
+.preview-container { padding: 32px 36px !important; }
+/* h1 渐变文字, h2/h3+ 保持普通色, 优先可读性 */
+.markdown-body h1 {
+  background: var(--accent-grad);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  border-bottom-color: var(--glass-border) !important;
+}
+.markdown-body h2 { border-bottom-color: var(--glass-border) !important; }
+.markdown-body code:not(pre code) {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.markdown-body pre {
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 var(--glass-stroke);
+}
+.markdown-body blockquote {
+  background: var(--accent-soft) !important;
+  border-left: 3px solid var(--accent) !important;
+  border-radius: 0 6px 6px 0;
+}
+.markdown-body a { color: var(--accent) !important; }
+.markdown-body a:hover { color: var(--accent-hover) !important; }
+
+/* ── 字体抗锯齿 ───────────────────────────────── */
+.toolbar, .format-toolbar, .tabbar, .statusbar, .pane-header, .modal {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 关闭按钮的 ::before 渐变描边在 Modal 上要确保 z-order ── */
+.modal-header, .modal-body, .modal-actions, .settings-modal-body,
+.tpl-overlay-body, .modal-footer, .settings-modal-footer { position: relative; z-index: 1; }
+
+/* ── 自定义 confirm 模态 ──────────────────────────────── */
+.confirm-overlay .modal-body { padding: 18px 22px 20px; }
+.confirm-overlay .confirm-message {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  margin-bottom: 18px;
+}
+.confirm-overlay .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.confirm-overlay .modal-actions button {
+  height: 32px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+}
+.confirm-overlay .btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #ec4899 100%) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: all 0.22s var(--ease) !important;
+}
+.confirm-overlay .btn-danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.confirm-overlay .btn-danger:active { transform: translateY(0) scale(0.98); }
+.confirm-overlay .btn-secondary {
+  background: var(--glass-bg-soft) !important;
+  border: 1px solid var(--glass-border) !important;
+  color: var(--text-secondary) !important;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: all 0.18s var(--ease) !important;
+}
+.confirm-overlay .btn-secondary:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ── macOS: 隐藏自绘窗口控件,留出红黄绿位置 ──────────── */
+.platform-mac #window-controls { display: none !important; }
+/* 标题栏左侧空出 ~78px (红黄绿宽 ~52px + padding) 避免 app-logo 被压到按钮上 */
+.platform-mac .toolbar { padding-left: 82px !important; }
+/* macOS 最大化时 Windows 那 8px 补偿不需要 */
+.platform-mac.is-maximized { padding-top: 0 !important; }
+
+/* =====================================================
+   ✨ 视觉升级 v2 — 层次系统 + 色彩对比
+   - 引入 z-level(z1/z2/z3/z4)阴影体系, 不同层级有不同深度
+   - 引入副 accent (cyan), 与主 accent (violet/pink) 形成色相对比
+   - 语义状态色 (success/warning) 在状态栏显式体现
+   - 编辑区与预览区采用不同色温, 增加视觉差异
+   ===================================================== */
+
+/* ── 1) 多色背景 mesh: 加入 cyan / amber 色斑, 丰富色相 ── */
+.theme-light {
+  --bg-mesh:
+    radial-gradient(at 5% 0%, rgba(99, 102, 241, 0.14) 0%, transparent 45%),
+    radial-gradient(at 80% 0%, rgba(6, 182, 212, 0.12) 0%, transparent 50%),
+    radial-gradient(at 100% 50%, rgba(168, 85, 247, 0.10) 0%, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.10) 0%, transparent 50%),
+    radial-gradient(at 60% 100%, rgba(245, 158, 11, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, #f4f6fb 0%, #ecf0f7 100%);
+}
+.theme-dark {
+  --bg-mesh:
+    radial-gradient(at 8% 0%, rgba(99, 102, 241, 0.26) 0%, transparent 50%),
+    radial-gradient(at 90% 5%, rgba(34, 211, 238, 0.18) 0%, transparent 55%),
+    radial-gradient(at 100% 60%, rgba(168, 85, 247, 0.20) 0%, transparent 55%),
+    radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.16) 0%, transparent 60%),
+    radial-gradient(at 50% 100%, rgba(244, 114, 182, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #0a0c14 0%, #060810 100%);
+}
+
+/* ── 2) 副 accent (cyan) + 语义色 + z-level 阴影 ──── */
+.theme-light {
+  --accent-2:        #06b6d4;
+  --accent-2-hover:  #0891b2;
+  --accent-2-soft:   rgba(6, 182, 212, 0.10);
+  --accent-2-grad:   linear-gradient(135deg, #0ea5e9 0%, #06b6d4 50%, #14b8a6 100%);
+  --accent-tri-grad: linear-gradient(135deg, #06b6d4 0%, #6366f1 35%, #8b5cf6 70%, #ec4899 100%);
+
+  --status-success:  #10b981;
+  --status-warning:  #f59e0b;
+  --status-info:     #06b6d4;
+
+  --z1-bg:           rgba(255, 255, 255, 0.30);
+  --z2-bg:           rgba(255, 255, 255, 0.55);
+  --z2-bg-strong:    rgba(255, 255, 255, 0.72);
+  --z3-bg:           rgba(255, 255, 255, 0.86);
+  --z4-bg:           rgba(255, 255, 255, 0.94);
+
+  --shadow-z1: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-z2: 0 2px 8px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-z3: 0 10px 28px rgba(15, 23, 42, 0.12), 0 3px 8px rgba(15, 23, 42, 0.06);
+  --shadow-z4: 0 28px 72px rgba(15, 23, 42, 0.20), 0 10px 24px rgba(15, 23, 42, 0.10),
+               inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.theme-dark {
+  --accent-2:        #22d3ee;
+  --accent-2-hover:  #67e8f9;
+  --accent-2-soft:   rgba(34, 211, 238, 0.14);
+  --accent-2-grad:   linear-gradient(135deg, #38bdf8 0%, #22d3ee 50%, #2dd4bf 100%);
+  --accent-tri-grad: linear-gradient(135deg, #22d3ee 0%, #818cf8 35%, #a78bfa 70%, #f472b6 100%);
+
+  --status-success:  #34d399;
+  --status-warning:  #fbbf24;
+  --status-info:     #22d3ee;
+
+  --z1-bg:           rgba(18, 21, 30, 0.28);
+  --z2-bg:           rgba(16, 19, 27, 0.55);
+  --z2-bg-strong:    rgba(26, 29, 38, 0.68);
+  --z3-bg:           rgba(20, 24, 34, 0.88);
+  --z4-bg:           rgba(15, 18, 26, 0.94);
+
+  --shadow-z1: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-z2: 0 2px 10px rgba(0, 0, 0, 0.40), 0 1px 3px rgba(0, 0, 0, 0.30);
+  --shadow-z3: 0 14px 36px rgba(0, 0, 0, 0.58), 0 4px 12px rgba(0, 0, 0, 0.38);
+  --shadow-z4: 0 32px 88px rgba(0, 0, 0, 0.70), 0 12px 28px rgba(0, 0, 0, 0.45),
+               inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* ── 3) z-level 应用: 三条栏深浅明显拉开 + 渐变分割带 ──── */
+/* 顶部 toolbar — 最亮, 接近不透明白(类一级 chrome) */
+.theme-light .toolbar {
+  background: linear-gradient(180deg,
+              rgba(255, 255, 255, 0.85) 0%,
+              rgba(252, 253, 255, 0.80) 100%) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 2px 8px rgba(15, 23, 42, 0.04);
+}
+.theme-dark .toolbar {
+  background: linear-gradient(180deg,
+              rgba(34, 38, 52, 0.70) 0%,
+              rgba(26, 30, 42, 0.65) 100%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 2px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* 格式化工具栏 — 中间, 带 violet 微染色 拉开与 toolbar 的对比 */
+.theme-light .format-toolbar {
+  background: linear-gradient(180deg,
+              rgba(243, 240, 252, 0.78) 0%,
+              rgba(238, 235, 250, 0.72) 100%) !important;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.14) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    inset 0 -1px 0 rgba(99, 102, 241, 0.06);
+}
+.theme-dark .format-toolbar {
+  background: linear-gradient(180deg,
+              rgba(22, 24, 36, 0.78) 0%,
+              rgba(18, 20, 32, 0.74) 100%) !important;
+  border-bottom: 1px solid rgba(129, 140, 248, 0.14) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    inset 0 -1px 0 rgba(129, 140, 248, 0.08);
+}
+
+/* 标签栏 — 最暗(贴近背景, 让 active 标签自然浮起) */
+.theme-light .tabbar {
+  background: linear-gradient(180deg,
+              rgba(220, 226, 240, 0.55) 0%,
+              rgba(214, 222, 238, 0.45) 100%) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+.theme-dark .tabbar {
+  background: linear-gradient(180deg,
+              rgba(8, 10, 16, 0.65) 0%,
+              rgba(6, 8, 14, 0.55) 100%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* z-index 修复: backdrop-filter 让这些栏成为独立层叠上下文,但 DOM 顺序上
+   .main-area 在它们之后, 默认会盖住向下溢出的浮层(如 export-menu / find-panel)。
+   显式给工具栏类元素更高的 z-index, 让浮层能正常落在编辑区之上。 */
+.toolbar        { position: relative; z-index: 30; }
+.format-toolbar { position: relative; z-index: 30; }
+.tabbar         { position: relative; z-index: 25; }
+.statusbar      { position: relative; z-index: 25; }
+.main-area      { position: relative; z-index: 1; }
+
+/* 在 toolbar 与 format-toolbar 之间, 加一条 1px 渐变分割 — 视觉上把两层"切开" */
+.toolbar::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg,
+              transparent 0%,
+              rgba(99, 102, 241, 0.35) 30%,
+              rgba(236, 72, 153, 0.35) 70%,
+              transparent 100%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.theme-dark .toolbar::after { opacity: 0.45; }
+/* z2 — 状态栏(底部锚,底渐变让它"落地") */
+.statusbar {
+  background: linear-gradient(180deg, var(--z2-bg) 0%, var(--z2-bg) 60%, rgba(99, 102, 241, 0.04) 100%) !important;
+  box-shadow: inset 0 1px 0 var(--glass-stroke);
+}
+/* z3 — 下拉/Find 浮层
+   注意: 这两类浮层没有遮罩(overlay)兜底, 直接落在编辑区上空,
+   背景必须近乎不透明, 否则编辑器文字会透出来。Toast 短暂出现可以略透。 */
+.theme-light .export-menu,
+.theme-light .find-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: var(--shadow-z3), inset 0 1px 0 var(--glass-stroke) !important;
+}
+.theme-dark .export-menu,
+.theme-dark .find-panel {
+  background: rgba(22, 25, 35, 0.98) !important;
+  box-shadow: var(--shadow-z3), inset 0 1px 0 var(--glass-stroke) !important;
+}
+.toast {
+  background: var(--z3-bg) !important;
+  box-shadow: var(--shadow-z3), inset 0 1px 0 var(--glass-stroke) !important;
+}
+/* z4 — 模态(最大深度) */
+.modal {
+  box-shadow: var(--shadow-z4) !important;
+}
+.modal-overlay {
+  background: radial-gradient(ellipse at center,
+              rgba(8, 11, 18, 0.50) 0%, rgba(8, 11, 18, 0.78) 100%) !important;
+}
+
+/* ── 4) 编辑区 vs 预览区: 不同色温(冷-暖) ──────────── */
+.theme-light .editor-pane {
+  background: linear-gradient(180deg,
+              rgba(241, 245, 252, 0.30) 0%,
+              rgba(235, 240, 250, 0.20) 100%) !important;
+}
+.theme-light .preview-pane {
+  background: linear-gradient(180deg,
+              rgba(255, 251, 245, 0.30) 0%,
+              rgba(253, 245, 238, 0.20) 100%) !important;
+}
+.theme-dark .editor-pane {
+  background: linear-gradient(180deg,
+              rgba(14, 18, 28, 0.45) 0%,
+              rgba(12, 16, 26, 0.40) 100%) !important;
+}
+.theme-dark .preview-pane {
+  background: linear-gradient(180deg,
+              rgba(20, 14, 26, 0.50) 0%,
+              rgba(16, 12, 22, 0.45) 100%) !important;
+}
+
+/* ── 5) Logo 用四色渐变图标(主+副 accent 都进) ─────── */
+.app-logo-icon {
+  background: var(--accent-tri-grad) !important;
+  box-shadow:
+    0 0 24px rgba(99, 102, 241, 0.35),
+    0 0 12px rgba(6, 182, 212, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+/* ── 6) Tab active 加强 — 浮起感 ─────────────────── */
+.tab.active {
+  background: var(--z2-bg-strong) !important;
+  box-shadow:
+    inset 0 1px 0 var(--glass-stroke),
+    0 -4px 14px rgba(99, 102, 241, 0.08),
+    0 -1px 0 var(--glass-stroke) !important;
+}
+.tab.active::after {
+  height: 3px !important;
+  background: var(--accent-tri-grad) !important;
+  border-radius: 2px 2px 0 0;
+  box-shadow:
+    0 -1px 14px rgba(99, 102, 241, 0.55),
+    0 -1px 14px rgba(6, 182, 212, 0.35);
+}
+
+/* ── 7) 编辑/预览面板的指示点用不同色 ──────────────── */
+.editor-pane .pane-label::before {
+  background: linear-gradient(135deg, #06b6d4 0%, #6366f1 100%) !important;
+  box-shadow: 0 0 8px rgba(6, 182, 212, 0.60);
+}
+.preview-pane .pane-label::before {
+  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%) !important;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.60);
+}
+
+/* ── 8) 字数胶囊用 cyan(副 accent) ───────────────── */
+.word-count {
+  color: var(--accent-2) !important;
+  background: var(--accent-2-soft) !important;
+  border-color: rgba(6, 182, 212, 0.20);
+}
+.theme-dark .word-count { border-color: rgba(34, 211, 238, 0.24); }
+
+/* ── 9) 状态栏: 语义化色彩 ──────────────────────── */
+#status-modified {
+  color: var(--status-warning) !important;
+  font-weight: 600;
+}
+#status-autosave { color: var(--status-success) !important; }
+#status-readtime, #status-chars { color: var(--text-muted); }
+#status-cursor { color: var(--accent-2) !important; }
+
+/* ── 10) markdown 预览升级 ──────────────────────── */
+/* h1 用四色渐变(增加 cyan 起点) */
+.markdown-body h1 {
+  background: var(--accent-tri-grad) !important;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+/* h2 加左侧渐变小条, 不再依赖文字色 */
+.markdown-body h2 {
+  position: relative;
+  padding-left: 14px !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+}
+.markdown-body h2::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0.25em; bottom: 0.3em;
+  width: 4px; border-radius: 2px;
+  background: linear-gradient(180deg, #6366f1, #ec4899);
+}
+/* 行内 code 改用 cyan 色系, 与主 accent 形成对比 */
+.markdown-body code:not(pre code) {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.10), rgba(99, 102, 241, 0.08)) !important;
+  color: var(--accent-2) !important;
+  border: 1px solid rgba(6, 182, 212, 0.20) !important;
+  font-weight: 500;
+}
+.theme-dark .markdown-body code:not(pre code) {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.14), rgba(129, 140, 248, 0.10)) !important;
+  border-color: rgba(34, 211, 238, 0.22) !important;
+}
+/* 代码块: 双色背景增加纵深 */
+.markdown-body pre {
+  background: linear-gradient(135deg, var(--z4-bg) 0%, rgba(99, 102, 241, 0.04) 100%) !important;
+  border: 1px solid rgba(99, 102, 241, 0.14) !important;
+  box-shadow: var(--shadow-z2), inset 0 1px 0 var(--glass-stroke) !important;
+}
+.theme-dark .markdown-body pre {
+  background: linear-gradient(135deg, rgba(11, 14, 20, 0.85) 0%, rgba(24, 20, 38, 0.82) 100%) !important;
+  border-color: rgba(129, 140, 248, 0.20) !important;
+}
+/* blockquote 左条用主 accent 渐变 */
+.markdown-body blockquote {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.10) 0%, rgba(99, 102, 241, 0.03) 100%) !important;
+  border-left: 3px solid var(--accent) !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+/* 表格: 表头用渐变背景 */
+.markdown-body table th {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.10), rgba(6, 182, 212, 0.06)) !important;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.20) !important;
+}
+
+/* ── 11) 分隔条 hover 用副 accent, 与主 accent 区分 ── */
+.divider:hover, .divider.dragging {
+  background: var(--accent-2-grad) !important;
+  box-shadow: 0 0 18px rgba(6, 182, 212, 0.50);
+}
+
+/* ── 12) 滚动条 hover 用渐变 ──────────────────── */
+.CodeMirror-scroll::-webkit-scrollbar-thumb:hover,
+.preview-container::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--accent-2) 0%, var(--accent) 100%) !important;
+  background-clip: padding-box !important;
+}
+
+/* ── 13) 主操作按钮(保存) 偶尔需要"待办"提示 ─────── */
+/* 当前 tab 处于 modified 时, 给保存按钮加微微的呼吸渐变(可选 — 仅当用户没设置自动保存时显眼) */
+@keyframes save-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3); }
+  50%      { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
+}
+body.has-unsaved #btn-save {
+  position: relative;
+}
+body.has-unsaved #btn-save::after {
+  content: '';
+  position: absolute; right: 4px; top: 4px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--status-warning);
+  box-shadow: 0 0 6px var(--status-warning);
+  animation: save-pulse 1.6s ease-in-out infinite;
+}
+
+/* ── 14) 文档标题色(状态栏) 用主 accent, 更醒目 ─── */
+#status-file {
+  color: var(--accent) !important;
+  font-weight: 600;
+}
+
+/* ── 15) Toolbar btn active 用主 accent 渐变(已有), 这里加 outer glow ── */
+.toolbar-btn.active {
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}

@@ -67,7 +67,12 @@ const RecentFiles = (() => {
     })
     overlay.querySelector('#recent-clear').addEventListener('click', async (e) => {
       e.stopPropagation()
-      if (!confirm('清空最近文件列表？')) return
+      const ok = await window.showConfirm('清空最近文件列表?', {
+        title: '清空最近文件',
+        okText: '清空',
+        danger: true
+      })
+      if (!ok) return
       await clear()
       render('')
     })

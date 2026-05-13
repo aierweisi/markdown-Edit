@@ -200,7 +200,12 @@ const SettingsManager = (() => {
     const clearBtn = document.getElementById('setting-clear-cache-btn')
     if (clearBtn) {
       clearBtn.addEventListener('click', async () => {
-        if (!confirm('确定清空缓存？将清理 HTTP/代码/GPU 缓存与本地存储，不影响您的设置和文档。')) return
+        const ok = await window.showConfirm('确定清空缓存?将清理 HTTP/代码/GPU 缓存与本地存储,不影响您的设置和文档。', {
+          title: '清空缓存',
+          okText: '清空',
+          danger: true
+        })
+        if (!ok) return
         const orig = clearBtn.textContent
         clearBtn.disabled = true
         clearBtn.textContent = '清理中...'

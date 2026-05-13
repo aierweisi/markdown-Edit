@@ -281,6 +281,16 @@ const EditorManager = (() => {
     cm.setValue(val || '')
     cm.clearHistory()
   }
+  // 创建独立的 CodeMirror Doc — 每个 tab 拥有自己的内容和撤销栈
+  function createDoc(content) {
+    if (!window.CodeMirror) return null
+    return window.CodeMirror.Doc(content || '', 'markdown')
+  }
+  // 切换到指定 Doc — 不触发 change 事件, 自动保留每个 tab 的撤销历史
+  function swapDoc(doc) {
+    if (!cm || !doc) return
+    cm.swapDoc(doc)
+  }
   // setValue without losing cursor/scroll/history — used for in-place updates (e.g. task checkbox toggle)
   function setValuePreserve(val) {
     if (!cm) return
@@ -297,9 +307,11 @@ const EditorManager = (() => {
   function getScrollTop() { return cm ? cm.getScrollInfo().top : 0 }
   function setScrollTop(top) { if (cm) cm.scrollTo(null, top) }
 
-  function setTheme(isDark) {
+  function setTheme(_isDark) {
     if (!cm) return
-    cm.setOption('theme', isDark ? 'dracula' : 'default')
+    // 深色模式靠 main.css 中 .theme-dark .CodeMirror 覆盖
+    // 不再依赖 CodeMirror 内置主题（项目没有引入 dracula.css）
+    cm.setOption('theme', 'default')
   }
 
   function setFontSize(size) {
@@ -343,6 +355,7 @@ const EditorManager = (() => {
 
   return {
     init, insertFormat, getValue, getCM, setValue, setValuePreserve,
+    createDoc, swapDoc,
     getCursor, setCursor, getScrollTop, setScrollTop,
     setTheme, setFontSize, setFont, onChange, focus, getWordCount
   }

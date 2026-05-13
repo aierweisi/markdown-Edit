@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('api', {
+  // 平台信息 (用于在 macOS 隐藏自绘窗口按钮,腾出红黄绿位置等)
+  platform: process.platform,
+
   // Store
   storeGet: (key) => ipcRenderer.invoke('store-get', key),
   storeSet: (key, value) => ipcRenderer.invoke('store-set', key, value),

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <!-- 四色渐变, 135deg 等价 (x1=0%,y1=0%) -> (x2=100%,y2=100%) -->
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -16,40 +16,40 @@
     </linearGradient>
     <!-- 投影 (用 indigo 染色, 而不是中性灰, 跟主色调一致) -->
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="5.12" stdDeviation="7.68" flood-color="#4338ca" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="0.96" stdDeviation="1.44" flood-color="#4338ca" flood-opacity="0.45"/>
     </filter>
   </defs>
 
   <!-- 投影层 -->
-  <rect x="10" y="13.84" width="108" height="108" rx="31"
+  <rect x="2" y="2.7199999999999998" width="20" height="20" rx="6"
         fill="#4338ca" opacity="0.25" filter="url(#shadow)"/>
 
   <!-- 主背景 (四色渐变) -->
-  <rect x="10" y="10" width="108" height="108" rx="31" fill="url(#bg)"/>
+  <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#bg)"/>
 
   <!-- 顶部内高光 -->
-  <rect x="10" y="10" width="108" height="54" rx="31" fill="url(#shine)"/>
+  <rect x="2" y="2" width="20" height="10" rx="6" fill="url(#shine)"/>
 
   <!-- 主字 "M" -->
   <text
-    x="64"
-    y="71.68"
+    x="12"
+    y="13.440000000000001"
     font-family="-apple-system, 'Segoe UI', 'PingFang SC', Arial, sans-serif"
     font-weight="800"
-    font-size="53.76"
+    font-size="10.08"
     fill="white"
     text-anchor="middle"
     dominant-baseline="middle"
-    letter-spacing="-1.28"
+    letter-spacing="-0.24"
   >M</text>
 
   <!-- 右下小箭头 "↓" -->
   <text
-    x="93.44"
-    y="101.12"
+    x="17.52"
+    y="18.96"
     font-family="-apple-system, 'Segoe UI', 'PingFang SC', Arial, sans-serif"
     font-weight="700"
-    font-size="28.16"
+    font-size="5.28"
     fill="white"
     text-anchor="middle"
     dominant-baseline="middle"
@@ -57,6 +57,6 @@
   >↓</text>
 
   <!-- 内部 1px 白色描边, 提高边缘锐度 -->
-  <rect x="10" y="10" width="108" height="108" rx="31"
-        fill="none" stroke="white" stroke-width="1.536" stroke-opacity="0.18"/>
+  <rect x="2" y="2" width="20" height="20" rx="6"
+        fill="none" stroke="white" stroke-width="0.28800000000000003" stroke-opacity="0.18"/>
 </svg>

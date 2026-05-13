@@ -159,7 +159,13 @@ const TemplateManager = (() => {
   async function del() {
     if (!selectedId) return
     const t = templates.find(t => t.id === selectedId)
-    if (!t || !confirm(`确定删除「${t.name}」吗？`)) return
+    if (!t) return
+    const ok = await window.showConfirm(`确定删除「${t.name}」吗?`, {
+      title: '删除模板',
+      okText: '删除',
+      danger: true
+    })
+    if (!ok) return
     templates = templates.filter(t => t.id !== selectedId)
     await persist()
     selectedId = templates.length > 0 ? templates[0].id : null

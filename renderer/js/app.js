@@ -3,6 +3,11 @@
  */
 
 ;(async function () {
+  // ─── 平台 class: macOS 走原生交通灯,Win/Linux 走自绘控件 ──────
+  if (window.api && window.api.platform === 'darwin') {
+    document.body.classList.add('platform-mac')
+  }
+
   // ─── Init editor ──────────────────────────────────────────────
   const editorContainer = document.getElementById('editor-container')
   EditorManager.init(editorContainer)
@@ -21,12 +26,17 @@
   if (window.RecentFiles) await RecentFiles.init()
 
   // ─── Template apply callback ──────────────────────────────────
-  TemplateManager.onApply((content, name) => {
+  TemplateManager.onApply(async (content, name) => {
     const tab = TabManager.getActive()
     if (!tab) return
     const cur = EditorManager.getValue()
     if (cur.trim().length > 0 && name !== '空白文档') {
-      if (!confirm(`当前标签页已有内容，是否覆盖？\n取消则在新标签页打开`)) {
+      const ok = await window.showConfirm(`当前标签页已有内容,是否覆盖?\n取消则在新标签页打开`, {
+        title: '应用模板',
+        okText: '覆盖',
+        cancelText: '新标签页'
+      })
+      if (!ok) {
         const nt = TabManager.createTab({ title: name, content })
         TabManager.setActive(nt.id)
         PreviewManager.render(content)
@@ -63,6 +73,8 @@
   // ─── Editor → Preview sync ────────────────────────────────────
   let changeDebounce = null
   let autoSaveDebounce = null
+  // 记录挂着的自动保存针对哪个 tab — 切换 tab 时即使被打断,也能正确保存到原 tab
+  let pendingAutoSaveTabId = null
 
   function updateStatusStats(value, wordCount) {
     const text = value || ''
@@ -98,9 +110,14 @@
   }
 
   async function autoSaveToFile() {
-    const tab = TabManager.getActive()
+    const tabId = pendingAutoSaveTabId
+    pendingAutoSaveTabId = null
+    if (!tabId) return
+    const tab = TabManager.getTab(tabId)
     if (!tab || !tab.filePath || !tab.modified) return
-    const content = EditorManager.getValue()
+    // 直接从 tab 自己的 Doc 取内容,与"当前活动 tab"解耦
+    // 否则用户编辑后立即切走,getValue 返回的会是新 tab 的内容
+    const content = tab.doc ? tab.doc.getValue() : ''
     const res = await window.api.fileSave(tab.filePath, content)
     if (res.success) {
       TabManager.markModified(tab.id, false)
@@ -136,9 +153,27 @@
 
     // Debounce auto-save to original file (only if tab has a file path)
     if (tab && tab.filePath) {
+      pendingAutoSaveTabId = tab.id
       clearTimeout(autoSaveDebounce)
       autoSaveDebounce = setTimeout(autoSaveToFile, 1500)
     }
+  })
+
+  // swapDoc 切换 tab 不触发 change 事件,这里手动同步预览/字数/状态栏
+  TabManager.onSwitch((tab) => {
+    // 先把上一个 tab 挂着的自动保存 flush 掉,避免切走后用户的修改丢失
+    if (autoSaveDebounce) {
+      clearTimeout(autoSaveDebounce)
+      autoSaveDebounce = null
+      autoSaveToFile()  // 内部按 pendingAutoSaveTabId 找回原 tab
+    }
+    clearTimeout(changeDebounce)
+    const value = EditorManager.getValue()
+    const wc = EditorManager.getWordCount(value)
+    const wcEl = document.getElementById('word-count')
+    if (wcEl) wcEl.textContent = `${wc} 字`
+    updateStatusStats(value, wc)
+    PreviewManager.render(value)
   })
 
   // ─── Pane swap (editor ↔ preview) ────────────────────────────
@@ -266,14 +301,20 @@
   })
 
   // ─── New tab button ───────────────────────────────────────────
-  document.getElementById('btn-tab-new').addEventListener('click', () => {
+  // mousedown preventDefault: 阻止按钮在 mousedown 时抢走 OS 焦点,
+  // 否则 Windows 下 cm.focus() 无法将 OS 焦点真正交给编辑器
+  const btnTabNew = document.getElementById('btn-tab-new')
+  btnTabNew.addEventListener('mousedown', e => e.preventDefault())
+  btnTabNew.addEventListener('click', () => {
     const tab = TabManager.createTab({ title: '未命名' })
     TabManager.setActive(tab.id)
     EditorManager.focus()
   })
 
   // ─── Toolbar buttons ──────────────────────────────────────────
-  document.getElementById('btn-new').addEventListener('click', () => newFile())
+  const btnNew = document.getElementById('btn-new')
+  btnNew.addEventListener('mousedown', e => e.preventDefault())
+  btnNew.addEventListener('click', () => newFile())
   document.getElementById('btn-open').addEventListener('click', () => openFile())
   document.getElementById('btn-save').addEventListener('click', () => saveFile())
   document.getElementById('btn-template').addEventListener('click', () => TemplateManager.open())
@@ -458,14 +499,15 @@
 
   // ─── OS 打开文件（双击 .md / 通过此应用打开） ─────────────────
   if (window.api && window.api.onOpenFileFromOS) {
-    window.api.onOpenFileFromOS(({ filePath, content, name }) => {
+    window.api.onOpenFileFromOS(async ({ filePath, content, name }) => {
       const title = (name || '').replace(/\.(md|markdown|txt)$/i, '') || '未命名'
 
       // 已有同路径 Tab：直接激活
+      // setActive 会触发 TabManager.onSwitch → 重新渲染预览,这里不用再调
+      // existed.content 是 stale 字段,Doc 才持有最新内容
       const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
       if (existed) {
         TabManager.setActive(existed.id)
-        PreviewManager.render(existed.content)
         EditorManager.focus()
         return
       }
@@ -480,10 +522,10 @@
       TabManager.markModified(tab.id, false)
       PreviewManager.render(content)
 
-      if (window.RecentFiles) RecentFiles.add(filePath)
+      if (window.RecentFiles) await RecentFiles.add(filePath)
 
       if (curIsBlankDraft) {
-        TabManager.closeTab(cur.id)
+        await TabManager.closeTab(cur.id)
       }
 
       EditorManager.focus()
@@ -576,6 +618,7 @@
     }
     // Ctrl+1~9 switch tab
     if (ctrl && e.key >= '1' && e.key <= '9') {
+      e.preventDefault()
       const idx = parseInt(e.key) - 1
       const tabs = TabManager.getAllTabs()
       if (tabs[idx]) TabManager.setActive(tabs[idx].id)
@@ -602,6 +645,17 @@
         tabsContainer.scrollLeft += e.deltaY
       }
     }, { passive: false })
+  }
+
+  // Double-click empty area of tab bar to create a new file
+  const tabbar = document.getElementById('tabbar')
+  if (tabbar) {
+    tabbar.addEventListener('dblclick', (e) => {
+      if (e.target === tabbar || e.target === tabsContainer) {
+        e.preventDefault()
+        newFile()
+      }
+    })
   }
 
   // Initial render

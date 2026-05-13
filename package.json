@@ -4,7 +4,7 @@
   "description": "A desktop Markdown editor built with Electron",
   "main": "main/main.js",
   "scripts": {
-    "start": "node_modules/electron/dist/electron.exe .",
+    "start": "electron .",
     "build": "electron-builder",
     "build:win": "electron-builder --win"
   },
@@ -22,6 +22,9 @@
     "appId": "com.markdown.editor",
     "productName": "Markdown Editor",
     "copyright": "Copyright © 2026",
+    "compression": "maximum",
+    "asar": true,
+    "afterPack": "scripts/afterPack.js",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -30,7 +33,11 @@
       "main/**/*",
       "renderer/**/*",
       "assets/**/*",
-      "package.json"
+      "package.json",
+      "!**/*.map",
+      "!**/*.md",
+      "!renderer/vendor/katex/fonts/*.ttf",
+      "!renderer/vendor/katex/fonts/*.woff"
     ],
     "extraMetadata": {
       "main": "main/main.js"

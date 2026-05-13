@@ -26,21 +26,20 @@ const CacheManager = (() => {
   }
 
   async function saveAll() {
-    // Save current tab content to tab object first
+    // 滚动位置不在 Doc 上,需要主动从编辑器同步给当前 tab
     const activeTab = TabManager.getActive()
     if (activeTab) {
-      activeTab.content = EditorManager.getValue()
       activeTab.scrollTop = EditorManager.getScrollTop()
-      activeTab.cursorPos = EditorManager.getCursor()
     }
 
+    // 每个 tab 的内容和光标由各自的 Doc 持有,序列化时直接从 Doc 取
     const tabs = TabManager.getAllTabs().map(t => ({
       id: t.id,
       title: t.title,
       filePath: t.filePath,
-      content: t.content,
-      scrollTop: t.scrollTop,
-      cursorPos: t.cursorPos,
+      content: t.doc ? t.doc.getValue() : (t.content || ''),
+      scrollTop: t.scrollTop || 0,
+      cursorPos: t.doc ? t.doc.getCursor() : { line: 0, ch: 0 },
       modified: t.modified
     }))
 
@@ -89,13 +88,18 @@ const CacheManager = (() => {
       tab.id = ct.id
       if (tabEl) tabEl.dataset.id = ct.id
       tab.scrollTop = ct.scrollTop || 0
-      tab.cursorPos = ct.cursorPos || { line: 0, ch: 0 }
+      // 把光标恢复到 Doc 上（createTab 已经创建了带 content 的 Doc）
+      if (tab.doc && ct.cursorPos) {
+        try { tab.doc.setCursor(ct.cursorPos) } catch (_) {}
+      }
       tab.modified = ct.modified || false
       if (tab.modified) {
         const el = document.querySelector(`.tab[data-id="${ct.id}"]`)
         if (el) el.classList.add('modified')
       }
     }
+    // 同步保存按钮的脉冲提示状态
+    if (TabManager.syncUnsavedClass) TabManager.syncUnsavedClass()
 
     const activeId = cache.activeTabId || cache.tabs[0]?.id
     if (activeId) {

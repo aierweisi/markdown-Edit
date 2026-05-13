@@ -66,14 +66,19 @@ async function createWindow() {
 
   const iconPath = path.join(__dirname, '../assets/icons/icon.ico')
 
+  const isMac = process.platform === 'darwin'
   mainWindow = new BrowserWindow({
     width,
     height,
     minWidth: 800,
     minHeight: 600,
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
-    frame: false,                // 完全无边框，标题栏由渲染进程自绘
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    // macOS: 保留原生窗口框架 (frame: true) 才能显示红黄绿交通灯;
+    //         titleBarStyle: 'hiddenInset' 让顶部融入工具栏视觉
+    // Win/Linux: frame: false, 完全自绘标题栏
+    frame: isMac,
+    titleBarStyle: isMac ? 'hiddenInset' : undefined,
+    trafficLightPosition: isMac ? { x: 14, y: 16 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -88,7 +93,7 @@ async function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
     if (!app.isPackaged) {
-      // mainWindow.webContents.openDevTools({ mode: 'detach' })
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
     }
   })
 
@@ -169,7 +174,7 @@ function setupMenu() {
         { label: '导出 HTML', click: () => mainWindow.webContents.send('menu-export-html') },
         { label: '导出 PDF', click: () => mainWindow.webContents.send('menu-export-pdf') },
         { type: 'separator' },
-        { role: 'quit', label: '退出' }
+        { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => { isQuitting = true; app.quit() } }
       ]
     },
     {
