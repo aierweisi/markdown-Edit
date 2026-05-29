@@ -97,14 +97,31 @@ const EditorManager = (() => {
       const stamp = `${ts.getFullYear()}${String(ts.getMonth()+1).padStart(2,'0')}${String(ts.getDate()).padStart(2,'0')}-${String(ts.getHours()).padStart(2,'0')}${String(ts.getMinutes()).padStart(2,'0')}${String(ts.getSeconds()).padStart(2,'0')}`
       const fileName = `image-${stamp}.${ext}`
 
-      const res = await window.api.imageSave({ baseDir, fileName, dataBase64: base64, imageDir: await getImageDirSetting() })
-      if (res && res.success) {
-        cm.replaceSelection(`![](${res.relPath})`)
-        if (!baseDir && window.ExportManager) {
-          ExportManager.showToast('未保存文档，图片已存到临时目录（建议先保存 .md）')
+      // 创建 toast 提示
+      const toastMsg = '正在保存图片...'
+      const toastEl = document.createElement('div')
+      toastEl.className = 'toast toast-loading'
+      toastEl.textContent = toastMsg
+      document.body.appendChild(toastEl)
+      setTimeout(() => toastEl.classList.add('toast-in'), 10)
+
+      try {
+        const res = await window.api.imageSave({ baseDir, fileName, dataBase64: base64, imageDir: await getImageDirSetting() })
+        if (res && res.success) {
+          cm.replaceSelection(`![](${res.relPath})`)
+          toastEl.textContent = '图片已保存' + (baseDir ? '' : '（临时目录）') + (res && res.relPath ? ': ' + res.relPath : '')
+          setTimeout(() => { if (toastEl.parentNode) toastEl.remove() }, 800)
+          if (!baseDir && window.ExportManager) {
+            ExportManager.showToast('未保存文档，图片已存到临时目录（建议先保存 .md）')
+          }
+        } else {
+          toastEl.textContent = '图片保存失败' + (res && res.error ? ': ' + res.error : '')
+          toastEl.classList.add('toast-error')
+          setTimeout(() => { if (toastEl.parentNode) toastEl.remove() }, 800)
         }
-      } else {
-        if (window.ExportManager) ExportManager.showToast('图片保存失败：' + (res && res.error))
+      } catch (err) {
+        if (toastEl.parentNode) toastEl.remove()
+        throw err
       }
       return true
     }

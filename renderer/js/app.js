@@ -66,6 +66,9 @@
     TabManager.setActive(tab.id)
   }
 
+  // Show welcome overlay for initial blank tab
+  requestAnimationFrame(() => updateWelcomeVisibility())
+
   // ─── Start auto-cache ─────────────────────────────────────────
   await CacheManager.loadInterval()
   CacheManager.start()
@@ -105,6 +108,23 @@
       } else {
         rtEl.textContent = ''
         if (rtSep) rtSep.style.display = 'none'
+      }
+    }
+  }
+
+  // ─── Welcome overlay visibility ─────────────────────────────
+  function updateWelcomeVisibility() {
+    const overlay = document.getElementById('welcome-overlay')
+    if (!overlay) return
+    const tabs = TabManager.getAllTabs()
+    if (tabs.length === 0) {
+      overlay.classList.remove('hidden')
+    } else {
+      const active = TabManager.getActive()
+      if (active && !active.filePath && (!EditorManager.getValue() || EditorManager.getValue().length === 0)) {
+        overlay.classList.remove('hidden')
+      } else {
+        overlay.classList.add('hidden')
       }
     }
   }
@@ -157,6 +177,8 @@
       clearTimeout(autoSaveDebounce)
       autoSaveDebounce = setTimeout(autoSaveToFile, 1500)
     }
+
+    updateWelcomeVisibility()
   })
 
   // swapDoc 切换 tab 不触发 change 事件,这里手动同步预览/字数/状态栏
@@ -174,6 +196,7 @@
     if (wcEl) wcEl.textContent = `${wc} 字`
     updateStatusStats(value, wc)
     PreviewManager.render(value)
+    updateWelcomeVisibility()
   })
 
   // ─── Pane swap (editor ↔ preview) ────────────────────────────
@@ -311,6 +334,17 @@
     EditorManager.focus()
   })
 
+  // Tab close → update welcome overlay
+  TabManager.onClose(() => updateWelcomeVisibility())
+
+  // ─── Welcome button handlers ───────────────────────────────
+  const welcomeNew = document.getElementById('welcome-new')
+  const welcomeOpen = document.getElementById('welcome-open')
+  const welcomeTemplate = document.getElementById('welcome-template')
+  if (welcomeNew) welcomeNew.addEventListener('click', () => newFile())
+  if (welcomeOpen) welcomeOpen.addEventListener('click', () => openFile())
+  if (welcomeTemplate) welcomeTemplate.addEventListener('click', () => TemplateManager.open())
+
   // ─── Toolbar buttons ──────────────────────────────────────────
   const btnNew = document.getElementById('btn-new')
   btnNew.addEventListener('mousedown', e => e.preventDefault())
@@ -320,6 +354,9 @@
   document.getElementById('btn-template').addEventListener('click', () => TemplateManager.open())
   document.getElementById('btn-theme').addEventListener('click', () => SettingsManager.toggleTheme())
   document.getElementById('btn-settings').addEventListener('click', () => SettingsManager.open())
+
+  // Command palette hint in status bar
+  document.getElementById('status-palette-hint').addEventListener('click', () => CommandPalette?.open?.())
 
   // Format buttons
   document.querySelectorAll('.fmt-btn').forEach(btn => {

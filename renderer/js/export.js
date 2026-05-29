@@ -79,7 +79,24 @@ const ExportManager = (() => {
 
   function buildHtmlDocument(markdown) {
     const body = marked.parse(markdown)
-    const theme = document.body.classList.contains('theme-dark') ? 'dark' : 'light'
+    const isDark = document.body.classList.contains('theme-dark')
+    const theme = isDark ? 'dark' : 'light'
+
+    // Read highlight.js theme CSS inline (the fetch works in Electron's file:// context)
+    const hljsHref = isDark ? 'vendor/hljs/styles/github-dark.min.css' : 'vendor/hljs/styles/github.min.css'
+    const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1)
+    const hljsUrl = new URL(hljsHref, base).href
+
+    // We'll inline synchronously via XMLHttpRequest to keep return type simple
+    let hljsCss = ''
+    try {
+      const req = new XMLHttpRequest()
+      req.open('GET', hljsUrl, false) // synchronous
+      req.overrideMimeType('text/css')
+      req.send()
+      if (req.status === 0 || req.status === 200) hljsCss = req.responseText
+    } catch (_) { /* fallback: no hljs CSS */ }
+
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -102,6 +119,7 @@ const ExportManager = (() => {
   a { color: #4a6cf7; }
   hr { border: none; border-top: 2px solid #eee; margin: 2em 0; }
 </style>
+${hljsCss ? `<style>${hljsCss}</style>` : ''}
 </head>
 <body>
 ${body}
@@ -139,16 +157,45 @@ ${body}
     return { filePath, content: res.content, name }
   }
 
+  // Toast 队列管理
+  const toasts = [] // 当前激活的 toast 列表（不含 .toast-out）
+
+  function reflowToasts() {
+    // 重新计算所有 toast 的 bottom 偏移
+    toasts.forEach((t, i) => {
+      t.style.bottom = `${24 + i * 56}px`
+    })
+  }
+
+  function removeToast(el) {
+    const idx = toasts.indexOf(el)
+    if (idx !== -1) toasts.splice(idx, 1)
+    el.remove()
+    reflowToasts()
+  }
+
   function showToast(msg, type = 'default') {
-    // Remove existing toasts
-    document.querySelectorAll('.toast').forEach(t => t.remove())
+    // 清除已处于淡出状态的 toast
+    for (let i = toasts.length - 1; i >= 0; i--) {
+      if (toasts[i].classList.contains('toast-out')) {
+        const el = toasts[i]
+        toasts.splice(i, 1)
+        el.remove()
+      }
+    }
+
     const toast = document.createElement('div')
     toast.className = 'toast'
     toast.textContent = msg
     document.body.appendChild(toast)
+
+    // 追加到队列末尾，并设置偏移
+    toasts.push(toast)
+    toast.style.bottom = `${24 + (toasts.length - 1) * 56}px`
+
     setTimeout(() => {
       toast.classList.add('toast-out')
-      setTimeout(() => toast.remove(), 200)
+      setTimeout(() => removeToast(toast), 200)
     }, 2200)
   }
 

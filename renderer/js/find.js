@@ -103,7 +103,7 @@ const FindManager = (() => {
   function show(withReplace) {
     if (!cm) cm = EditorManager.getCM()
     visible = true
-    panel.hidden = false
+    panel.classList.remove('closing'); panel.classList.add('open')
     setReplaceMode(!!withReplace)
     // Pre-fill with current selection
     const sel = cm && cm.getSelection()
@@ -115,7 +115,7 @@ const FindManager = (() => {
 
   function hide() {
     visible = false
-    panel.hidden = true
+    panel.classList.remove('open'); panel.classList.add('closing'); setTimeout(() => panel.classList.remove('closing'), 200)
     clearMarks()
     if (cm) cm.focus()
   }

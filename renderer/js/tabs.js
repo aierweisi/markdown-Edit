@@ -10,6 +10,8 @@ const TabManager = (() => {
 
   function genId() { return `tab_${++tabCounter}` }
   function onSwitch(cb) { switchCallback = cb }
+  let closeCallback = null
+  function onClose(cb) { closeCallback = cb }
 
   // 应用风格的确认框,返回 Promise<boolean>
   // 替代原生 confirm() 的视觉割裂感
@@ -403,10 +405,14 @@ const TabManager = (() => {
       activeTabId = null
       const newTab = createTab()
       setActive(newTab.id)
+      if (closeCallback) closeCallback()
     } else if (wasActive) {
       const nextTab = tabs[Math.min(idx, tabs.length - 1)]
       activeTabId = null  // prevent saving editor state into the closed tab
       setActive(nextTab.id)
+      if (closeCallback) closeCallback()
+    } else {
+      if (closeCallback) closeCallback()
     }
   }
 
@@ -461,7 +467,7 @@ const TabManager = (() => {
     createTab, setActive, closeTab,
     getActive, getTab, getAllTabs,
     markModified, setTabTitle, restoreFromCache,
-    onSwitch, syncUnsavedClass,
+    onSwitch, onClose, syncUnsavedClass,
     get activeTabId() { return activeTabId }
   }
 })()
