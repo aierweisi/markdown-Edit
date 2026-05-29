@@ -980,10 +980,12 @@ body.is-maximized { padding-top: 8px; }
 .settings-nav-item[data-panel="editor"] .nav-icon      { background: #e8f5e9; color: #2e7d32; }
 .settings-nav-item[data-panel="autosave"] .nav-icon    { background: #e3f2fd; color: #1565c0; }
 .settings-nav-item[data-panel="export"] .nav-icon      { background: #f3e5f5; color: #6a1b9a; }
+.settings-nav-item[data-panel="system"] .nav-icon     { background: #fce4ec; color: #c62828; }
 .theme-dark .settings-nav-item[data-panel="appearance"] .nav-icon { background: #3d2800; color: #ffb74d; }
 .theme-dark .settings-nav-item[data-panel="editor"] .nav-icon      { background: #1b3a1f; color: #66bb6a; }
 .theme-dark .settings-nav-item[data-panel="autosave"] .nav-icon    { background: #0d2a47; color: #64b5f6; }
 .theme-dark .settings-nav-item[data-panel="export"] .nav-icon      { background: #2d1040; color: #ce93d8; }
+.theme-dark .settings-nav-item[data-panel="system"] .nav-icon     { background: #3d1520; color: #ef9a9a; }
 
 .settings-nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
 .settings-nav-item.active { background: var(--bg-panel); color: var(--text-primary); font-weight: 600; }
@@ -1021,10 +1023,12 @@ body.is-maximized { padding-top: 8px; }
 #panel-editor .panel-title-icon      { background: #e8f5e9; color: #2e7d32; }
 #panel-autosave .panel-title-icon    { background: #e3f2fd; color: #1565c0; }
 #panel-export .panel-title-icon      { background: #f3e5f5; color: #6a1b9a; }
+#panel-system .panel-title-icon      { background: #fce4ec; color: #c62828; }
 .theme-dark #panel-appearance .panel-title-icon { background: #3d2800; color: #ffb74d; }
 .theme-dark #panel-editor .panel-title-icon      { background: #1b3a1f; color: #66bb6a; }
 .theme-dark #panel-autosave .panel-title-icon    { background: #0d2a47; color: #64b5f6; }
 .theme-dark #panel-export .panel-title-icon      { background: #2d1040; color: #ce93d8; }
+.theme-dark #panel-system .panel-title-icon      { background: #3d1520; color: #ef9a9a; }
 
 /* Setting item card */
 .setting-item {
@@ -1049,6 +1053,7 @@ body.is-maximized { padding-top: 8px; }
 #panel-editor .setting-item::before      { background: linear-gradient(to bottom, #2e7d32, #43a047); }
 #panel-autosave .setting-item::before    { background: linear-gradient(to bottom, #1565c0, #1e88e5); }
 #panel-export .setting-item::before      { background: linear-gradient(to bottom, #6a1b9a, #8e24aa); }
+#panel-system .setting-item::before      { background: linear-gradient(to bottom, #c62828, #e53935); }
 
 .setting-item:hover {
   border-color: var(--border-focus);
