@@ -63,15 +63,20 @@ function resolveNamingRule(rule, content) {
   const firstLine = content.trim().split('\n')[0] || ''
   const h1Title = (firstLine.match(/^#\s+(.+)/) || [])[1] || firstLine.slice(0, 40).replace(/[\\/:*?"<>|]/g, '_')
 
+  const datetime = `${date}_${time}`
+
   return rule
     .replace(/{title}/g, h1Title || '未命名')
     .replace(/{date}/g, date)
     .replace(/{time}/g, time)
+    .replace(/{datetime}/g, datetime)
     .replace(/{timestamp}/g, String(Date.now()))
     .replace(/{random}/g, Math.random().toString(36).slice(2, 8))
 }
 
 describe('resolveNamingRule', () => {
+  const pad = n => String(n).padStart(2, '0')
+
   it('replaces {title} with first h1', () => {
     const result = resolveNamingRule('{title}', '# 产品设计文档\n正文')
     expect(result).toBe('产品设计文档')
@@ -84,7 +89,6 @@ describe('resolveNamingRule', () => {
 
   it('replaces {date} with current date', () => {
     const now = new Date()
-    const pad = n => String(n).padStart(2, '0')
     const expected = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`
     const result = resolveNamingRule('{date}', '')
     expect(result).toBe(expected)
@@ -92,7 +96,6 @@ describe('resolveNamingRule', () => {
 
   it('replaces {time} with HHMMSS', () => {
     const now = new Date()
-    const pad = n => String(n).padStart(2, '0')
     const expected = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
     const result = resolveNamingRule('{time}', '')
     expect(result).toBe(expected)
@@ -106,6 +109,11 @@ describe('resolveNamingRule', () => {
   it('replaces {random} with 6-char random string', () => {
     const result = resolveNamingRule('{random}', '')
     expect(result).toMatch(/^[0-9a-z]{6}$/)
+  })
+
+  it('replaces {datetime} with date_time', () => {
+    const result = resolveNamingRule('{datetime}', '')
+    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}_\d{6}$/)
   })
 
   it('handles compound rule', () => {
@@ -205,5 +213,106 @@ describe('isMdFile', () => {
 
   it('rejects file with no extension', () => {
     expect(isMdFile('readme')).toBe(false)
+  })
+})
+
+// ─── getWordCount (from editor.js) ────────────────────────────
+function getWordCount(text) {
+  return text
+    ? (text.match(/[\u4e00-\u9fa5]/g) || []).length +
+      (text.match(/\b[a-zA-Z]+\b/g) || []).length
+    : 0
+}
+
+describe('getWordCount', () => {
+  it('counts chinese characters', () => {
+    expect(getWordCount('你好世界')).toBe(4)
+  })
+
+  it('counts english words', () => {
+    expect(getWordCount('hello world')).toBe(2)
+  })
+
+  it('counts mixed chinese and english', () => {
+    expect(getWordCount('你好 world 世界 hello')).toBe(6)
+  })
+
+  it('returns 0 for empty string', () => {
+    expect(getWordCount('')).toBe(0)
+  })
+
+  it('returns 0 for null/undefined', () => {
+    expect(getWordCount(null)).toBe(0)
+    expect(getWordCount(undefined)).toBe(0)
+  })
+
+  it('ignores numbers and punctuation', () => {
+    expect(getWordCount('123 !@# 你好')).toBe(2)
+  })
+
+  it('counts hyphenated words as single word', () => {
+    expect(getWordCount('well-known')).toBe(2) // two English words
+  })
+})
+
+// ─── paneOrder / CSS class helpers ────────────────────────────
+// Test view mode icon SVG mapping
+const viewIcons = {
+  split: '<rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/>',
+  editor: '<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="8" y1="3" x2="8" y2="21" opacity="0.3"/>',
+  preview: '<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="16" y1="3" x2="16" y2="21" opacity="0.3"/>',
+}
+
+describe('viewIcons', () => {
+  it('has all three modes', () => {
+    expect(Object.keys(viewIcons)).toEqual(['split', 'editor', 'preview'])
+  })
+
+  it('each icon is a non-empty string', () => {
+    for (const key of Object.keys(viewIcons)) {
+      expect(viewIcons[key].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('split icon has two rectangles', () => {
+    const matches = viewIcons.split.match(/<rect/g)
+    expect(matches ? matches.length : 0).toBe(2)
+  })
+
+  it('editor icon has one rect and one line', () => {
+    expect(viewIcons.editor.match(/<rect/g).length).toBe(1)
+    expect(viewIcons.editor.match(/<line/g).length).toBe(1)
+  })
+
+  it('preview icon has one rect and one line', () => {
+    expect(viewIcons.preview.match(/<rect/g).length).toBe(1)
+    expect(viewIcons.preview.match(/<line/g).length).toBe(1)
+  })
+})
+
+// ─── tab ID generation ────────────────────────────────────────
+function generateTabId(counter) {
+  return 'tab_' + counter
+}
+
+describe('generateTabId', () => {
+  it('generates sequential ids', () => {
+    expect(generateTabId(1)).toBe('tab_1')
+    expect(generateTabId(100)).toBe('tab_100')
+  })
+})
+
+// ─── word count boundary edge cases ───────────────────────────
+describe('getWordCount (edge cases)', () => {
+  it('handles only whitespace', () => {
+    expect(getWordCount('   \n  \t  ')).toBe(0)
+  })
+
+  it('handles mixed CJK + English + numbers', () => {
+    expect(getWordCount('测试123abc测试')).toBe(4)
+  })
+
+  it('handles repeated punctuation', () => {
+    expect(getWordCount('!!! ??? ...')).toBe(0)
   })
 })

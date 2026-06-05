@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "PostToolUse": {
+      "glob": "renderer/js/*.js",
+      "commands": [
+        "cd {{cwd}} && npm test 2>&1 | tail -20"
+      ]
+    },
+    "PreToolUse": {
+      "glob": "renderer/js/app.js",
+      "blockMessage": "⚠️ app.js 是构建压缩产物，请编辑源码文件 (renderer/js/*.js) 然后通过 npm run minify 重新构建"
+    }
+  }
+}

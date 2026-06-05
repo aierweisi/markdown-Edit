@@ -50,7 +50,7 @@ jobs:
         with:
           name: mac-build
           path: |
-            dist/*.dmg
+            release/*.dmg
           retention-days: 30
 
   build-win:
@@ -78,5 +78,5 @@ jobs:
         with:
           name: win-build
           path: |
-            dist/*.exe
+            release/*.exe
           retention-days: 30
