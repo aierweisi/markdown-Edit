@@ -7,7 +7,8 @@
     "katex": "0.16.21",
     "dompurify": "3.2.4",
     "codemirror": "5.65.16",
-    "mermaid": "10.x"
+    "mermaid": "10.x",
+    "highlight.js": "11.9.0"
   },
   "main": "main/main.js",
   "scripts": {

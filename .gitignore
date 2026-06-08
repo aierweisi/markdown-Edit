@@ -33,3 +33,9 @@ build
 
 # cache
 .atomcode/graph.bin
+
+# temp files from build/commit scripts
+.msg
+.commit_msg
+_diag.txt
+_v*.txt
