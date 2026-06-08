@@ -407,3 +407,109 @@ describe('isSafeUrl (DOMPurify ALLOWED_URI_REGEXP)', () => {
     expect(isSafeUrl('#section-1')).toBe(true)
   })
 })
+
+// ─── Markdown rendering (marked library) ────────────────────
+import { readFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+// Load vendored marked.min.js (v15)
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const markedCode = readFileSync(join(__dirname, '..', 'renderer', 'vendor', 'marked', 'marked.min.js'), 'utf8')
+
+// Evaluate to get marked in this scope
+let marked
+const _module = { exports: {} }
+const _eval = new Function('module', 'exports', markedCode)
+_eval(_module, _module.exports)
+marked = _module.exports
+
+describe('marked.parse (v15)', () => {
+  it('renders headings', () => {
+    const html = marked.parse('# Heading 1\n## Heading 2')
+    expect(html).toContain('<h1')
+    expect(html).toContain('Heading 1')
+    expect(html).toContain('<h2')
+    expect(html).toContain('Heading 2')
+  })
+
+  it('renders bold and italic', () => {
+    const html = marked.parse('**bold** *italic*')
+    expect(html).toContain('<strong>bold</strong>')
+    expect(html).toContain('<em>italic</em>')
+  })
+
+  it('renders strikethrough (GFM)', () => {
+    const html = marked.parse('~~deleted~~')
+    expect(html).toContain('<del>deleted</del>')
+  })
+
+  it('renders tables (GFM)', () => {
+    const html = marked.parse('| A | B |\n|---|---|\n| 1 | 2 |')
+    expect(html).toContain('<table>')
+    expect(html).toContain('<th>A</th>')
+    expect(html).toContain('<td>1</td>')
+  })
+
+  it('renders links', () => {
+    const html = marked.parse('[click](https://example.com)')
+    expect(html).toContain('href="https://example.com"')
+    expect(html).toContain('>click</a>')
+  })
+
+  it('renders code blocks', () => {
+    const html = marked.parse('```js\nconsole.log("hi")\n```')
+    expect(html).toContain('<pre><code class="language-js">')
+    expect(html).toContain('console.log')
+  })
+
+  it('renders inline code', () => {
+    const html = marked.parse('Use `code` here')
+    expect(html).toContain('<code>code</code>')
+  })
+
+  it('renders blockquotes', () => {
+    const html = marked.parse('> quote')
+    expect(html).toContain('<blockquote>')
+    expect(html).toContain('quote')
+  })
+
+  it('renders unordered lists', () => {
+    const html = marked.parse('- item 1\n- item 2')
+    expect(html).toContain('<ul>')
+    expect(html).toContain('<li>item 1</li>')
+  })
+
+  it('renders ordered lists', () => {
+    const html = marked.parse('1. first\n2. second')
+    expect(html).toContain('<ol>')
+    expect(html).toContain('<li>first</li>')
+  })
+
+  it('renders horizontal rules', () => {
+    const html = marked.parse('---')
+    expect(html).toContain('<hr')
+  })
+
+  it('renders images', () => {
+    const html = marked.parse('![alt](img.png)')
+    expect(html).toContain('<img src="img.png" alt="alt"')
+  })
+
+  it('handles empty input', () => {
+    expect(marked.parse('')).toBe('')
+    expect(marked.parse('\n\n')).toBe('')
+  })
+
+  it('renders paragraphs', () => {
+    const html = marked.parse('Line one\n\nLine two')
+    expect(html).toContain('<p>Line one</p>')
+    expect(html).toContain('<p>Line two</p>')
+  })
+
+  it('passes raw HTML through (DOMPurify handles sanitization)', () => {
+    const html = marked.parse('<script>alert("xss")</script>')
+    // marked itself does not strip HTML — that's DOMPurify's job
+    expect(html).toContain('<script>')
+  })
+})
