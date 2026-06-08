@@ -163,6 +163,23 @@ function minifyHTML(filePath, outPath) {
   }
   console.log(`[Vendor] ✅ 复制 ${vendorCopied} 个 vendor 文件到 dist/`)
 
+  // ====== 复制 main 进程文件（main.js + preload.js） ======
+  const mainFiles = [
+    { rel: 'main/main.js', abs: path.join(ROOT, 'main/main.js') },
+    { rel: 'main/preload.js', abs: path.join(ROOT, 'main/preload.js') },
+  ]
+  for (const { rel, abs } of mainFiles) {
+    const outPath = path.join(OUT, rel)
+    if (fs.existsSync(abs)) {
+      fs.mkdirSync(path.dirname(outPath), { recursive: true })
+      fs.copyFileSync(abs, outPath)
+      console.log(`[Main]   ✅ ${rel} → dist/${rel}`)
+      ok++
+    } else {
+      console.warn(`[skip] 不存在: ${rel}`)
+    }
+  }
+
   // 复制 assets 目录
   const assetsDir = path.join(ROOT, 'assets')
   const assetsOut = path.join(OUT, 'assets')

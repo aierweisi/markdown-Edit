@@ -50,6 +50,7 @@
     },
     "files": [
       "dist/**/*",
+      "main/**/*",
       "package.json",
       "!**/*.map",
       "!**/*.md"
@@ -130,7 +131,7 @@
       "language": "2052",
       "include": "scripts/installer.nsh"
     },
-    "electronVersion": "28.0.0",
+    "electronVersion": "33.0.0",
     "electronDist": "node_modules/electron/dist"
   }
 }

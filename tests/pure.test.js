@@ -513,3 +513,141 @@ describe('marked.parse (v15)', () => {
     expect(html).toContain('<script>')
   })
 })
+
+// ─── Cache hash logic ──────────────────────────────────────────
+describe('Cache hash computation', () => {
+  function computeCacheHash(tabs, activeId) {
+    return tabs.map(t => `${t.id}:${t.content}|${t.modified}`).join('||') + `|${activeId}`
+  }
+
+  it('produces same hash for same data', () => {
+    const tabs = [{ id: 't1', content: 'hello', modified: false }]
+    expect(computeCacheHash(tabs, 't1')).toBe(computeCacheHash(tabs, 't1'))
+  })
+
+  it('produces different hash when content changes', () => {
+    const tabs1 = [{ id: 't1', content: 'hello', modified: false }]
+    const tabs2 = [{ id: 't1', content: 'world', modified: false }]
+    expect(computeCacheHash(tabs1, 't1')).not.toBe(computeCacheHash(tabs2, 't1'))
+  })
+
+  it('produces different hash when modified flag changes', () => {
+    const tabs1 = [{ id: 't1', content: '', modified: false }]
+    const tabs2 = [{ id: 't1', content: '', modified: true }]
+    expect(computeCacheHash(tabs1, 't1')).not.toBe(computeCacheHash(tabs2, 't1'))
+  })
+
+  it('produces different hash when active tab changes', () => {
+    const tabs = [{ id: 't1', content: '', modified: false }]
+    expect(computeCacheHash(tabs, 't1')).not.toBe(computeCacheHash(tabs, 't2'))
+  })
+
+  it('handles multiple tabs', () => {
+    const tabs = [
+      { id: 't1', content: 'a', modified: true },
+      { id: 't2', content: 'b', modified: false },
+    ]
+    const hash = computeCacheHash(tabs, 't2')
+    expect(hash).toContain('t1:a|true')
+    expect(hash).toContain('t2:b|false')
+    expect(hash.endsWith('|t2')).toBe(true)
+  })
+})
+
+// ─── Image magic bytes validation ───────────────────────────────
+describe('Image magic bytes validation', () => {
+  function isImageBase64(data) {
+    // Replicates the logic added to main.js
+    try {
+      const buf = Buffer.from(data, 'base64')
+      const b0 = buf[0], b1 = buf[1], b2 = buf[2], b3 = buf[3]
+      if (b0 === 0x89 && b1 === 0x50 && b2 === 0x4E && b3 === 0x47) return 'PNG'
+      if (b0 === 0xFF && b1 === 0xD8 && b2 === 0xFF) return 'JPEG'
+      if (b0 === 0x47 && b1 === 0x49 && b2 === 0x46) return 'GIF'
+      if (b0 === 0x42 && b1 === 0x4D) return 'BMP'
+      if (b0 === 0x52 && b1 === 0x49 && b2 === 0x46 && b3 === 0x46 &&
+          buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return 'WebP'
+      return null
+    } catch { return null }
+  }
+
+  it('detects PNG', () => {
+    // Minimal valid PNG header (8 bytes)
+    const png = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D])
+    expect(isImageBase64(png.toString('base64'))).toBe('PNG')
+  })
+
+  it('detects JPEG', () => {
+    const jpg = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46])
+    expect(isImageBase64(jpg.toString('base64'))).toBe('JPEG')
+  })
+
+  it('detects GIF', () => {
+    const gif = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00])
+    expect(isImageBase64(gif.toString('base64'))).toBe('GIF')
+  })
+
+  it('detects BMP', () => {
+    const bmp = Buffer.from([0x42, 0x4D, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00])
+    expect(isImageBase64(bmp.toString('base64'))).toBe('BMP')
+  })
+
+  it('detects WebP', () => {
+    const webp = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50])
+    expect(isImageBase64(webp.toString('base64'))).toBe('WebP')
+  })
+
+  it('rejects plain text base64', () => {
+    const txt = Buffer.from('hello world')
+    expect(isImageBase64(txt.toString('base64'))).toBeNull()
+  })
+
+  it('rejects empty string', () => {
+    expect(isImageBase64('')).toBeNull()
+  })
+})
+
+// ─── Template slug generation ──────────────────────────────────
+describe('Template slug generation', () => {
+  function slugify(text) {
+    // Replicates the anchor ID logic in preview.js custom renderer
+    return String(text).toLowerCase().trim()
+      .replace(/[\s\u3000]+/g, '-')
+      .replace(/[^\w\u4e00-\u9fa5\-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'h'
+  }
+
+  it('converts spaces to hyphens', () => {
+    expect(slugify('hello world')).toBe('hello-world')
+  })
+
+  it('lowercases', () => {
+    expect(slugify('Hello World')).toBe('hello-world')
+  })
+
+  it('removes special characters', () => {
+    expect(slugify('Hello, World!')).toBe('hello-world')
+  })
+
+  it('handles Chinese characters', () => {
+    const result = slugify('你好世界')
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('collapses multiple hyphens', () => {
+    expect(slugify('hello   world')).toBe('hello-world')
+  })
+
+  it('trims leading/trailing hyphens', () => {
+    expect(slugify(' -hello- ')).toBe('hello')
+  })
+
+  it('falls back to "h" for empty result', () => {
+    expect(slugify('!@#$%')).toBe('h')
+  })
+
+  it('replaces full-width spaces (U+3000)', () => {
+    expect(slugify('hello\u3000world')).toBe('hello-world')
+  })
+})
