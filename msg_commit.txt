@@ -1,0 +1,7 @@
+fix: 缓存恢复安全加固 - 数据验证与损坏降级
+
+- #17: checkAndRestore 增加结构/类型校验，过滤损坏标签
+- restore 单个标签异常不会导致整体恢复失败
+- removeTab 增加 Array.isArray 检查
+
+Co-Authored-By: AtomCode (deepseek-v4-flash) <noreply@atomgit.com>

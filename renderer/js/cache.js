@@ -58,33 +58,47 @@ window.CacheManager = (() => {
     },
     saveAll: o,
     checkAndRestore: async function () {
-      const t = await window.api.storeGet('cache')
-      return (
-        !(!t || !t.tabs || 0 === t.tabs.length) &&
-        !!t.tabs.some(t => t.content && t.content.trim().length > 0) &&
-        t
+      let t
+      try {
+        t = await window.api.storeGet('cache')
+      } catch (_) {
+        return !1
+      }
+      if (!t || 'object' != typeof t || !t.tabs || !Array.isArray(t.tabs)) return !1
+      if (0 === t.tabs.length) return !1
+      const validTabs = t.tabs.filter(
+        e =>
+          e &&
+          'object' == typeof e &&
+          'string' == typeof e.content &&
+          e.content.trim().length > 0,
       )
+      return validTabs.length > 0 ? (t.tabs = validTabs, t) : !1
     },
     restore: async function (t) {
       document.getElementById('tabs-container').innerHTML = ''
       for (const e of t.tabs) {
-        const a = TabManager.createTab({
-            title: e.title,
-            filePath: e.filePath,
-            content: e.content,
-          }),
-          n = document.querySelector(`.tab[data-id="${a.id}"]`)
-        a.id = e.id
-        if (n) n.dataset.id = e.id
-        a.scrollTop = e.scrollTop || 0
-        if (a.doc && e.cursorPos)
-          try {
-            a.doc.setCursor(e.cursorPos)
-          } catch (t) {}
-        a.modified = e.modified || !1
-        if (a.modified) {
-          const t = document.querySelector(`.tab[data-id="${e.id}"]`)
-          t && t.classList.add('modified')
+        try {
+          const a = TabManager.createTab({
+              title: e.title,
+              filePath: e.filePath,
+              content: e.content,
+            }),
+            n = document.querySelector(`.tab[data-id="${a.id}"]`)
+          a.id = e.id
+          if (n) n.dataset.id = e.id
+          a.scrollTop = e.scrollTop || 0
+          if (a.doc && e.cursorPos)
+            try {
+              a.doc.setCursor(e.cursorPos)
+            } catch (t) {}
+          a.modified = e.modified || !1
+          if (a.modified) {
+            const t = document.querySelector(`.tab[data-id="${e.id}"]`)
+            t && t.classList.add('modified')
+          }
+        } catch (_) {
+          console.warn('[Cache] 跳过损坏的标签缓存:', e?.title)
         }
       }
       TabManager.syncUnsavedClass && TabManager.syncUnsavedClass()
@@ -97,9 +111,10 @@ window.CacheManager = (() => {
     },
     removeTab: async function (t) {
       const e = await window.api.storeGet('cache')
-      e &&
-        e.tabs &&
-        ((e.tabs = e.tabs.filter(e => e.id !== t)), await window.api.storeSet('cache', e))
+      if (e && e.tabs && Array.isArray(e.tabs)) {
+        e.tabs = e.tabs.filter(e => e.id !== t)
+        await window.api.storeSet('cache', e)
+      }
     },
     showRestoreDialog: function (t) {
       return new Promise(e => {
