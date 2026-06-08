@@ -34,7 +34,7 @@
       const ok = await window.showConfirm(`当前标签页已有内容,是否覆盖?\n取消则在新标签页打开`, {
         title: '应用模板',
         okText: '覆盖',
-        cancelText: '新标签页'
+        cancelText: '新标签页',
       })
       if (!ok) {
         const nt = TabManager.createTab({ title: name, content })
@@ -123,7 +123,11 @@
       overlay.classList.remove('hidden')
     } else {
       const active = TabManager.getActive()
-      if (active && !active.filePath && (!EditorManager.getValue() || EditorManager.getValue().length === 0)) {
+      if (
+        active &&
+        !active.filePath &&
+        (!EditorManager.getValue() || EditorManager.getValue().length === 0)
+      ) {
         overlay.classList.remove('hidden')
       } else {
         overlay.classList.add('hidden')
@@ -153,7 +157,7 @@
     }
   }
 
-  EditorManager.onChange((value) => {
+  EditorManager.onChange(value => {
     // Update word count
     const wc = EditorManager.getWordCount(value)
     document.getElementById('word-count').textContent = `${wc} 字`
@@ -193,15 +197,18 @@
   })
 
   // swapDoc 切换 tab 不触发 change 事件,这里手动同步预览/字数/状态栏
-  TabManager.onSwitch((tab) => {
+  TabManager.onSwitch(tab => {
     // 先把上一个 tab 挂着的自动保存 flush 掉,避免切走后用户的修改丢失
     if (autoSaveDebounce) {
       clearTimeout(autoSaveDebounce)
       autoSaveDebounce = null
-      autoSaveToFile()  // 内部按 pendingAutoSaveTabId 找回原 tab
+      autoSaveToFile() // 内部按 pendingAutoSaveTabId 找回原 tab
     }
     // Cancel pending preview render
-    if (changeRAF) { cancelAnimationFrame(changeRAF); changeRAF = null }
+    if (changeRAF) {
+      cancelAnimationFrame(changeRAF)
+      changeRAF = null
+    }
     clearTimeout(changeDebounce)
     const value = EditorManager.getValue()
     const wc = EditorManager.getWordCount(value)
@@ -274,7 +281,7 @@
   let isDragging = false
   let startX, startLeftWidth
 
-  divider.addEventListener('mousedown', (e) => {
+  divider.addEventListener('mousedown', e => {
     isDragging = true
     startX = e.clientX
     // Left pane is whichever of editor/preview comes first
@@ -286,7 +293,7 @@
     e.preventDefault()
   })
 
-  document.addEventListener('mousemove', (e) => {
+  document.addEventListener('mousemove', e => {
     if (!isDragging) return
     const delta = e.clientX - startX
     const totalWidth = mainArea.getBoundingClientRect().width - 4
@@ -331,9 +338,9 @@
   const viewModes = ['split', 'editor', 'preview']
 
   const viewSVGs = {
-    split:   `<rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/>`,
-    editor:  `<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="8" y1="3" x2="8" y2="21" opacity="0.3"/>`,
-    preview: `<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="16" y1="3" x2="16" y2="21" opacity="0.3"/>`
+    split: `<rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/>`,
+    editor: `<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="8" y1="3" x2="8" y2="21" opacity="0.3"/>`,
+    preview: `<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="16" y1="3" x2="16" y2="21" opacity="0.3"/>`,
   }
 
   function setViewMode(mode) {
@@ -343,7 +350,11 @@
     if (mode === 'preview') mainArea.classList.add('view-preview-only')
     const icon = viewToggleBtn.querySelector('svg')
     if (icon) icon.innerHTML = viewSVGs[mode]
-    const titles = { split: '分栏视图 (Ctrl+\\)', editor: '仅编辑 (Ctrl+\\)', preview: '仅预览 (Ctrl+\\)' }
+    const titles = {
+      split: '分栏视图 (Ctrl+\\)',
+      editor: '仅编辑 (Ctrl+\\)',
+      preview: '仅预览 (Ctrl+\\)',
+    }
     viewToggleBtn.title = titles[mode]
   }
 
@@ -381,11 +392,15 @@
   document.getElementById('btn-open').addEventListener('click', () => openFile())
   document.getElementById('btn-save').addEventListener('click', () => saveFile())
   document.getElementById('btn-template').addEventListener('click', () => TemplateManager.open())
-  document.getElementById('btn-theme').addEventListener('click', () => SettingsManager.toggleTheme())
+  document
+    .getElementById('btn-theme')
+    .addEventListener('click', () => SettingsManager.toggleTheme())
   document.getElementById('btn-settings').addEventListener('click', () => SettingsManager.open())
 
   // Command palette hint in status bar
-  document.getElementById('status-palette-hint').addEventListener('click', () => CommandPalette?.open?.())
+  document
+    .getElementById('status-palette-hint')
+    .addEventListener('click', () => CommandPalette?.open?.())
 
   // Format buttons
   document.querySelectorAll('.fmt-btn').forEach(btn => {
@@ -398,7 +413,7 @@
   const exportBtn = document.getElementById('btn-export')
   const exportMenu = document.getElementById('export-menu')
 
-  exportBtn.addEventListener('click', (e) => {
+  exportBtn.addEventListener('click', e => {
     e.stopPropagation()
     exportMenu.classList.toggle('open')
   })
@@ -421,7 +436,7 @@
   function newFile(templateContent) {
     const tab = TabManager.createTab({
       title: '未命名',
-      content: templateContent || ''
+      content: templateContent || '',
     })
     TabManager.setActive(tab.id)
     EditorManager.focus()
@@ -503,7 +518,7 @@
 
       const result = await window.api.dialogSaveFile({
         defaultPath,
-        filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+        filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
       })
 
       if (result.canceled || !result.filePath) return
@@ -515,12 +530,13 @@
 
     const res = await window.api.fileSave(filePath, content)
     if (res.success) {
-      const baseName = filePath.split(/[/\\]/).pop().replace(/\.(md|markdown)$/i, '')
+      const baseName = filePath
+        .split(/[/\\]/)
+        .pop()
+        .replace(/\.(md|markdown)$/i, '')
       // 若用户在另存对话框里改了文件名，以磁盘上的为准；
       // 否则保留 tab.title（含用户重命名）—— 仅更新 filePath。
-      const titleToUse = (tab.filePath && tab.filePath === filePath)
-        ? tab.title
-        : baseName
+      const titleToUse = tab.filePath && tab.filePath === filePath ? tab.title : baseName
       TabManager.setTabTitle(tab.id, titleToUse, filePath)
       TabManager.markModified(tab.id, false)
       CacheManager.markDirty()
@@ -537,26 +553,50 @@
   }
 
   // ─── Menu event handlers ──────────────────────────────────────
-  window.api.onMenuEvent((event) => {
+  window.api.onMenuEvent(event => {
     const content = EditorManager.getValue()
     switch (event) {
-      case 'menu-new':        newFile(); break
-      case 'menu-open':       openFile(); break
-      case 'menu-save':       saveFile(); break
-      case 'menu-save-as':    saveFile(true); break
-      case 'menu-import':     openFile(); break
-      case 'menu-export-md':  ExportManager.exportMd(content); break
-      case 'menu-export-html':ExportManager.exportHtml(content); break
-      case 'menu-export-pdf': ExportManager.exportPdf(content); break
-      case 'menu-toggle-theme': SettingsManager.toggleTheme(); break
+      case 'menu-new':
+        newFile()
+        break
+      case 'menu-open':
+        openFile()
+        break
+      case 'menu-save':
+        saveFile()
+        break
+      case 'menu-save-as':
+        saveFile(true)
+        break
+      case 'menu-import':
+        openFile()
+        break
+      case 'menu-export-md':
+        ExportManager.exportMd(content)
+        break
+      case 'menu-export-html':
+        ExportManager.exportHtml(content)
+        break
+      case 'menu-export-pdf':
+        ExportManager.exportPdf(content)
+        break
+      case 'menu-toggle-theme':
+        SettingsManager.toggleTheme()
+        break
       case 'menu-toggle-view': {
         const idx = viewModes.indexOf(viewMode)
         setViewMode(viewModes[(idx + 1) % viewModes.length])
         break
       }
-      case 'menu-settings':   SettingsManager.open(); break
-      case 'menu-templates':  TemplateManager.open(); break
-      case 'menu-recent':     if (window.RecentFiles) RecentFiles.open(); break
+      case 'menu-settings':
+        SettingsManager.open()
+        break
+      case 'menu-templates':
+        TemplateManager.open()
+        break
+      case 'menu-recent':
+        if (window.RecentFiles) RecentFiles.open()
+        break
     }
   })
 
@@ -577,7 +617,10 @@
 
       // 若当前活动 Tab 是空白未修改的"未命名"草稿，先关掉它
       const cur = TabManager.getActive()
-      const curIsBlankDraft = cur && !cur.filePath && !cur.modified &&
+      const curIsBlankDraft =
+        cur &&
+        !cur.filePath &&
+        !cur.modified &&
         (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
 
       const tab = TabManager.createTab({ title, filePath, content })
@@ -597,7 +640,7 @@
 
   // ─── Recent files picker ──────────────────────────────────────
   if (window.RecentFiles) {
-    RecentFiles.onOpen(async (filePath) => {
+    RecentFiles.onOpen(async filePath => {
       await openFileByPath(filePath)
     })
   }
@@ -605,45 +648,225 @@
   // ─── Command palette commands ─────────────────────────────────
   if (window.CommandPalette) {
     const P = CommandPalette
-    P.register({ id: 'file.new', group: '文件', title: '新建', hint: 'Ctrl+N', run: () => newFile() })
-    P.register({ id: 'file.open', group: '文件', title: '打开文件...', hint: 'Ctrl+O', run: () => openFile() })
-    P.register({ id: 'file.save', group: '文件', title: '保存', hint: 'Ctrl+S', run: () => saveFile() })
-    P.register({ id: 'file.saveAs', group: '文件', title: '另存为...', hint: 'Ctrl+Shift+S', run: () => saveFile(true) })
-    P.register({ id: 'file.recent', group: '文件', title: '最近文件...', hint: 'Ctrl+Shift+R', run: () => window.RecentFiles && RecentFiles.open() })
-    P.register({ id: 'export.md', group: '导出', title: '导出 Markdown', run: () => ExportManager.exportMd(EditorManager.getValue()) })
-    P.register({ id: 'export.html', group: '导出', title: '导出 HTML', run: () => ExportManager.exportHtml(EditorManager.getValue()) })
-    P.register({ id: 'export.pdf', group: '导出', title: '导出 PDF', run: () => ExportManager.exportPdf(EditorManager.getValue()) })
-    P.register({ id: 'view.toggleTheme', group: '视图', title: '切换主题', hint: 'Ctrl+Shift+T', run: () => SettingsManager.toggleTheme() })
-    P.register({ id: 'view.toggleMode', group: '视图', title: '循环视图模式', hint: 'Ctrl+\\', run: () => {
-      const idx = viewModes.indexOf(viewMode)
-      setViewMode(viewModes[(idx + 1) % viewModes.length])
-    }})
-    P.register({ id: 'view.editorOnly', group: '视图', title: '仅编辑器', run: () => setViewMode('editor') })
-    P.register({ id: 'view.previewOnly', group: '视图', title: '仅预览', run: () => setViewMode('preview') })
-    P.register({ id: 'view.split', group: '视图', title: '分栏视图', run: () => setViewMode('split') })
-    P.register({ id: 'view.swapPanes', group: '视图', title: '互换编辑/预览位置', hint: 'Ctrl+Shift+\\', run: () => togglePaneSwap() })
-    P.register({ id: 'edit.find', group: '编辑', title: '查找', hint: 'Ctrl+F', run: () => window.FindManager && FindManager.open && FindManager.open(false) })
-    P.register({ id: 'edit.replace', group: '编辑', title: '替换', hint: 'Ctrl+H', run: () => window.FindManager && FindManager.open && FindManager.open(true) })
-    P.register({ id: 'insert.heading', group: '插入', title: '标题（循环）', run: () => EditorManager.insertFormat('heading') })
-    P.register({ id: 'insert.bold', group: '插入', title: '粗体', hint: 'Ctrl+B', run: () => EditorManager.insertFormat('bold') })
-    P.register({ id: 'insert.italic', group: '插入', title: '斜体', hint: 'Ctrl+I', run: () => EditorManager.insertFormat('italic') })
-    P.register({ id: 'insert.link', group: '插入', title: '链接', hint: 'Ctrl+K', run: () => EditorManager.insertFormat('link') })
-    P.register({ id: 'insert.image', group: '插入', title: '图片', run: () => EditorManager.insertFormat('image') })
-    P.register({ id: 'insert.code', group: '插入', title: '行内代码', run: () => EditorManager.insertFormat('code') })
-    P.register({ id: 'insert.codeblock', group: '插入', title: '代码块', run: () => EditorManager.insertFormat('codeblock') })
-    P.register({ id: 'insert.quote', group: '插入', title: '引用', run: () => EditorManager.insertFormat('quote') })
-    P.register({ id: 'insert.ul', group: '插入', title: '无序列表', run: () => EditorManager.insertFormat('ul') })
-    P.register({ id: 'insert.ol', group: '插入', title: '有序列表', run: () => EditorManager.insertFormat('ol') })
-    P.register({ id: 'insert.table', group: '插入', title: '表格', run: () => EditorManager.insertFormat('table') })
-    P.register({ id: 'insert.hr', group: '插入', title: '分割线', run: () => EditorManager.insertFormat('hr') })
-    P.register({ id: 'tab.new', group: '标签', title: '新建标签页', run: () => { const t = TabManager.createTab({ title: '未命名' }); TabManager.setActive(t.id) } })
-    P.register({ id: 'tab.close', group: '标签', title: '关闭当前标签', hint: 'Ctrl+W', run: () => { const t = TabManager.getActive(); if (t) TabManager.closeTab(t.id) } })
-    P.register({ id: 'app.templates', group: '工具', title: '模板库', run: () => TemplateManager.open() })
-    P.register({ id: 'app.settings', group: '工具', title: '设置', run: () => SettingsManager.open() })
+    P.register({
+      id: 'file.new',
+      group: '文件',
+      title: '新建',
+      hint: 'Ctrl+N',
+      run: () => newFile(),
+    })
+    P.register({
+      id: 'file.open',
+      group: '文件',
+      title: '打开文件...',
+      hint: 'Ctrl+O',
+      run: () => openFile(),
+    })
+    P.register({
+      id: 'file.save',
+      group: '文件',
+      title: '保存',
+      hint: 'Ctrl+S',
+      run: () => saveFile(),
+    })
+    P.register({
+      id: 'file.saveAs',
+      group: '文件',
+      title: '另存为...',
+      hint: 'Ctrl+Shift+S',
+      run: () => saveFile(true),
+    })
+    P.register({
+      id: 'file.recent',
+      group: '文件',
+      title: '最近文件...',
+      hint: 'Ctrl+Shift+R',
+      run: () => window.RecentFiles && RecentFiles.open(),
+    })
+    P.register({
+      id: 'export.md',
+      group: '导出',
+      title: '导出 Markdown',
+      run: () => ExportManager.exportMd(EditorManager.getValue()),
+    })
+    P.register({
+      id: 'export.html',
+      group: '导出',
+      title: '导出 HTML',
+      run: () => ExportManager.exportHtml(EditorManager.getValue()),
+    })
+    P.register({
+      id: 'export.pdf',
+      group: '导出',
+      title: '导出 PDF',
+      run: () => ExportManager.exportPdf(EditorManager.getValue()),
+    })
+    P.register({
+      id: 'view.toggleTheme',
+      group: '视图',
+      title: '切换主题',
+      hint: 'Ctrl+Shift+T',
+      run: () => SettingsManager.toggleTheme(),
+    })
+    P.register({
+      id: 'view.toggleMode',
+      group: '视图',
+      title: '循环视图模式',
+      hint: 'Ctrl+\\',
+      run: () => {
+        const idx = viewModes.indexOf(viewMode)
+        setViewMode(viewModes[(idx + 1) % viewModes.length])
+      },
+    })
+    P.register({
+      id: 'view.editorOnly',
+      group: '视图',
+      title: '仅编辑器',
+      run: () => setViewMode('editor'),
+    })
+    P.register({
+      id: 'view.previewOnly',
+      group: '视图',
+      title: '仅预览',
+      run: () => setViewMode('preview'),
+    })
+    P.register({
+      id: 'view.split',
+      group: '视图',
+      title: '分栏视图',
+      run: () => setViewMode('split'),
+    })
+    P.register({
+      id: 'view.swapPanes',
+      group: '视图',
+      title: '互换编辑/预览位置',
+      hint: 'Ctrl+Shift+\\',
+      run: () => togglePaneSwap(),
+    })
+    P.register({
+      id: 'edit.find',
+      group: '编辑',
+      title: '查找',
+      hint: 'Ctrl+F',
+      run: () => window.FindManager && FindManager.open && FindManager.open(false),
+    })
+    P.register({
+      id: 'edit.replace',
+      group: '编辑',
+      title: '替换',
+      hint: 'Ctrl+H',
+      run: () => window.FindManager && FindManager.open && FindManager.open(true),
+    })
+    P.register({
+      id: 'insert.heading',
+      group: '插入',
+      title: '标题（循环）',
+      run: () => EditorManager.insertFormat('heading'),
+    })
+    P.register({
+      id: 'insert.bold',
+      group: '插入',
+      title: '粗体',
+      hint: 'Ctrl+B',
+      run: () => EditorManager.insertFormat('bold'),
+    })
+    P.register({
+      id: 'insert.italic',
+      group: '插入',
+      title: '斜体',
+      hint: 'Ctrl+I',
+      run: () => EditorManager.insertFormat('italic'),
+    })
+    P.register({
+      id: 'insert.link',
+      group: '插入',
+      title: '链接',
+      hint: 'Ctrl+K',
+      run: () => EditorManager.insertFormat('link'),
+    })
+    P.register({
+      id: 'insert.image',
+      group: '插入',
+      title: '图片',
+      run: () => EditorManager.insertFormat('image'),
+    })
+    P.register({
+      id: 'insert.code',
+      group: '插入',
+      title: '行内代码',
+      run: () => EditorManager.insertFormat('code'),
+    })
+    P.register({
+      id: 'insert.codeblock',
+      group: '插入',
+      title: '代码块',
+      run: () => EditorManager.insertFormat('codeblock'),
+    })
+    P.register({
+      id: 'insert.quote',
+      group: '插入',
+      title: '引用',
+      run: () => EditorManager.insertFormat('quote'),
+    })
+    P.register({
+      id: 'insert.ul',
+      group: '插入',
+      title: '无序列表',
+      run: () => EditorManager.insertFormat('ul'),
+    })
+    P.register({
+      id: 'insert.ol',
+      group: '插入',
+      title: '有序列表',
+      run: () => EditorManager.insertFormat('ol'),
+    })
+    P.register({
+      id: 'insert.table',
+      group: '插入',
+      title: '表格',
+      run: () => EditorManager.insertFormat('table'),
+    })
+    P.register({
+      id: 'insert.hr',
+      group: '插入',
+      title: '分割线',
+      run: () => EditorManager.insertFormat('hr'),
+    })
+    P.register({
+      id: 'tab.new',
+      group: '标签',
+      title: '新建标签页',
+      run: () => {
+        const t = TabManager.createTab({ title: '未命名' })
+        TabManager.setActive(t.id)
+      },
+    })
+    P.register({
+      id: 'tab.close',
+      group: '标签',
+      title: '关闭当前标签',
+      hint: 'Ctrl+W',
+      run: () => {
+        const t = TabManager.getActive()
+        if (t) TabManager.closeTab(t.id)
+      },
+    })
+    P.register({
+      id: 'app.templates',
+      group: '工具',
+      title: '模板库',
+      run: () => TemplateManager.open(),
+    })
+    P.register({
+      id: 'app.settings',
+      group: '工具',
+      title: '设置',
+      run: () => SettingsManager.open(),
+    })
   }
 
   // ─── Keyboard shortcuts ───────────────────────────────────────
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('keydown', e => {
     const ctrl = e.ctrlKey || e.metaKey
     if (ctrl && e.key === 's') {
       e.preventDefault()
@@ -702,18 +925,22 @@
   // Horizontal wheel scroll for tab bar
   const tabsContainer = document.getElementById('tabs-container')
   if (tabsContainer) {
-    tabsContainer.addEventListener('wheel', (e) => {
-      if (e.deltaY !== 0) {
-        e.preventDefault()
-        tabsContainer.scrollLeft += e.deltaY
-      }
-    }, { passive: false })
+    tabsContainer.addEventListener(
+      'wheel',
+      e => {
+        if (e.deltaY !== 0) {
+          e.preventDefault()
+          tabsContainer.scrollLeft += e.deltaY
+        }
+      },
+      { passive: false },
+    )
   }
 
   // Double-click empty area of tab bar to create a new file
   const tabbar = document.getElementById('tabbar')
   if (tabbar) {
-    tabbar.addEventListener('dblclick', (e) => {
+    tabbar.addEventListener('dblclick', e => {
       if (e.target === tabbar || e.target === tabsContainer) {
         e.preventDefault()
         newFile()
@@ -741,10 +968,12 @@
     if (!winMaxIcon) return
     if (isMax) {
       // Restore (two overlapping squares)
-      winMaxIcon.innerHTML = '<rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>'
+      winMaxIcon.innerHTML =
+        '<rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>'
       winMaxBtn.title = '还原'
     } else {
-      winMaxIcon.innerHTML = '<rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/>'
+      winMaxIcon.innerHTML =
+        '<rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/>'
       winMaxBtn.title = '最大化'
     }
   }
