@@ -316,3 +316,94 @@ describe('getWordCount (edge cases)', () => {
     expect(getWordCount('!!! ??? ...')).toBe(0)
   })
 })
+
+// ─── isPathSafe (path traversal protection from main.js) ─────
+function isPathSafe(p) {
+  try {
+    if (!p || typeof p !== 'string') return false
+    if (p.includes('..')) return false
+    const normalized = require('path').normalize(p)
+    if (!require('path').isAbsolute(normalized)) return false
+    if (process.platform.startsWith('win')) {
+      const upper = normalized.toUpperCase()
+      if (upper.startsWith('\\\\?\\') || upper.startsWith('\\\\.\\')) return false
+      if (/^[A-Z]:\\\\(?:NUL|CON|PRN|AUX|COM\d|LPT\d)(?:\.|$)/i.test(normalized)) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Skip path-safe tests on Windows due to drive-letter differences
+import { platform } from 'process'
+
+describe('isPathSafe', () => {
+  it('allows normal absolute paths', () => {
+    if (platform === 'win32') {
+      expect(isPathSafe('C:\\Users\\test\\file.md')).toBe(true)
+    } else {
+      expect(isPathSafe('/home/user/file.md')).toBe(true)
+    }
+  })
+
+  it('rejects relative paths', () => {
+    expect(isPathSafe('relative/path.md')).toBe(false)
+  })
+
+  it('rejects "./" prefixed paths', () => {
+    expect(isPathSafe('./file.md')).toBe(false)
+  })
+
+  it('rejects path traversal with ../', () => {
+    if (platform === 'win32') {
+      expect(isPathSafe('C:\\Users\\..\\..\\file.md')).toBe(false)
+    } else {
+      expect(isPathSafe('/home/../../etc/passwd')).toBe(false)
+    }
+  })
+
+  it('rejects empty string', () => {
+    expect(isPathSafe('')).toBe(false)
+  })
+})
+
+// ─── URL sanitization pattern ─────────────────────────────────
+function isSafeUrl(url) {
+  // Matches safe protocols (http/https/mailto/tel/etc), no file:
+  return /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i.test(url)
+}
+
+describe('isSafeUrl (DOMPurify ALLOWED_URI_REGEXP)', () => {
+  it('allows https:// URLs', () => {
+    expect(isSafeUrl('https://example.com')).toBe(true)
+  })
+
+  it('allows http:// URLs', () => {
+    expect(isSafeUrl('http://example.com')).toBe(true)
+  })
+
+  it('allows mailto: links', () => {
+    expect(isSafeUrl('mailto:test@example.com')).toBe(true)
+  })
+
+  it('allows tel: links', () => {
+    expect(isSafeUrl('tel:+861234567890')).toBe(true)
+  })
+
+  it('REJECTS file:/// URLs', () => {
+    expect(isSafeUrl('file:///etc/passwd')).toBe(false)
+  })
+
+  it('REJECTS file:// links', () => {
+    expect(isSafeUrl('file:///C:/Windows/system32/cmd.exe')).toBe(false)
+  })
+
+  it('allows relative paths starting with /', () => {
+    expect(isSafeUrl('/path/to/page')).toBe(true)
+  })
+
+  it('allows fragment-only links', () => {
+    expect(isSafeUrl('#section-1')).toBe(true)
+  })
+})

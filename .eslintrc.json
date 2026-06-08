@@ -1,0 +1,62 @@
+{
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2021": true
+  },
+  "globals": {
+    "CodeMirror": "readonly",
+    "marked": "readonly",
+    "DOMPurify": "readonly",
+    "katex": "readonly",
+    "mermaid": "readonly",
+    "hljs": "readonly",
+    "EditorManager": "writable",
+    "PreviewManager": "writable",
+    "ExportManager": "writable",
+    "FindManager": "writable",
+    "CacheManager": "writable",
+    "SettingsManager": "writable",
+    "TemplateManager": "writable",
+    "CommandPalette": "writable",
+    "TabManager": "writable",
+    "RecentFiles": "writable",
+    "escHtml": "writable",
+    "resolveNamingRule": "writable",
+    "showConfirm": "writable"
+  },
+  "extends": ["eslint:recommended"],
+  "parserOptions": {
+    "ecmaVersion": "latest"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "args": "none" }],
+    "no-var": "warn",
+    "prefer-const": "warn",
+    "no-console": "off",
+    "no-undef": "error",
+    "no-empty": ["warn", { "allowEmptyCatch": true }],
+    "no-prototype-builtins": "off",
+    "no-useless-escape": "warn",
+    "no-irregular-whitespace": "off"
+  },
+  "ignorePatterns": [
+    "dist/",
+    "release/",
+    "node_modules/",
+    "renderer/vendor/",
+    "test_syntax*.js"
+  ],
+  "overrides": [
+    {
+      "files": ["tests/**/*.js"],
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "env": {
+        "node": true,
+        "es2021": true
+      }
+    }
+  ]
+}

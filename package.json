@@ -15,7 +15,12 @@
     "minify": "node scripts/minify.js",
     "build": "npm run minify && electron-builder",
     "build:win": "npm run minify && electron-builder --win",
-    "test": "vitest run"
+    "lint": "eslint main/ renderer/js/ scripts/ tests/",
+    "lint:fix": "eslint --fix main/ renderer/js/ scripts/ tests/",
+    "format": "prettier --check main/ renderer/js/ scripts/ tests/",
+    "format:fix": "prettier --write main/ renderer/js/ scripts/ tests/",
+    "test": "vitest run",
+    "check": "npm run lint && npm run test"
   },
   "keywords": [],
   "author": "Markdown Editor Team",

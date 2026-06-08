@@ -11,9 +11,8 @@ const csso = require('csso')
 const ROOT = path.resolve(__dirname, '..')
 const OUT = path.join(ROOT, 'dist')
 
-// ====== JS 文件 ======
+// ====== JS 文件（仅渲染进程） ======
 const jsFiles = [
-  // renderer JS
   'renderer/js/app.js',
   'renderer/js/cache.js',
   'renderer/js/editor.js',
@@ -26,9 +25,6 @@ const jsFiles = [
   'renderer/js/tabs.js',
   'renderer/js/templates.js',
   'renderer/js/utils.js',
-  // main process JS
-  'main/main.js',
-  'main/preload.js',
 ]
 
 // ====== CSS 文件 ======
@@ -97,7 +93,7 @@ function minifyHTML(filePath, outPath) {
   fs.writeFileSync(outPath, html)
 }
 
-;(async () => {
+(async () => {
   console.log('[minify] 开始压缩...\n')
   let ok = 0, fail = 0
 
