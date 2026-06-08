@@ -371,7 +371,7 @@ describe('isPathSafe', () => {
 // ─── URL sanitization pattern ─────────────────────────────────
 function isSafeUrl(url) {
   // Matches safe protocols (http/https/mailto/tel/etc), no file:
-  return /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i.test(url)
+  return /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i.test(url)
 }
 
 describe('isSafeUrl (DOMPurify ALLOWED_URI_REGEXP)', () => {
@@ -418,11 +418,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const markedCode = readFileSync(join(__dirname, '..', 'renderer', 'vendor', 'marked', 'marked.min.js'), 'utf8')
 
 // Evaluate to get marked in this scope
-let marked
 const _module = { exports: {} }
 const _eval = new Function('module', 'exports', markedCode)
 _eval(_module, _module.exports)
-marked = _module.exports
+const marked = _module.exports
 
 describe('marked.parse (v15)', () => {
   it('renders headings', () => {
@@ -613,7 +612,7 @@ describe('Template slug generation', () => {
     // Replicates the anchor ID logic in preview.js custom renderer
     return String(text).toLowerCase().trim()
       .replace(/[\s\u3000]+/g, '-')
-      .replace(/[^\w\u4e00-\u9fa5\-]/g, '')
+      .replace(/[^\w\u4e00-\u9fa5-]/g, '')
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '') || 'h'
   }

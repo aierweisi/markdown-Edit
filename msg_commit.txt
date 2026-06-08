@@ -1,7 +1,9 @@
-fix: 缓存恢复安全加固 - 数据验证与损坏降级
+fix: 安全加固 - CSP收紧/Tray跨平台/ESLint清理
 
-- #17: checkAndRestore 增加结构/类型校验，过滤损坏标签
-- restore 单个标签异常不会导致整体恢复失败
-- removeTab 增加 Array.isArray 检查
+- #1: CSP 增加 connect-src 'self' / worker-src 'self' 限制
+- #18: Tray 图标跨平台兼容 - Win用.ico，macOS/Linux用.png
+- 修复 ESLint 配置 vitest.config.js 解析错误
+- 修复 test 中 marked 改为 const、无用转义符清理
+- main.js 多余分号清理
 
 Co-Authored-By: AtomCode (deepseek-v4-flash) <noreply@atomgit.com>

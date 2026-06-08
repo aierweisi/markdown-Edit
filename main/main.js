@@ -110,7 +110,7 @@ async function createWindow() {
         : path.join(__dirname, '../renderer/index.html'),
     ),
     mainWindow.once('ready-to-show', () => {
-      ;(mainWindow.show(),
+      (mainWindow.show(),
         app.isPackaged || mainWindow.webContents.openDevTools({ mode: 'detach' }))
     }),
     mainWindow.webContents.on('did-finish-load', () => {
@@ -130,8 +130,12 @@ async function createWindow() {
 }
 function setupTray() {
   if (tray) return
-  const e = path.join(__dirname, '../assets/icons/icon.ico'),
+  const isWin = 'win32' === process.platform
+  const iconName = isWin ? 'icon.ico' : 'icon.png'
+  const e = path.join(__dirname, '../assets/icons/' + iconName),
     n = fs.existsSync(e) ? nativeImage.createFromPath(e) : nativeImage.createEmpty()
+  // 非 Windows 平台需要设置 resize 选项
+  if (!isWin) n.setTemplateImage(!0)
   ;((tray = new Tray(n)), tray.setToolTip('Markdown Editor'))
   const i = () => {
       mainWindow &&
@@ -143,7 +147,7 @@ function setupTray() {
       {
         label: '退出',
         click: () => {
-          ;((isQuitting = !0), app.quit())
+          ((isQuitting = !0), app.quit())
         },
       },
     ])
@@ -189,7 +193,7 @@ function setupMenu() {
             label: '退出',
             accelerator: 'CmdOrCtrl+Q',
             click: () => {
-              ;((isQuitting = !0), app.quit())
+              ((isQuitting = !0), app.quit())
             },
           },
         ],
@@ -235,7 +239,7 @@ function setupMenu() {
   Menu.setApplicationMenu(n)
 }
 function setupIPC() {
-  ;(ipcMain.handle('store-get', (e, n) => store.get(n)),
+  (ipcMain.handle('store-get', (e, n) => store.get(n)),
     ipcMain.handle('store-set', (e, n, i) => store.set(n, i)),
     ipcMain.handle('file-read', async (e, n) => {
       try {
@@ -436,10 +440,10 @@ const gotTheLock = app.requestSingleInstanceLock()
           mainWindow.focus()))
     }),
     app.on('open-file', (e, n) => {
-      ;(e.preventDefault(), mainWindow ? sendOpenFile(n) : (pendingOpenFile = n))
+      (e.preventDefault(), mainWindow ? sendOpenFile(n) : (pendingOpenFile = n))
     }),
     app.whenReady().then(() => {
-      ;((pendingOpenFile = extractFileArg(process.argv)), setupIPC(), createWindow())
+      ((pendingOpenFile = extractFileArg(process.argv)), setupIPC(), createWindow())
     }))
   : app.quit(),
   app.on('window-all-closed', () => {

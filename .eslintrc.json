@@ -57,6 +57,16 @@
         "node": true,
         "es2021": true
       }
+    },
+    {
+      "files": ["vitest.config.js"],
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "env": {
+        "node": true,
+        "es2021": true
+      }
     }
   ]
 }
