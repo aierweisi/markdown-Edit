@@ -4,8 +4,8 @@
   "description": "A desktop Markdown editor built with Electron",
   "vendor": {
     "marked": "9.1.6",
-    "katex": "0.16.11",
-    "dompurify": "3.1.6",
+    "katex": "0.16.21",
+    "dompurify": "3.2.4",
     "codemirror": "5.65.16",
     "mermaid": "10.x"
   },
@@ -32,6 +32,8 @@
     "csso": "^5.0.5",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.8.3",
     "terser": "^5.48.0",
     "vitest": "^4.1.7"
   },
