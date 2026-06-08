@@ -67,7 +67,7 @@ async function minifyJS(filePath, outPath) {
     compress: { passes: 2, drop_console: false },
     mangle: { reserved: ['TabManager', 'EditorManager', 'PreviewManager', 'ExportManager', 'FindManager', 'CacheManager', 'SettingsManager', 'TemplateManager', 'CommandPalette', 'RecentFiles', 'CodeMirror', 'marked', 'DOMPurify', 'katex', 'mermaid', 'hljs'] },
     output: { comments: false },
-    sourceMap: false,
+    sourceMap: true,
   })
   if (result.error) throw result.error
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
