@@ -1,7 +1,7 @@
 /**
  * minify.js — Build-time JS/CSS/HTML 压缩
- * 输出到 dist/ 目录，不覆盖源文件。
- * 配合 package.json 中 files 字段打包 dist/ 下的产物。
+ * 从 src/ 读取可读源码，压缩后输出到 dist/，供 electron-builder 打包。
+ * 不覆盖 renderer/ 下的开发文件。
  */
 const fs = require('fs')
 const path = require('path')
@@ -9,36 +9,36 @@ const Terser = require('terser')
 const csso = require('csso')
 
 const ROOT = path.resolve(__dirname, '..')
+const SRC = path.join(ROOT, 'src')
 const OUT = path.join(ROOT, 'dist')
 
-// ====== JS 文件（仅渲染进程） ======
+// ====== JS 文件（从 src/js/ 读取） ======
 const jsFiles = [
-  'renderer/js/app.js',
-  'renderer/js/cache.js',
-  'renderer/js/editor.js',
-  'renderer/js/export.js',
-  'renderer/js/find.js',
-  'renderer/js/palette.js',
-  'renderer/js/preview.js',
-  'renderer/js/recent.js',
-  'renderer/js/settings.js',
-  'renderer/js/tabs.js',
-  'renderer/js/templates.js',
-  'renderer/js/utils.js',
+  'app.js',
+  'cache.js',
+  'editor.js',
+  'export.js',
+  'find.js',
+  'palette.js',
+  'preview.js',
+  'recent.js',
+  'settings.js',
+  'tabs.js',
+  'templates.js',
+  'utils.js',
 ]
 
-// ====== CSS 文件 ======
+// ====== CSS 文件（从 src/css/ 读取） ======
 const cssFiles = [
-  'renderer/css/main.css',
+  'main.css',
 ]
 
-// ====== HTML 文件 ======
+// ====== HTML 文件（从 src/ 读取） ======
 const htmlFiles = [
-  'renderer/index.html',
+  'index.html',
 ]
 
-// ====== vendor 文件（仅复制，不压缩） ======
-// 自动扫描 renderer/vendor/ 下所有子目录中的文件
+// ====== Vendor 文件（从 renderer/vendor/ 复制） ======
 function collectVendorFiles() {
   const vendorDir = path.join(ROOT, 'renderer', 'vendor')
   const files = []
@@ -50,22 +50,31 @@ function collectVendorFiles() {
   }
   return files
 }
+
 function collectFiles(dir, result, prefix) {
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name)
     if (fs.statSync(full).isDirectory()) {
       collectFiles(full, result, prefix + '/' + name)
     } else {
-      result.push({ rel: 'renderer/' + prefix + '/' + name, abs: full })
+      result.push({ rel: prefix + '/' + name, abs: full })
     }
   }
 }
 
-async function minifyJS(filePath, outPath) {
-  const code = fs.readFileSync(filePath, 'utf8')
+async function minifyJS(inPath, outPath) {
+  const code = fs.readFileSync(inPath, 'utf8')
   const result = await Terser.minify(code, {
     compress: { passes: 2, drop_console: false },
-    mangle: { reserved: ['TabManager', 'EditorManager', 'PreviewManager', 'ExportManager', 'FindManager', 'CacheManager', 'SettingsManager', 'TemplateManager', 'CommandPalette', 'RecentFiles', 'CodeMirror', 'marked', 'DOMPurify', 'katex', 'mermaid', 'hljs'] },
+    mangle: {
+      reserved: [
+        'TabManager', 'EditorManager', 'PreviewManager',
+        'ExportManager', 'FindManager', 'CacheManager',
+        'SettingsManager', 'TemplateManager', 'CommandPalette',
+        'RecentFiles', 'CodeMirror', 'marked', 'DOMPurify',
+        'katex', 'mermaid', 'hljs',
+      ],
+    },
     output: { comments: false },
     sourceMap: true,
   })
@@ -75,17 +84,15 @@ async function minifyJS(filePath, outPath) {
   if (result.map) fs.writeFileSync(outPath + '.map', result.map)
 }
 
-function minifyCSS(filePath, outPath) {
-  const code = fs.readFileSync(filePath, 'utf8')
+function minifyCSS(inPath, outPath) {
+  const code = fs.readFileSync(inPath, 'utf8')
   const result = csso.minify(code, { restructure: true })
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
   fs.writeFileSync(outPath, result.css)
 }
 
-function minifyHTML(filePath, outPath) {
-  let html = fs.readFileSync(filePath, 'utf8')
-  // 注意：HTML 中引用的 vendor/ 路径不变，仅复制 vendor 到 dist 对应位置
-  // 简单去除多余空白
+function minifyHTML(inPath, outPath) {
+  let html = fs.readFileSync(inPath, 'utf8')
   html = html.replace(/\s{2,}/g, ' ')
     .replace(/>\s+</g, '><')
     .trim()
@@ -93,90 +100,89 @@ function minifyHTML(filePath, outPath) {
   fs.writeFileSync(outPath, html)
 }
 
-(async () => {
-  console.log('[minify] 开始压缩...\n')
+;(async () => {
+  console.log('[minify] 从 src/ 开始压缩...\n')
   let ok = 0, fail = 0
 
-  for (const rel of jsFiles) {
-    const full = path.join(ROOT, rel)
-    if (!fs.existsSync(full)) {
-      console.warn(`[skip] 不存在: ${rel}`)
+  // JS 文件
+  for (const name of jsFiles) {
+    const inPath = path.join(SRC, 'js', name)
+    if (!fs.existsSync(inPath)) {
+      console.warn(`[skip] 不存在: src/js/${name}`)
       continue
     }
     try {
-      const outRel = rel.replace(/^renderer\//, '')
-      const outPath = path.join(OUT, outRel)
-      await minifyJS(full, outPath)
-      console.log(`[JS]    ✅ ${rel} → dist/${outRel}`)
+      const outPath = path.join(OUT, 'js', name)
+      await minifyJS(inPath, outPath)
+      console.log(`[JS]    ✅ src/js/${name} → dist/js/${name}`)
       ok++
     } catch (e) {
-      console.error(`[JS]    ❌ ${rel}: ${e.message}`)
+      console.error(`[JS]    ❌ src/js/${name}: ${e.message}`)
       fail++
     }
   }
 
-  for (const rel of cssFiles) {
-    const full = path.join(ROOT, rel)
-    if (!fs.existsSync(full)) {
-      console.warn(`[skip] 不存在: ${rel}`)
+  // CSS 文件
+  for (const name of cssFiles) {
+    const inPath = path.join(SRC, 'css', name)
+    if (!fs.existsSync(inPath)) {
+      console.warn(`[skip] 不存在: src/css/${name}`)
       continue
     }
     try {
-      const outRel = rel.replace(/^renderer\//, '')
-      const outPath = path.join(OUT, outRel)
-      minifyCSS(full, outPath)
-      console.log(`[CSS]   ✅ ${rel} → dist/${outRel}`)
+      const outPath = path.join(OUT, 'css', name)
+      minifyCSS(inPath, outPath)
+      console.log(`[CSS]   ✅ src/css/${name} → dist/css/${name}`)
       ok++
     } catch (e) {
-      console.error(`[CSS]   ❌ ${rel}: ${e.message}`)
+      console.error(`[CSS]   ❌ src/css/${name}: ${e.message}`)
       fail++
     }
   }
 
-  for (const rel of htmlFiles) {
-    const full = path.join(ROOT, rel)
-    if (!fs.existsSync(full)) {
-      console.warn(`[skip] 不存在: ${rel}`)
+  // HTML 文件
+  for (const name of htmlFiles) {
+    const inPath = path.join(SRC, name)
+    if (!fs.existsSync(inPath)) {
+      console.warn(`[skip] 不存在: src/${name}`)
       continue
     }
     try {
-      const outRel = rel.replace(/^renderer\//, '')
-      const outPath = path.join(OUT, outRel)
-      minifyHTML(full, outPath)
-      console.log(`[HTML]  ✅ ${rel} → dist/${outRel}`)
+      const outPath = path.join(OUT, name)
+      minifyHTML(inPath, outPath)
+      console.log(`[HTML]  ✅ src/${name} → dist/${name}`)
       ok++
     } catch (e) {
-      console.error(`[HTML]  ❌ ${rel}: ${e.message}`)
+      console.error(`[HTML]  ❌ src/${name}: ${e.message}`)
       fail++
     }
   }
 
-  // 复制 vendor 文件
+  // 复制 vendor 文件（从 renderer/vendor/ 到 dist/vendor/）
   const vendorFiles = collectVendorFiles()
   let vendorCopied = 0
   for (const { rel, abs } of vendorFiles) {
-    const outRel = rel.replace(/^renderer\//, '')
-    const outPath = path.join(OUT, outRel)
+    const outPath = path.join(OUT, rel)
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
     fs.copyFileSync(abs, outPath)
     vendorCopied++
   }
   console.log(`[Vendor] ✅ 复制 ${vendorCopied} 个 vendor 文件到 dist/`)
 
-  // ====== 复制 main 进程文件（main.js + preload.js） ======
+  // 复制 main 进程文件
   const mainFiles = [
-    { rel: 'main/main.js', abs: path.join(ROOT, 'main/main.js') },
-    { rel: 'main/preload.js', abs: path.join(ROOT, 'main/preload.js') },
+    { src: 'main/main.js', inPath: path.join(ROOT, 'main/main.js') },
+    { src: 'main/preload.js', inPath: path.join(ROOT, 'main/preload.js') },
   ]
-  for (const { rel, abs } of mainFiles) {
-    const outPath = path.join(OUT, rel)
-    if (fs.existsSync(abs)) {
+  for (const { src, inPath } of mainFiles) {
+    const outPath = path.join(OUT, src)
+    if (fs.existsSync(inPath)) {
       fs.mkdirSync(path.dirname(outPath), { recursive: true })
-      fs.copyFileSync(abs, outPath)
-      console.log(`[Main]   ✅ ${rel} → dist/${rel}`)
+      fs.copyFileSync(inPath, outPath)
+      console.log(`[Main]   ✅ ${src} → dist/${src}`)
       ok++
     } else {
-      console.warn(`[skip] 不存在: ${rel}`)
+      console.warn(`[skip] 不存在: ${src}`)
     }
   }
 
@@ -185,7 +191,7 @@ function minifyHTML(filePath, outPath) {
   const assetsOut = path.join(OUT, 'assets')
   if (fs.existsSync(assetsDir)) {
     copyDirSync(assetsDir, assetsOut)
-    console.log(`[Assets] ✅ 复制 assets/ 到 dist/`)
+    console.log('[Assets] ✅ 复制 assets/ 到 dist/')
   }
 
   console.log(`\n压缩完成: ${ok} 成功, ${fail} 失败, ${vendorCopied} vendor 已复制`)

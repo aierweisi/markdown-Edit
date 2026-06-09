@@ -12,14 +12,15 @@
   },
   "main": "main/main.js",
   "scripts": {
-    "start": "electron .",
+    "dev": "node scripts/dev-build.js",
+    "start": "node scripts/dev-build.js && electron .",
     "minify": "node scripts/minify.js",
     "build": "npm run minify && electron-builder",
     "build:win": "npm run minify && electron-builder --win",
-    "lint": "eslint main/ renderer/js/ scripts/ tests/",
-    "lint:fix": "eslint --fix main/ renderer/js/ scripts/ tests/",
-    "format": "prettier --check main/ renderer/js/ scripts/ tests/",
-    "format:fix": "prettier --write main/ renderer/js/ scripts/ tests/",
+    "lint": "eslint main/ src/js/ scripts/ tests/",
+    "lint:fix": "eslint --fix main/ src/js/ scripts/ tests/",
+    "format": "prettier --check main/ src/js/ scripts/ tests/",
+    "format:fix": "prettier --write main/ src/js/ scripts/ tests/",
     "test": "vitest run",
     "check": "npm run lint && npm run test"
   },
@@ -36,7 +37,7 @@
     "eslint": "^8.57.1",
     "prettier": "^3.8.3",
     "terser": "^5.48.0",
-    "vitest": "^4.1.7"
+    "vitest": "^0.34.0"
   },
   "build": {
     "appId": "com.markdown.editor",
@@ -50,7 +51,6 @@
     },
     "files": [
       "dist/**/*",
-      "main/**/*",
       "package.json",
       "!**/*.map",
       "!**/*.md"

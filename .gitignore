@@ -34,8 +34,14 @@ build
 # cache
 .atomcode/graph.bin
 
+# generated from src/ by dev-build.js / minify.js
+renderer/js/
+renderer/css/main.css
+renderer/index.html
+
 # temp files from build/commit scripts
 .msg
 .commit_msg
+msg_commit.txt
 _diag.txt
 _v*.txt

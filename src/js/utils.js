@@ -1,13 +1,13 @@
-window.escHtml = function (t) {
-  return String(t).replace(
+window.escHtml = function (str) {
+  return String(str).replace(
     /[&<>"']/g,
-    t => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[t],
+    ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch],
   )
 }
 window.resolveNamingRule = function (rule, content) {
-  const n = new Date(),
-    date = n.toISOString().slice(0, 10),
-    time = n.toTimeString().slice(0, 8).replace(/:/g, ''),
+  const now = new Date(),
+    date = now.toISOString().slice(0, 10),
+    time = now.toTimeString().slice(0, 8).replace(/:/g, ''),
     datetime = date + '_' + time,
     timestamp = String(Math.floor(Date.now() / 1e3)),
     random = Math.random().toString(36).substring(2, 8),

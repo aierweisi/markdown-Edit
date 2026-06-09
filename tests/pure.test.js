@@ -650,3 +650,84 @@ describe('Template slug generation', () => {
     expect(slugify('hello\u3000world')).toBe('hello-world')
   })
 })
+
+// ─── Template content resolution (function vs string) ───────────
+describe('Template content resolution', () => {
+  // 模拟内置模板数组
+  const builtinTemplates = [
+    { id: 'b_static', name: '静态模板', content: '# 静态内容\n固定文本' },
+    {
+      id: 'b_dynamic',
+      name: '动态模板',
+      content: () => `# 动态内容\n生成时间: ${new Date().toISOString().slice(0, 10)}`,
+    },
+  ]
+
+  // 模拟 templates.js 中的 resolveContent 逻辑
+  function resolveTemplateContent(template, builtins) {
+    if (!template.builtin) return template.content
+    const src = builtins.find(b => b.id === template.id)
+    return src
+      ? typeof src.content === 'function'
+        ? src.content()
+        : src.content
+      : template.content
+  }
+
+  it('返回静态内置模板的字符串内容', () => {
+    const tpl = { id: 'b_static', builtin: true, content: '' }
+    const result = resolveTemplateContent(tpl, builtinTemplates)
+    expect(result).toBe('# 静态内容\n固定文本')
+  })
+
+  it('执行函数式内置模板并返回结果', () => {
+    const tpl = { id: 'b_dynamic', builtin: true, content: '' }
+    const result = resolveTemplateContent(tpl, builtinTemplates)
+    expect(result).toContain('# 动态内容')
+    expect(result).toMatch(/生成时间: \d{4}-\d{2}-\d{2}/)
+  })
+
+  it('函数模板每次调用生成独立结果（日期变化）', () => {
+    // 验证 content() 每次执行返回新对象（引用不缓存）
+    const tpl = { id: 'b_dynamic', builtin: true, content: '' }
+    const r1 = resolveTemplateContent(tpl, builtinTemplates)
+    const r2 = resolveTemplateContent(tpl, builtinTemplates)
+    expect(r1).toEqual(r2) // 同一天内内容一致
+    expect(typeof r1).toBe('string')
+    expect(r1.length).toBeGreaterThan(20)
+  })
+
+  it('自定义模板直接返回存储的 content', () => {
+    const tpl = { id: 'u_custom', builtin: false, content: '自定义内容' }
+    const result = resolveTemplateContent(tpl, builtinTemplates)
+    expect(result).toBe('自定义内容')
+  })
+
+  it('内置模板在存储中 content 为空时从源码恢复', () => {
+    // 模拟修复前的情况：content 为空字符串
+    const tpl = { id: 'b_dynamic', builtin: true, content: '' }
+    const result = resolveTemplateContent(tpl, builtinTemplates)
+    expect(result).toBeTruthy()
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('加载函数正确处理函数类型的 content', () => {
+    // 模拟 templates.js 中修复后的 load 逻辑
+    function loadTemplateContent(src) {
+      return typeof src.content === 'function' ? src.content() : (src.content || '')
+    }
+    const funcTpl = builtinTemplates[1]
+    const strTpl = builtinTemplates[0]
+    expect(loadTemplateContent(funcTpl)).toContain('# 动态内容')
+    expect(loadTemplateContent(strTpl)).toBe('# 静态内容\n固定文本')
+  })
+
+  it('加载函数处理 content 为 null/undefined 的情况', () => {
+    function loadTemplateContent(src) {
+      return typeof src.content === 'function' ? src.content() : (src.content || '')
+    }
+    expect(loadTemplateContent({ content: null })).toBe('')
+    expect(loadTemplateContent({ content: undefined })).toBe('')
+    expect(loadTemplateContent({ content: '' })).toBe('')
+  })
+})

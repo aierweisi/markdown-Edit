@@ -1,5 +1,5 @@
 window.TemplateManager = (() => {
-  const n = [
+  const builtinTpls = [
     {
       id: 'b_prd',
       name: '产品需求文档 (PRD)',
@@ -43,173 +43,194 @@ window.TemplateManager = (() => {
         `# Bug 报告\n\n| | |\n|---|---|\n| **标题** |  |\n| **Bug ID** | BUG-001 |\n| **报告人** |  |\n| **报告日期** | ${new Date().toLocaleDateString('zh-CN')} |\n| **严重程度** | 🔴 阻塞 / 🟠 严重 / 🟡 一般 / 🟢 轻微 |\n| **优先级** | P0 / P1 / P2 / P3 |\n| **状态** | 🆕 新建 / 🛠 处理中 / ✅ 已修复 / 🚫 无效 |\n\n## 环境信息\n\n- **系统**：Windows 11 / macOS 14 / ...\n- **浏览器**：Chrome 120\n- **版本**：v1.0.0\n- **账号 / 数据**：\n\n## 问题描述\n\n> 简洁说明现象。\n\n## 复现步骤\n\n1. 打开 xxx 页面\n2. 点击 xxx 按钮\n3. 输入 xxx\n4. 观察到 xxx\n\n## 预期结果\n\n\n\n## 实际结果\n\n\n\n## 截图 / 录屏\n\n> 附上证据\n\n## 日志 / 错误信息\n\n\`\`\`\n[粘贴日志]\n\`\`\`\n\n## 影响范围\n\n- 受影响用户：\n- 是否有 workaround：\n\n## 修复方案（研发填写）\n\n- 根因分析：\n- 修复方式：\n- 回归范围：\n`,
     },
   ]
-  let e = [],
-    t = null,
-    a = null
-  async function o() {
-    await window.api.storeSet('tpl_v2', e)
+
+  let templates = [],
+    activeId = null,
+    onApplyCb = null
+  let dragId = null
+
+  async function saveToStore() {
+    await window.api.storeSet('tpl_v2', templates)
   }
-  let i = null
-  function d() {
-    const n = document.getElementById('tpl-list')
-    ;((n.innerHTML = ''),
-      e.forEach(a => {
-        const l = document.createElement('div')
-        ;((l.className = 'tpl-item' + (a.id === t ? ' active' : '')),
-          (l.dataset.id = a.id),
-          (l.draggable = !0),
-          (l.innerHTML = `\n        <span class="tpl-drag-handle" title="拖拽排序">⠿</span>\n        <span class="tpl-item-icon">${a.icon || '📄'}</span>\n        <span class="tpl-item-name">${a.name}</span>\n        <span class="tpl-item-tag">${a.builtin ? '内置' : '自定义'}</span>\n      `),
-          l.addEventListener('click', () => c(a.id)),
-          l.addEventListener('dragstart', n => {
-            ((i = a.id), (n.dataTransfer.effectAllowed = 'move'), l.classList.add('dragging'))
-          }),
-          l.addEventListener('dragend', () => {
-            (l.classList.remove('dragging'),
-              document.querySelectorAll('.tpl-item').forEach(n => n.classList.remove('drag-over')))
-          }),
-          l.addEventListener('dragover', n => {
-            (n.preventDefault(),
-              (n.dataTransfer.dropEffect = 'move'),
-              document.querySelectorAll('.tpl-item').forEach(n => n.classList.remove('drag-over')),
-              a.id !== i && l.classList.add('drag-over'))
-          }),
-          l.addEventListener('dragleave', () => l.classList.remove('drag-over')),
-          l.addEventListener('drop', async n => {
-            if ((n.preventDefault(), l.classList.remove('drag-over'), !i || i === a.id)) return
-            const t = e.findIndex(n => n.id === i),
-              c = e.findIndex(n => n.id === a.id)
-            if (t < 0 || c < 0) return
-            const [s] = e.splice(t, 1)
-            ;(e.splice(c, 0, s), await o(), d())
-          }),
-          n.appendChild(l))
-      }))
+
+  function renderList() {
+    const listEl = document.getElementById('tpl-list')
+    listEl.innerHTML = ''
+    templates.forEach(tpl => {
+      const item = document.createElement('div')
+      item.className = 'tpl-item' + (tpl.id === activeId ? ' active' : '')
+      item.dataset.id = tpl.id
+      item.draggable = !0
+      item.innerHTML = `\n        <span class="tpl-drag-handle" title="拖拽排序">⠿</span>\n        <span class="tpl-item-icon">${tpl.icon || '📄'}</span>\n        <span class="tpl-item-name">${tpl.name}</span>\n        <span class="tpl-item-tag">${tpl.builtin ? '内置' : '自定义'}</span>\n      `
+      item.addEventListener('click', () => selectTemplate(tpl.id))
+      item.addEventListener('dragstart', evt => {
+        dragId = tpl.id
+        evt.dataTransfer.effectAllowed = 'move'
+        item.classList.add('dragging')
+      })
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging')
+        document.querySelectorAll('.tpl-item').forEach(el => el.classList.remove('drag-over'))
+      })
+      item.addEventListener('dragover', evt => {
+        evt.preventDefault()
+        evt.dataTransfer.dropEffect = 'move'
+        document.querySelectorAll('.tpl-item').forEach(el => el.classList.remove('drag-over'))
+        tpl.id !== dragId && item.classList.add('drag-over')
+      })
+      item.addEventListener('dragleave', () => item.classList.remove('drag-over'))
+      item.addEventListener('drop', async evt => {
+        evt.preventDefault()
+        item.classList.remove('drag-over')
+        if (!dragId || dragId === tpl.id) return
+        const fromIdx = templates.findIndex(t => t.id === dragId),
+          toIdx = templates.findIndex(t => t.id === tpl.id)
+        if (fromIdx < 0 || toIdx < 0) return
+        const [moved] = templates.splice(fromIdx, 1)
+        templates.splice(toIdx, 0, moved)
+        await saveToStore()
+        renderList()
+      })
+      listEl.appendChild(item)
+    })
   }
-  function c(n) {
-    ((t = n), d())
-    const a = e.find(e => e.id === n)
-    a &&
-      ((document.getElementById('tpl-icon').value = a.icon || ''),
-      (document.getElementById('tpl-name').value = a.name),
-      (document.getElementById('tpl-content').value = a.content),
-      (document.getElementById('tpl-btn-delete').style.display = ''),
-      (document.getElementById('tpl-btn-apply').style.display = ''))
+
+  function selectTemplate(id) {
+    activeId = id
+    renderList()
+    const tpl = templates.find(t => t.id === id)
+    if (tpl) {
+      document.getElementById('tpl-icon').value = tpl.icon || ''
+      document.getElementById('tpl-name').value = tpl.name
+      document.getElementById('tpl-content').value = tpl.content
+      document.getElementById('tpl-btn-delete').style.display = ''
+      document.getElementById('tpl-btn-apply').style.display = ''
+    }
   }
-  function l() {
-    ((t = null),
-      d(),
-      (document.getElementById('tpl-icon').value = '📋'),
-      (document.getElementById('tpl-name').value = ''),
-      (document.getElementById('tpl-content').value = ''),
-      (document.getElementById('tpl-btn-delete').style.display = 'none'),
-      (document.getElementById('tpl-btn-apply').style.display = 'none'),
-      document.getElementById('tpl-name').focus())
+
+  function resetForm() {
+    activeId = null
+    renderList()
+    document.getElementById('tpl-icon').value = '📋'
+    document.getElementById('tpl-name').value = ''
+    document.getElementById('tpl-content').value = ''
+    document.getElementById('tpl-btn-delete').style.display = 'none'
+    document.getElementById('tpl-btn-apply').style.display = 'none'
+    document.getElementById('tpl-name').focus()
   }
-  async function s() {
-    const n = document.getElementById('tpl-icon').value.trim() || '📋',
-      a = document.getElementById('tpl-name').value.trim(),
-      i = document.getElementById('tpl-content').value
-    if (a) {
-      if (t) {
-        const o = e.find(n => n.id === t)
-        o && ((o.icon = n), (o.name = a), (o.content = i))
+
+  async function saveTemplate() {
+    const icon = document.getElementById('tpl-icon').value.trim() || '📋',
+      name = document.getElementById('tpl-name').value.trim(),
+      content = document.getElementById('tpl-content').value
+    if (name) {
+      if (activeId) {
+        const existing = templates.find(t => t.id === activeId)
+        existing && ((existing.icon = icon), (existing.name = name), (existing.content = content))
       } else {
-        const o = 'u_' + Date.now()
-        ;(e.push({ id: o, name: a, icon: n, content: i, builtin: !1 }), (t = o))
+        const newId = 'u_' + Date.now()
+        templates.push({ id: newId, name: name, icon: icon, content: content, builtin: !1 })
+        activeId = newId
       }
-      (await o(), d(), c(t), ExportManager.showToast('模板已保存'))
+      await saveToStore()
+      renderList()
+      selectTemplate(activeId)
+      ExportManager.showToast('模板已保存')
     } else ExportManager.showToast('请输入模板名称')
   }
-  async function r() {
-    if (!t) return
-    const n = e.find(n => n.id === t)
-    n &&
-      (await window.showConfirm(`确定删除「${n.name}」吗?`, {
+
+  async function deleteTemplate() {
+    if (!activeId) return
+    const tpl = templates.find(t => t.id === activeId)
+    tpl &&
+      (await window.showConfirm(`确定删除「${tpl.name}」吗?`, {
         title: '删除模板',
         okText: '删除',
         danger: !0,
       })) &&
-      ((e = e.filter(n => n.id !== t)),
-      await o(),
-      (t = e.length > 0 ? e[0].id : null),
-      d(),
-      t ? c(t) : l(),
-      ExportManager.showToast('已删除'))
+      ((templates = templates.filter(t => t.id !== activeId)),
+        await saveToStore(),
+        (activeId = templates.length > 0 ? templates[0].id : null),
+        renderList(),
+        activeId ? selectTemplate(activeId) : resetForm(),
+        ExportManager.showToast('已删除'))
   }
-  async function m() {
-    const o = e.find(n => n.id === t)
-    if (!o) return
-    const i = (function (e) {
-      if (!e.builtin) return e.content
-      const t = n.find(n => n.id === e.id)
-      return t ? ('function' == typeof t.content ? t.content() : t.content) : e.content
-    })(o)
-    ;(document.activeElement && document.activeElement.blur && document.activeElement.blur(),
-      document.getElementById('tpl-overlay').classList.remove('open'),
-      a && a(i, o.name),
-      window.api && window.api.focusWindow && (await window.api.focusWindow()),
-      EditorManager.focus(),
-      requestAnimationFrame(() => EditorManager.focus()),
-      ExportManager.showToast(`已应用：${o.name}`))
+
+  async function applyTemplate() {
+    const tpl = templates.find(t => t.id === activeId)
+    if (!tpl) return
+    const content = (function (tpl) {
+      if (!tpl.builtin) return tpl.content
+      const builtin = builtinTpls.find(b => b.id === tpl.id)
+      return builtin ? ('function' == typeof builtin.content ? builtin.content() : builtin.content) : tpl.content
+    })(tpl)
+
+    document.activeElement && document.activeElement.blur && document.activeElement.blur()
+    document.getElementById('tpl-overlay').classList.remove('open')
+    onApplyCb && onApplyCb(content, tpl.name)
+    window.api && window.api.focusWindow && (await window.api.focusWindow())
+    EditorManager.focus()
+    requestAnimationFrame(() => EditorManager.focus())
+    ExportManager.showToast(`已应用：${tpl.name}`)
   }
-  function p() {
+
+  function closeOverlay() {
     document.getElementById('tpl-overlay').classList.remove('open')
   }
+
   return {
     init: function () {
-      (document.getElementById('tpl-close').addEventListener('click', p),
-        document.getElementById('tpl-btn-add').addEventListener('click', l),
-        document.getElementById('tpl-btn-save').addEventListener('click', s),
-        document.getElementById('tpl-btn-delete').addEventListener('click', r))
-      const n = document.getElementById('tpl-btn-apply')
-      ;(n.addEventListener('mousedown', n => n.preventDefault()),
-        n.addEventListener('click', m),
-        document.getElementById('tpl-overlay').addEventListener('click', n => {
-          n.target === n.currentTarget && p()
-        }),
-        document.addEventListener('keydown', n => {
-          'Escape' === n.key &&
-            document.getElementById('tpl-overlay').classList.contains('open') &&
-            p()
-        }))
+      document.getElementById('tpl-close').addEventListener('click', closeOverlay)
+      document.getElementById('tpl-btn-add').addEventListener('click', resetForm)
+      document.getElementById('tpl-btn-save').addEventListener('click', saveTemplate)
+      document.getElementById('tpl-btn-delete').addEventListener('click', deleteTemplate)
+      const applyBtn = document.getElementById('tpl-btn-apply')
+      applyBtn.addEventListener('mousedown', evt => evt.preventDefault())
+      applyBtn.addEventListener('click', applyTemplate)
+      document.getElementById('tpl-overlay').addEventListener('click', evt => {
+        evt.target === evt.currentTarget && closeOverlay()
+      })
+      document.addEventListener('keydown', evt => {
+        'Escape' === evt.key && document.getElementById('tpl-overlay').classList.contains('open') && closeOverlay()
+      })
     },
     open: async function () {
-      (await (async function () {
-        const t = await window.api.storeGet('tpl_v2'),
-          a = new Set(n.map(n => n.id))
-        if (t && t.length > 0) {
-          e = t.filter(n => !n.builtin || a.has(n.id))
-          let i = e.length !== t.length
-          ;(n.forEach(n => {
-            e.some(e => e.id === n.id) ||
-              (e.push({
-                id: n.id,
-                name: n.name,
-                icon: n.icon,
+      await (async function () {
+        const stored = await window.api.storeGet('tpl_v2'),
+          activeBuiltins = new Set(builtinTpls.map(b => b.id))
+        if (stored && stored.length > 0) {
+          templates = stored.filter(t => !t.builtin || activeBuiltins.has(t.id))
+          let changed = templates.length !== stored.length
+          builtinTpls.forEach(b => {
+            templates.some(t => t.id === b.id) ||
+              (templates.push({
+                id: b.id,
+                name: b.name,
+                icon: b.icon,
                 builtin: !0,
-                content: 'string' == typeof n.content ? n.content : '',
+                content: 'function' == typeof b.content ? b.content() : b.content || '',
               }),
-              (i = !0))
-          }),
-            i && (await o()))
+                (changed = !0))
+          })
+          changed && (await saveToStore())
         } else
-          ((e = n.map(n => ({
-            id: n.id,
-            name: n.name,
-            icon: n.icon,
+          templates = builtinTpls.map(b => ({
+            id: b.id,
+            name: b.name,
+            icon: b.icon,
             builtin: !0,
-            content: 'string' == typeof n.content ? n.content : '',
-          }))),
-            await o())
-      })(),
-        d(),
-        !t && e.length > 0 && (t = e[0].id),
-        t ? c(t) : l(),
-        document.getElementById('tpl-overlay').classList.add('open'))
+            content: 'function' == typeof b.content ? b.content() : b.content || '',
+          })),
+            await saveToStore()
+      })()
+      renderList()
+      !activeId && templates.length > 0 && (activeId = templates[0].id)
+      activeId ? selectTemplate(activeId) : resetForm()
+      document.getElementById('tpl-overlay').classList.add('open')
     },
-    close: p,
-    onApply: function (n) {
-      a = n
+    close: closeOverlay,
+    onApply: function (cb) {
+      onApplyCb = cb
     },
   }
 })()

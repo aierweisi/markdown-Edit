@@ -45,6 +45,7 @@
     "release/",
     "node_modules/",
     "renderer/vendor/",
+    "renderer/css/",
     "test_syntax*.js"
   ],
   "overrides": [

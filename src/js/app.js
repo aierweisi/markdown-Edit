@@ -1,31 +1,19 @@
-/**
- * app.js — Main application orchestration
- */
-
 (async function () {
-  // ─── 平台 class: macOS 走原生交通灯,Win/Linux 走自绘控件 ──────
   if (window.api && window.api.platform === 'darwin') {
     document.body.classList.add('platform-mac')
   }
-
-  // ─── Init editor ──────────────────────────────────────────────
   const editorContainer = document.getElementById('editor-container')
   EditorManager.init(editorContainer)
-
-  // ─── Load settings and apply ──────────────────────────────────
   const settings = await SettingsManager.load()
   SettingsManager.applyTheme(settings.theme)
   SettingsManager.applyFontSize(settings.fontSize)
   SettingsManager.applyEditorFont(settings.editorFont)
-
-  // ─── Init subsystems ──────────────────────────────────────────
   PreviewManager.init()
   TemplateManager.init()
   SettingsManager.init()
   if (window.FindManager) FindManager.init()
   if (window.RecentFiles) await RecentFiles.init()
 
-  // ─── Template apply callback ──────────────────────────────────
   TemplateManager.onApply(async (content, name) => {
     const tab = TabManager.getActive()
     if (!tab) return
@@ -37,8 +25,8 @@
         cancelText: '新标签页',
       })
       if (!ok) {
-        const nt = TabManager.createTab({ title: name, content })
-        TabManager.setActive(nt.id)
+        const newTab = TabManager.createTab({ title: name, content: content })
+        TabManager.setActive(newTab.id)
         PreviewManager.render(content)
         requestAnimationFrame(() => EditorManager.focus())
         return
@@ -51,41 +39,29 @@
     requestAnimationFrame(() => EditorManager.focus())
   })
 
-  // ─── Cache recovery (auto-restore, no prompt) ─────────────────
   const cache = await CacheManager.checkAndRestore()
   let restored = false
-
   if (cache) {
     await CacheManager.restore(cache)
     restored = true
   }
-
   if (!restored) {
-    // Create initial empty tab
     const tab = TabManager.createTab({ title: '未命名' })
     TabManager.setActive(tab.id)
   }
-
-  // Show welcome overlay for initial blank tab
   requestAnimationFrame(() => updateWelcomeVisibility())
-
-  // ─── Start auto-cache ─────────────────────────────────────────
   await CacheManager.loadInterval()
   CacheManager.start()
 
-  // ─── Editor → Preview sync (rAF-throttled) ────────────────────
-  const changeDebounce = null
   let changeRAF = null
   let lastRenderTime = 0
-  let autoSaveDebounce = null
-  // 记录挂着的自动保存针对哪个 tab — 切换 tab 时即使被打断,也能正确保存到原 tab
+  let autoSaveTimer = null
   let pendingAutoSaveTabId = null
 
   function updateStatusStats(value, wordCount) {
     const text = value || ''
     const charsAll = text.length
     const charsNoSpace = text.replace(/\s/g, '').length
-
     const chEl = document.getElementById('status-chars')
     const chSep = document.getElementById('status-chars-sep')
     if (chEl) {
@@ -97,8 +73,6 @@
         if (chSep) chSep.style.display = 'none'
       }
     }
-
-    // Reading time: Chinese ~300 chars/min, English ~200 wpm — use wordCount as proxy
     const rtEl = document.getElementById('status-readtime')
     const rtSep = document.getElementById('status-readtime-sep')
     if (rtEl) {
@@ -114,7 +88,6 @@
     }
   }
 
-  // ─── Welcome overlay visibility ─────────────────────────────
   function updateWelcomeVisibility() {
     const overlay = document.getElementById('welcome-overlay')
     if (!overlay) return
@@ -136,16 +109,15 @@
   }
 
   async function autoSaveToFile() {
+    if (window.__isSaving) return
     const tabId = pendingAutoSaveTabId
     pendingAutoSaveTabId = null
     if (!tabId) return
     const tab = TabManager.getTab(tabId)
     if (!tab || !tab.filePath || !tab.modified) return
-    // 直接从 tab 自己的 Doc 取内容,与"当前活动 tab"解耦
-    // 否则用户编辑后立即切走,getValue 返回的会是新 tab 的内容
     const content = tab.doc ? tab.doc.getValue() : ''
-    const res = await window.api.fileSave(tab.filePath, content)
-    if (res.success) {
+    const result = await window.api.fileSave(tab.filePath, content)
+    if (result.success) {
       TabManager.markModified(tab.id, false)
       const el = document.getElementById('status-autosave')
       const sep = document.getElementById('status-autosave-sep')
@@ -158,18 +130,12 @@
   }
 
   EditorManager.onChange(value => {
-    // Update word count
     const wc = EditorManager.getWordCount(value)
     document.getElementById('word-count').textContent = `${wc} 字`
-    // Notify cache that content changed
     CacheManager.markDirty()
-
-    // Status bar: char count + reading time
     updateStatusStats(value, wc)
-
-    // rAF-throttled preview render with adaptive delay
     if (changeRAF) cancelAnimationFrame(changeRAF)
-    const delay = value.length > 5000 ? 1200 : value.length > 2000 ? 800 : 400
+    const delay = value.length > 5e3 ? 1200 : value.length > 2e3 ? 800 : 400
     changeRAF = requestAnimationFrame(() => {
       changeRAF = null
       const now = performance.now()
@@ -179,37 +145,28 @@
       }
     })
     if (!lastRenderTime) lastRenderTime = performance.now()
-
-    // Mark tab modified
     const tab = TabManager.getActive()
     if (tab && !tab.modified) {
       TabManager.markModified(tab.id, true)
     }
-
-    // Debounce auto-save to original file (only if tab has a file path)
     if (tab && tab.filePath) {
       pendingAutoSaveTabId = tab.id
-      clearTimeout(autoSaveDebounce)
-      autoSaveDebounce = setTimeout(autoSaveToFile, 1500)
+      clearTimeout(autoSaveTimer)
+      autoSaveTimer = setTimeout(autoSaveToFile, 1500)
     }
-
     updateWelcomeVisibility()
   })
 
-  // swapDoc 切换 tab 不触发 change 事件,这里手动同步预览/字数/状态栏
   TabManager.onSwitch(tab => {
-    // 先把上一个 tab 挂着的自动保存 flush 掉,避免切走后用户的修改丢失
-    if (autoSaveDebounce) {
-      clearTimeout(autoSaveDebounce)
-      autoSaveDebounce = null
-      autoSaveToFile() // 内部按 pendingAutoSaveTabId 找回原 tab
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer)
+      autoSaveTimer = null
+      autoSaveToFile()
     }
-    // Cancel pending preview render
     if (changeRAF) {
       cancelAnimationFrame(changeRAF)
       changeRAF = null
     }
-    clearTimeout(changeDebounce)
     const value = EditorManager.getValue()
     const wc = EditorManager.getWordCount(value)
     const wcEl = document.getElementById('word-count')
@@ -220,16 +177,14 @@
     CacheManager.markDirty()
   })
 
-  // ─── Pane swap (editor ↔ preview) ────────────────────────────
   let panesSwapped = false
 
   async function initPaneOrder() {
     const order = await window.api.storeGet('paneOrder')
-    // Default is preview-first (editor on right)
     if (order === 'editor-first') {
       applyPaneSwap(false, false)
     } else {
-      applyPaneSwap(true, false) // silent, no toast
+      applyPaneSwap(true, false)
     }
   }
 
@@ -239,27 +194,18 @@
     const editorPane = document.getElementById('editor-pane')
     const divider = document.getElementById('divider')
     const previewPane = document.getElementById('preview-pane')
-
-    // Re-order DOM children — only the editor/divider/preview trio.
     if (swapped) {
-      // preview | divider | editor
       mainArea.appendChild(previewPane)
       mainArea.appendChild(divider)
       mainArea.appendChild(editorPane)
     } else {
-      // editor | divider | preview
       mainArea.appendChild(editorPane)
       mainArea.appendChild(divider)
       mainArea.appendChild(previewPane)
     }
-
-    // Update swap button appearance
     const btn = document.getElementById('btn-swap-panes')
     if (btn) btn.classList.toggle('active', !swapped)
-
-    // Persist
     window.api.storeSet('paneOrder', swapped ? 'preview-first' : 'editor-first')
-
     if (notify) {
       ExportManager.showToast(swapped ? '预览在左，编辑在右' : '编辑在左，预览在右')
     }
@@ -269,33 +215,27 @@
     applyPaneSwap(!panesSwapped)
   }
 
-  // Init pane order from stored setting
   await initPaneOrder()
-
   document.getElementById('btn-swap-panes').addEventListener('click', togglePaneSwap)
 
-  // ─── Divider drag (resizable panes) ───────────────────────────
+  // Divider drag
   const divider = document.getElementById('divider')
   const mainArea = document.getElementById('main-area')
-
   let isDragging = false
   let startX, startLeftWidth
-
-  divider.addEventListener('mousedown', e => {
+  divider.addEventListener('mousedown', evt => {
     isDragging = true
-    startX = e.clientX
-    // Left pane is whichever of editor/preview comes first
+    startX = evt.clientX
     const leftPane = divider.previousElementSibling
     startLeftWidth = leftPane.getBoundingClientRect().width
     divider.classList.add('dragging')
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
-    e.preventDefault()
+    evt.preventDefault()
   })
-
-  document.addEventListener('mousemove', e => {
+  document.addEventListener('mousemove', evt => {
     if (!isDragging) return
-    const delta = e.clientX - startX
+    const delta = evt.clientX - startX
     const totalWidth = mainArea.getBoundingClientRect().width - 4
     const newLeftWidth = Math.max(200, Math.min(totalWidth - 200, startLeftWidth + delta))
     const leftPane = divider.previousElementSibling
@@ -305,21 +245,17 @@
     rightPane.style.flex = '1'
     rightPane.style.width = ''
   })
-
   document.addEventListener('mouseup', () => {
     if (isDragging) {
       isDragging = false
       divider.classList.remove('dragging')
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
-      // Save divider position
       const leftPane = divider.previousElementSibling
       const w = leftPane.getBoundingClientRect().width
       window.api.storeSet('dividerPos', w)
     }
   })
-
-  // Restore saved divider position
   ;(async () => {
     const saved = await window.api.storeGet('dividerPos')
     if (saved != null) {
@@ -332,11 +268,10 @@
     }
   })()
 
-  // ─── View mode toggle ─────────────────────────────────────────
+  // View mode toggle
   let viewMode = 'split'
   const viewToggleBtn = document.getElementById('btn-view-toggle')
   const viewModes = ['split', 'editor', 'preview']
-
   const viewSVGs = {
     split: `<rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/>`,
     editor: `<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="8" y1="3" x2="8" y2="21" opacity="0.3"/>`,
@@ -363,21 +298,17 @@
     setViewMode(viewModes[(idx + 1) % viewModes.length])
   })
 
-  // ─── New tab button ───────────────────────────────────────────
-  // mousedown preventDefault: 阻止按钮在 mousedown 时抢走 OS 焦点,
-  // 否则 Windows 下 cm.focus() 无法将 OS 焦点真正交给编辑器
+  // Tab buttons
   const btnTabNew = document.getElementById('btn-tab-new')
-  btnTabNew.addEventListener('mousedown', e => e.preventDefault())
+  btnTabNew.addEventListener('mousedown', evt => evt.preventDefault())
   btnTabNew.addEventListener('click', () => {
     const tab = TabManager.createTab({ title: '未命名' })
     TabManager.setActive(tab.id)
     EditorManager.focus()
   })
-
-  // Tab close → update welcome overlay
   TabManager.onClose(() => updateWelcomeVisibility())
 
-  // ─── Welcome button handlers ───────────────────────────────
+  // Welcome page
   const welcomeNew = document.getElementById('welcome-new')
   const welcomeOpen = document.getElementById('welcome-open')
   const welcomeTemplate = document.getElementById('welcome-template')
@@ -385,22 +316,16 @@
   if (welcomeOpen) welcomeOpen.addEventListener('click', () => openFile())
   if (welcomeTemplate) welcomeTemplate.addEventListener('click', () => TemplateManager.open())
 
-  // ─── Toolbar buttons ──────────────────────────────────────────
+  // Toolbar buttons
   const btnNew = document.getElementById('btn-new')
-  btnNew.addEventListener('mousedown', e => e.preventDefault())
+  btnNew.addEventListener('mousedown', evt => evt.preventDefault())
   btnNew.addEventListener('click', () => newFile())
   document.getElementById('btn-open').addEventListener('click', () => openFile())
   document.getElementById('btn-save').addEventListener('click', () => saveFile())
   document.getElementById('btn-template').addEventListener('click', () => TemplateManager.open())
-  document
-    .getElementById('btn-theme')
-    .addEventListener('click', () => SettingsManager.toggleTheme())
+  document.getElementById('btn-theme').addEventListener('click', () => SettingsManager.toggleTheme())
   document.getElementById('btn-settings').addEventListener('click', () => SettingsManager.open())
-
-  // Command palette hint in status bar
-  document
-    .getElementById('status-palette-hint')
-    .addEventListener('click', () => CommandPalette?.open?.())
+  document.getElementById('status-palette-hint').addEventListener('click', () => CommandPalette?.open?.())
 
   // Format buttons
   document.querySelectorAll('.fmt-btn').forEach(btn => {
@@ -409,17 +334,14 @@
     })
   })
 
-  // Export dropdown
+  // Export menu
   const exportBtn = document.getElementById('btn-export')
   const exportMenu = document.getElementById('export-menu')
-
-  exportBtn.addEventListener('click', e => {
-    e.stopPropagation()
+  exportBtn.addEventListener('click', evt => {
+    evt.stopPropagation()
     exportMenu.classList.toggle('open')
   })
-
   document.addEventListener('click', () => exportMenu.classList.remove('open'))
-
   document.querySelectorAll('.export-item').forEach(item => {
     item.addEventListener('click', () => {
       exportMenu.classList.remove('open')
@@ -432,12 +354,8 @@
     })
   })
 
-  // ─── File operations ──────────────────────────────────────────
   function newFile(templateContent) {
-    const tab = TabManager.createTab({
-      title: '未命名',
-      content: templateContent || '',
-    })
+    const tab = TabManager.createTab({ title: '未命名', content: templateContent || '' })
     TabManager.setActive(tab.id)
     EditorManager.focus()
   }
@@ -445,21 +363,14 @@
   async function openFile() {
     const result = await ExportManager.importFile()
     if (!result) return
-
     const { filePath, content, name } = result
     const title = name.replace(/\.(md|markdown|txt)$/i, '')
-
-    const tab = TabManager.createTab({ title, filePath, content })
+    const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
     TabManager.setActive(tab.id)
     TabManager.markModified(tab.id, false)
     CacheManager.markDirty()
     PreviewManager.render(content)
-
     if (window.RecentFiles) await RecentFiles.add(filePath)
-
-    // 原生对话框关闭后 Windows OS 焦点未回到 webContents。
-    // 必须 await 主进程 IPC（内部会 blur+focus 强制重置 Win32 焦点），
-    // 完成后再调用 cm.focus()，否则主进程的 webContents.focus() 会覆盖 cm.focus()
     if (document.activeElement && document.activeElement.blur) {
       document.activeElement.blur()
     }
@@ -472,26 +383,25 @@
 
   async function openFileByPath(filePath) {
     if (!filePath) return
-    // Activate if already open
     const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
     if (existed) {
       TabManager.setActive(existed.id)
       EditorManager.focus()
       return
     }
-    const res = await window.api.fileRead(filePath)
-    if (!res.success) {
-      ExportManager.showToast('打开失败：' + res.error)
+    const readResult = await window.api.fileRead(filePath)
+    if (!readResult.success) {
+      ExportManager.showToast('打开失败：' + readResult.error)
       if (window.RecentFiles) await RecentFiles.remove(filePath)
       return
     }
     const name = filePath.split(/[/\\]/).pop()
     const title = name.replace(/\.(md|markdown|txt)$/i, '')
-    const tab = TabManager.createTab({ title, filePath, content: res.content })
+    const tab = TabManager.createTab({ title: title, filePath: filePath, content: readResult.content })
     TabManager.setActive(tab.id)
     TabManager.markModified(tab.id, false)
     CacheManager.markDirty()
-    PreviewManager.render(res.content)
+    PreviewManager.render(readResult.content)
     if (window.RecentFiles) await RecentFiles.add(filePath)
     EditorManager.focus()
   }
@@ -499,14 +409,10 @@
   async function saveFile(saveAs = false) {
     const tab = TabManager.getActive()
     if (!tab) return
-
     const content = EditorManager.getValue()
     let filePath = tab.filePath
-
     if (!filePath || saveAs) {
       const exportDir = (await window.api.storeGet('exportDir')) || ''
-      // 优先使用用户设置的标签标题作为默认文件名；
-      // 若仍是默认 "未命名" 则回退到命名规则模板。
       let baseName
       if (tab.title && tab.title !== '未命名') {
         baseName = tab.title.replace(/[\\/:*?"<>|]/g, '_')
@@ -515,27 +421,20 @@
         baseName = resolveNamingRuleLocal(rule, content)
       }
       const defaultPath = exportDir ? exportDir + '/' + baseName + '.md' : baseName + '.md'
-
       const result = await window.api.dialogSaveFile({
-        defaultPath,
+        defaultPath: defaultPath,
         filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
       })
-
       if (result.canceled || !result.filePath) return
       filePath = result.filePath
-
       const dir = filePath.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
       if (dir) window.api.storeSet('exportDir', dir)
     }
-
-    const res = await window.api.fileSave(filePath, content)
-    if (res.success) {
-      const baseName = filePath
-        .split(/[/\\]/)
-        .pop()
-        .replace(/\.(md|markdown)$/i, '')
-      // 若用户在另存对话框里改了文件名，以磁盘上的为准；
-      // 否则保留 tab.title（含用户重命名）—— 仅更新 filePath。
+    window.__isSaving = true
+    const saveResult = await window.api.fileSave(filePath, content)
+    window.__isSaving = false
+    if (saveResult.success) {
+      const baseName = filePath.split(/[/\\]/).pop().replace(/\.(md|markdown)$/i, '')
       const titleToUse = tab.filePath && tab.filePath === filePath ? tab.title : baseName
       TabManager.setTabTitle(tab.id, titleToUse, filePath)
       TabManager.markModified(tab.id, false)
@@ -543,408 +442,148 @@
       if (window.RecentFiles) await RecentFiles.add(filePath)
       ExportManager.showToast(`已保存: ${filePath.split(/[/\\]/).pop()}`)
     } else {
-      ExportManager.showToast('保存失败: ' + res.error)
+      ExportManager.showToast('保存失败: ' + saveResult.error)
     }
   }
 
   function resolveNamingRuleLocal(rule, content) {
-    // Delegates to the global resolveNamingRule in utils.js
     return window.resolveNamingRule(rule, content)
   }
 
-  // ─── Menu event handlers ──────────────────────────────────────
+  // Menu events from main process
   window.api.onMenuEvent(event => {
     const content = EditorManager.getValue()
     switch (event) {
-      case 'menu-new':
-        newFile()
-        break
-      case 'menu-open':
-        openFile()
-        break
-      case 'menu-save':
-        saveFile()
-        break
-      case 'menu-save-as':
-        saveFile(true)
-        break
-      case 'menu-import':
-        openFile()
-        break
-      case 'menu-export-md':
-        ExportManager.exportMd(content)
-        break
-      case 'menu-export-html':
-        ExportManager.exportHtml(content)
-        break
-      case 'menu-export-pdf':
-        ExportManager.exportPdf(content)
-        break
-      case 'menu-toggle-theme':
-        SettingsManager.toggleTheme()
-        break
+      case 'menu-new': newFile(); break
+      case 'menu-open': openFile(); break
+      case 'menu-save': saveFile(); break
+      case 'menu-save-as': saveFile(true); break
+      case 'menu-import': openFile(); break
+      case 'menu-export-md': ExportManager.exportMd(content); break
+      case 'menu-export-html': ExportManager.exportHtml(content); break
+      case 'menu-export-pdf': ExportManager.exportPdf(content); break
+      case 'menu-toggle-theme': SettingsManager.toggleTheme(); break
       case 'menu-toggle-view': {
         const idx = viewModes.indexOf(viewMode)
         setViewMode(viewModes[(idx + 1) % viewModes.length])
         break
       }
-      case 'menu-settings':
-        SettingsManager.open()
-        break
-      case 'menu-templates':
-        TemplateManager.open()
-        break
-      case 'menu-recent':
-        if (window.RecentFiles) RecentFiles.open()
-        break
+      case 'menu-settings': SettingsManager.open(); break
+      case 'menu-templates': TemplateManager.open(); break
+      case 'menu-recent': if (window.RecentFiles) RecentFiles.open(); break
     }
   })
 
-  // ─── OS 打开文件（双击 .md / 通过此应用打开） ─────────────────
+  // Handle file open from OS
   if (window.api && window.api.onOpenFileFromOS) {
     window.api.onOpenFileFromOS(async ({ filePath, content, name }) => {
       const title = (name || '').replace(/\.(md|markdown|txt)$/i, '') || '未命名'
-
-      // 已有同路径 Tab：直接激活
-      // setActive 会触发 TabManager.onSwitch → 重新渲染预览,这里不用再调
-      // existed.content 是 stale 字段,Doc 才持有最新内容
       const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
       if (existed) {
         TabManager.setActive(existed.id)
         EditorManager.focus()
         return
       }
-
-      // 若当前活动 Tab 是空白未修改的"未命名"草稿，先关掉它
       const cur = TabManager.getActive()
       const curIsBlankDraft =
-        cur &&
-        !cur.filePath &&
-        !cur.modified &&
+        cur && !cur.filePath && !cur.modified &&
         (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
-
-      const tab = TabManager.createTab({ title, filePath, content })
+      const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
       TabManager.setActive(tab.id)
       TabManager.markModified(tab.id, false)
       PreviewManager.render(content)
-
       if (window.RecentFiles) await RecentFiles.add(filePath)
-
       if (curIsBlankDraft) {
         await TabManager.closeTab(cur.id)
       }
-
       EditorManager.focus()
     })
   }
 
-  // ─── Recent files picker ──────────────────────────────────────
+  // Recent files
   if (window.RecentFiles) {
     RecentFiles.onOpen(async filePath => {
       await openFileByPath(filePath)
     })
   }
 
-  // ─── Command palette commands ─────────────────────────────────
+  // Command palette
   if (window.CommandPalette) {
     const P = CommandPalette
-    P.register({
-      id: 'file.new',
-      group: '文件',
-      title: '新建',
-      hint: 'Ctrl+N',
-      run: () => newFile(),
-    })
-    P.register({
-      id: 'file.open',
-      group: '文件',
-      title: '打开文件...',
-      hint: 'Ctrl+O',
-      run: () => openFile(),
-    })
-    P.register({
-      id: 'file.save',
-      group: '文件',
-      title: '保存',
-      hint: 'Ctrl+S',
-      run: () => saveFile(),
-    })
-    P.register({
-      id: 'file.saveAs',
-      group: '文件',
-      title: '另存为...',
-      hint: 'Ctrl+Shift+S',
-      run: () => saveFile(true),
-    })
-    P.register({
-      id: 'file.recent',
-      group: '文件',
-      title: '最近文件...',
-      hint: 'Ctrl+Shift+R',
-      run: () => window.RecentFiles && RecentFiles.open(),
-    })
-    P.register({
-      id: 'export.md',
-      group: '导出',
-      title: '导出 Markdown',
-      run: () => ExportManager.exportMd(EditorManager.getValue()),
-    })
-    P.register({
-      id: 'export.html',
-      group: '导出',
-      title: '导出 HTML',
-      run: () => ExportManager.exportHtml(EditorManager.getValue()),
-    })
-    P.register({
-      id: 'export.pdf',
-      group: '导出',
-      title: '导出 PDF',
-      run: () => ExportManager.exportPdf(EditorManager.getValue()),
-    })
-    P.register({
-      id: 'view.toggleTheme',
-      group: '视图',
-      title: '切换主题',
-      hint: 'Ctrl+Shift+T',
-      run: () => SettingsManager.toggleTheme(),
-    })
-    P.register({
-      id: 'view.toggleMode',
-      group: '视图',
-      title: '循环视图模式',
-      hint: 'Ctrl+\\',
-      run: () => {
-        const idx = viewModes.indexOf(viewMode)
-        setViewMode(viewModes[(idx + 1) % viewModes.length])
-      },
-    })
-    P.register({
-      id: 'view.editorOnly',
-      group: '视图',
-      title: '仅编辑器',
-      run: () => setViewMode('editor'),
-    })
-    P.register({
-      id: 'view.previewOnly',
-      group: '视图',
-      title: '仅预览',
-      run: () => setViewMode('preview'),
-    })
-    P.register({
-      id: 'view.split',
-      group: '视图',
-      title: '分栏视图',
-      run: () => setViewMode('split'),
-    })
-    P.register({
-      id: 'view.swapPanes',
-      group: '视图',
-      title: '互换编辑/预览位置',
-      hint: 'Ctrl+Shift+\\',
-      run: () => togglePaneSwap(),
-    })
-    P.register({
-      id: 'edit.find',
-      group: '编辑',
-      title: '查找',
-      hint: 'Ctrl+F',
-      run: () => window.FindManager && FindManager.open && FindManager.open(false),
-    })
-    P.register({
-      id: 'edit.replace',
-      group: '编辑',
-      title: '替换',
-      hint: 'Ctrl+H',
-      run: () => window.FindManager && FindManager.open && FindManager.open(true),
-    })
-    P.register({
-      id: 'insert.heading',
-      group: '插入',
-      title: '标题（循环）',
-      run: () => EditorManager.insertFormat('heading'),
-    })
-    P.register({
-      id: 'insert.bold',
-      group: '插入',
-      title: '粗体',
-      hint: 'Ctrl+B',
-      run: () => EditorManager.insertFormat('bold'),
-    })
-    P.register({
-      id: 'insert.italic',
-      group: '插入',
-      title: '斜体',
-      hint: 'Ctrl+I',
-      run: () => EditorManager.insertFormat('italic'),
-    })
-    P.register({
-      id: 'insert.link',
-      group: '插入',
-      title: '链接',
-      hint: 'Ctrl+K',
-      run: () => EditorManager.insertFormat('link'),
-    })
-    P.register({
-      id: 'insert.image',
-      group: '插入',
-      title: '图片',
-      run: () => EditorManager.insertFormat('image'),
-    })
-    P.register({
-      id: 'insert.code',
-      group: '插入',
-      title: '行内代码',
-      run: () => EditorManager.insertFormat('code'),
-    })
-    P.register({
-      id: 'insert.codeblock',
-      group: '插入',
-      title: '代码块',
-      run: () => EditorManager.insertFormat('codeblock'),
-    })
-    P.register({
-      id: 'insert.quote',
-      group: '插入',
-      title: '引用',
-      run: () => EditorManager.insertFormat('quote'),
-    })
-    P.register({
-      id: 'insert.ul',
-      group: '插入',
-      title: '无序列表',
-      run: () => EditorManager.insertFormat('ul'),
-    })
-    P.register({
-      id: 'insert.ol',
-      group: '插入',
-      title: '有序列表',
-      run: () => EditorManager.insertFormat('ol'),
-    })
-    P.register({
-      id: 'insert.table',
-      group: '插入',
-      title: '表格',
-      run: () => EditorManager.insertFormat('table'),
-    })
-    P.register({
-      id: 'insert.hr',
-      group: '插入',
-      title: '分割线',
-      run: () => EditorManager.insertFormat('hr'),
-    })
-    P.register({
-      id: 'tab.new',
-      group: '标签',
-      title: '新建标签页',
-      run: () => {
-        const t = TabManager.createTab({ title: '未命名' })
-        TabManager.setActive(t.id)
-      },
-    })
-    P.register({
-      id: 'tab.close',
-      group: '标签',
-      title: '关闭当前标签',
-      hint: 'Ctrl+W',
-      run: () => {
-        const t = TabManager.getActive()
-        if (t) TabManager.closeTab(t.id)
-      },
-    })
-    P.register({
-      id: 'app.templates',
-      group: '工具',
-      title: '模板库',
-      run: () => TemplateManager.open(),
-    })
-    P.register({
-      id: 'app.settings',
-      group: '工具',
-      title: '设置',
-      run: () => SettingsManager.open(),
-    })
+    P.register({ id: 'file.new', group: '文件', title: '新建', hint: 'Ctrl+N', run: () => newFile() })
+    P.register({ id: 'file.open', group: '文件', title: '打开文件...', hint: 'Ctrl+O', run: () => openFile() })
+    P.register({ id: 'file.save', group: '文件', title: '保存', hint: 'Ctrl+S', run: () => saveFile() })
+    P.register({ id: 'file.saveAs', group: '文件', title: '另存为...', hint: 'Ctrl+Shift+S', run: () => saveFile(true) })
+    P.register({ id: 'file.recent', group: '文件', title: '最近文件...', hint: 'Ctrl+Shift+R', run: () => window.RecentFiles && RecentFiles.open() })
+    P.register({ id: 'export.md', group: '导出', title: '导出 Markdown', run: () => ExportManager.exportMd(EditorManager.getValue()) })
+    P.register({ id: 'export.html', group: '导出', title: '导出 HTML', run: () => ExportManager.exportHtml(EditorManager.getValue()) })
+    P.register({ id: 'export.pdf', group: '导出', title: '导出 PDF', run: () => ExportManager.exportPdf(EditorManager.getValue()) })
+    P.register({ id: 'view.toggleTheme', group: '视图', title: '切换主题', hint: 'Ctrl+Shift+T', run: () => SettingsManager.toggleTheme() })
+    P.register({ id: 'view.toggleMode', group: '视图', title: '循环视图模式', hint: 'Ctrl+\\', run: () => { const idx = viewModes.indexOf(viewMode); setViewMode(viewModes[(idx + 1) % viewModes.length]) } })
+    P.register({ id: 'view.editorOnly', group: '视图', title: '仅编辑器', run: () => setViewMode('editor') })
+    P.register({ id: 'view.previewOnly', group: '视图', title: '仅预览', run: () => setViewMode('preview') })
+    P.register({ id: 'view.split', group: '视图', title: '分栏视图', run: () => setViewMode('split') })
+    P.register({ id: 'view.swapPanes', group: '视图', title: '互换编辑/预览位置', hint: 'Ctrl+Shift+\\', run: () => togglePaneSwap() })
+    P.register({ id: 'edit.find', group: '编辑', title: '查找', hint: 'Ctrl+F', run: () => window.FindManager && FindManager.show && FindManager.show(false) })
+    P.register({ id: 'edit.replace', group: '编辑', title: '替换', hint: 'Ctrl+H', run: () => window.FindManager && FindManager.show && FindManager.show(true) })
+    P.register({ id: 'insert.heading', group: '插入', title: '标题（循环）', run: () => EditorManager.insertFormat('heading') })
+    P.register({ id: 'insert.bold', group: '插入', title: '粗体', hint: 'Ctrl+B', run: () => EditorManager.insertFormat('bold') })
+    P.register({ id: 'insert.italic', group: '插入', title: '斜体', hint: 'Ctrl+I', run: () => EditorManager.insertFormat('italic') })
+    P.register({ id: 'insert.link', group: '插入', title: '链接', hint: 'Ctrl+K', run: () => EditorManager.insertFormat('link') })
+    P.register({ id: 'insert.image', group: '插入', title: '图片', run: () => EditorManager.insertFormat('image') })
+    P.register({ id: 'insert.code', group: '插入', title: '行内代码', run: () => EditorManager.insertFormat('code') })
+    P.register({ id: 'insert.codeblock', group: '插入', title: '代码块', run: () => EditorManager.insertFormat('codeblock') })
+    P.register({ id: 'insert.quote', group: '插入', title: '引用', run: () => EditorManager.insertFormat('quote') })
+    P.register({ id: 'insert.ul', group: '插入', title: '无序列表', run: () => EditorManager.insertFormat('ul') })
+    P.register({ id: 'insert.ol', group: '插入', title: '有序列表', run: () => EditorManager.insertFormat('ol') })
+    P.register({ id: 'insert.table', group: '插入', title: '表格', run: () => EditorManager.insertFormat('table') })
+    P.register({ id: 'insert.hr', group: '插入', title: '分割线', run: () => EditorManager.insertFormat('hr') })
+    P.register({ id: 'tab.new', group: '标签', title: '新建标签页', run: () => { const t = TabManager.createTab({ title: '未命名' }); TabManager.setActive(t.id) } })
+    P.register({ id: 'tab.close', group: '标签', title: '关闭当前标签', hint: 'Ctrl+W', run: () => { const t = TabManager.getActive(); if (t) TabManager.closeTab(t.id) } })
+    P.register({ id: 'app.templates', group: '工具', title: '模板库', run: () => TemplateManager.open() })
+    P.register({ id: 'app.settings', group: '工具', title: '设置', run: () => SettingsManager.open() })
   }
 
-  // ─── Keyboard shortcuts ───────────────────────────────────────
-  document.addEventListener('keydown', e => {
-    const ctrl = e.ctrlKey || e.metaKey
-    if (ctrl && e.key === 's') {
-      e.preventDefault()
-      saveFile(e.shiftKey)
+  // Keyboard shortcuts
+  document.addEventListener('keydown', evt => {
+    const ctrl = evt.ctrlKey || evt.metaKey
+    if (ctrl && evt.key === 's') { evt.preventDefault(); saveFile(evt.shiftKey) }
+    if (ctrl && evt.key === 'n') { evt.preventDefault(); newFile() }
+    if (ctrl && evt.key === 'o') { evt.preventDefault(); openFile() }
+    if (ctrl && evt.shiftKey && (evt.key === 'R' || evt.key === 'r')) { evt.preventDefault(); if (window.RecentFiles) RecentFiles.open() }
+    if (ctrl && evt.shiftKey && (evt.key === 'P' || evt.key === 'p')) { evt.preventDefault(); if (window.CommandPalette) CommandPalette.open() }
+    if (ctrl && evt.key === '\\') {
+      evt.preventDefault()
+      if (evt.shiftKey) { togglePaneSwap() }
+      else { const idx = viewModes.indexOf(viewMode); setViewMode(viewModes[(idx + 1) % viewModes.length]) }
     }
-    if (ctrl && e.key === 'n') {
-      e.preventDefault()
-      newFile()
-    }
-    if (ctrl && e.key === 'o') {
-      e.preventDefault()
-      openFile()
-    }
-    if (ctrl && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
-      e.preventDefault()
-      if (window.RecentFiles) RecentFiles.open()
-    }
-    if (ctrl && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
-      e.preventDefault()
-      if (window.CommandPalette) CommandPalette.open()
-    }
-    if (ctrl && e.key === '\\') {
-      e.preventDefault()
-      if (e.shiftKey) {
-        togglePaneSwap()
-      } else {
-        const idx = viewModes.indexOf(viewMode)
-        setViewMode(viewModes[(idx + 1) % viewModes.length])
-      }
-    }
-    if (ctrl && e.key === 'w') {
-      e.preventDefault()
-      const tab = TabManager.getActive()
-      if (tab) TabManager.closeTab(tab.id)
-    }
-    // Ctrl+1~9 switch tab
-    if (ctrl && e.key >= '1' && e.key <= '9') {
-      e.preventDefault()
-      const idx = parseInt(e.key) - 1
-      const tabs = TabManager.getAllTabs()
-      if (tabs[idx]) TabManager.setActive(tabs[idx].id)
-    }
-    // Ctrl+Tab / Ctrl+Shift+Tab cycle tabs
-    if (ctrl && e.key === 'Tab') {
-      e.preventDefault()
+    if (ctrl && evt.key === 'w') { evt.preventDefault(); const tab = TabManager.getActive(); if (tab) TabManager.closeTab(tab.id) }
+    if (ctrl && evt.key >= '1' && evt.key <= '9') { evt.preventDefault(); const idx = parseInt(evt.key) - 1; const tabs = TabManager.getAllTabs(); if (tabs[idx]) TabManager.setActive(tabs[idx].id) }
+    if (ctrl && evt.key === 'Tab') {
+      evt.preventDefault()
       const tabs = TabManager.getAllTabs()
       if (tabs.length === 0) return
       const cur = TabManager.getActive()
       const curIdx = cur ? tabs.findIndex(t => t.id === cur.id) : 0
-      const dir = e.shiftKey ? -1 : 1
+      const dir = evt.shiftKey ? -1 : 1
       const next = tabs[(curIdx + dir + tabs.length) % tabs.length]
       if (next) TabManager.setActive(next.id)
     }
   })
 
-  // Horizontal wheel scroll for tab bar
+  // Tab scroll with mouse wheel
   const tabsContainer = document.getElementById('tabs-container')
   if (tabsContainer) {
-    tabsContainer.addEventListener(
-      'wheel',
-      e => {
-        if (e.deltaY !== 0) {
-          e.preventDefault()
-          tabsContainer.scrollLeft += e.deltaY
-        }
-      },
-      { passive: false },
-    )
+    tabsContainer.addEventListener('wheel', evt => {
+      if (evt.deltaY !== 0) { evt.preventDefault(); tabsContainer.scrollLeft += evt.deltaY }
+    }, { passive: false })
   }
 
-  // Double-click empty area of tab bar to create a new file
+  // Double-click tab bar to create new tab
   const tabbar = document.getElementById('tabbar')
   if (tabbar) {
-    tabbar.addEventListener('dblclick', e => {
-      if (e.target === tabbar || e.target === tabsContainer) {
-        e.preventDefault()
-        newFile()
-      }
+    tabbar.addEventListener('dblclick', evt => {
+      if (evt.target === tabbar || evt.target === tabsContainer) { evt.preventDefault(); newFile() }
     })
   }
 
@@ -953,12 +592,11 @@
   updateStatusStats(EditorManager.getValue())
   EditorManager.focus()
 
-  // ─── Custom window controls (frameless) ──────────────────────
+  // Window controls (custom title bar)
   const winMinBtn = document.getElementById('win-min')
   const winMaxBtn = document.getElementById('win-max')
   const winCloseBtn = document.getElementById('win-close')
   const winMaxIcon = document.getElementById('win-max-icon')
-
   if (winMinBtn) winMinBtn.addEventListener('click', () => window.api.winMinimize())
   if (winMaxBtn) winMaxBtn.addEventListener('click', () => window.api.winToggleMaximize())
   if (winCloseBtn) winCloseBtn.addEventListener('click', () => window.api.winClose())
@@ -967,16 +605,14 @@
     document.body.classList.toggle('is-maximized', !!isMax)
     if (!winMaxIcon) return
     if (isMax) {
-      // Restore (two overlapping squares)
-      winMaxIcon.innerHTML =
-        '<rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>'
+      winMaxIcon.innerHTML = '<rect x="2.5" y="0.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/><rect x="0.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1"/>'
       winMaxBtn.title = '还原'
     } else {
-      winMaxIcon.innerHTML =
-        '<rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/>'
+      winMaxIcon.innerHTML = '<rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/>'
       winMaxBtn.title = '最大化'
     }
   }
+
   if (window.api && window.api.onWinMaximized) {
     window.api.onWinMaximized(updateMaxIcon)
   }
@@ -984,14 +620,12 @@
     window.api.winIsMaximized().then(updateMaxIcon)
   }
 
-  // Aero Snap / 最小化恢复 / 拖拽脱离最大化 等场景下 maximize/unmaximize 事件
-  // 不一定触发；窗口尺寸变化后再主动查询一次状态，确保顶部 padding 与窗口
-  // 真实状态同步，避免顶部间距偶发消失。
-  let resizeStateTimer = null
+  // Track window resize to update maximize icon
+  let resizeTimer = null
   window.addEventListener('resize', () => {
     if (!window.api || !window.api.winIsMaximized) return
-    clearTimeout(resizeStateTimer)
-    resizeStateTimer = setTimeout(() => {
+    clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
       window.api.winIsMaximized().then(updateMaxIcon)
     }, 50)
   })
