@@ -53,8 +53,7 @@
   await CacheManager.loadInterval()
   CacheManager.start()
 
-  let changeRAF = null
-  let lastRenderTime = 0
+  let changeTimer = null
   let autoSaveTimer = null
   let pendingAutoSaveTabId = null
   let welcomeDismissed = false  // 用户主动操作后不再显示欢迎页
@@ -127,15 +126,25 @@
     const tab = TabManager.getTab(tabId)
     if (!tab || !tab.filePath || !tab.modified) return
     const content = tab.doc ? tab.doc.getValue() : ''
-    const result = await window.api.fileSave(tab.filePath, content)
-    if (result.success) {
-      TabManager.markModified(tab.id, false)
-      const el = document.getElementById('status-autosave')
-      const sep = document.getElementById('status-autosave-sep')
-      if (el) {
-        const now = new Date()
-        el.textContent = `已保存 ${now.toLocaleTimeString('zh-CN', { hour12: false })}`
-        if (sep) sep.style.display = ''
+    // 使用持久化锁防止与缓存写入同时进行
+    if (window.CacheManager && CacheManager.acquirePersistLock) {
+      await CacheManager.acquirePersistLock()
+    }
+    try {
+      const result = await window.api.fileSave(tab.filePath, content)
+      if (result.success) {
+        TabManager.markModified(tab.id, false)
+        const el = document.getElementById('status-autosave')
+        const sep = document.getElementById('status-autosave-sep')
+        if (el) {
+          const now = new Date()
+          el.textContent = `已保存 ${now.toLocaleTimeString('zh-CN', { hour12: false })}`
+          if (sep) sep.style.display = ''
+        }
+      }
+    } finally {
+      if (window.CacheManager && CacheManager.releasePersistLock) {
+        CacheManager.releasePersistLock()
       }
     }
   }
@@ -145,17 +154,12 @@
     document.getElementById('word-count').textContent = `${wc} 字`
     CacheManager.markDirty()
     updateStatusStats(value, wc)
-    if (changeRAF) cancelAnimationFrame(changeRAF)
-    const delay = value.length > 5e3 ? 1200 : value.length > 2e3 ? 800 : 400
-    changeRAF = requestAnimationFrame(() => {
-      changeRAF = null
-      const now = performance.now()
-      if (!lastRenderTime || now - lastRenderTime >= delay - 50) {
-        lastRenderTime = now
-        PreviewManager.render(value)
-      }
-    })
-    if (!lastRenderTime) lastRenderTime = performance.now()
+    // 使用 trailing-debounce 代替 rAF 节流，用户停止输入后再渲染预览
+    clearTimeout(changeTimer)
+    const delay = value.length > 5e3 ? 1200 : value.length > 2e3 ? 800 : 300
+    changeTimer = setTimeout(() => {
+      PreviewManager.render(value)
+    }, delay)
     const tab = TabManager.getActive()
     if (tab && !tab.modified) {
       TabManager.markModified(tab.id, true)
@@ -174,9 +178,9 @@
       autoSaveTimer = null
       autoSaveToFile()
     }
-    if (changeRAF) {
-      cancelAnimationFrame(changeRAF)
-      changeRAF = null
+    if (changeTimer) {
+      clearTimeout(changeTimer)
+      changeTimer = null
     }
     const value = EditorManager.getValue()
     const wc = EditorManager.getWordCount(value)
@@ -415,7 +419,7 @@
     }
     const readResult = await window.api.fileRead(filePath)
     if (!readResult.success) {
-      ExportManager.showToast('打开失败：' + readResult.error)
+      ExportManager.showToast('打开失败：' + readResult.error, 'error')
       if (window.RecentFiles) await RecentFiles.remove(filePath)
       return
     }
@@ -436,6 +440,7 @@
       await TabManager.closeTab(cur.id)
     }
     EditorManager.focus()
+    welcomeDismissed = true
     // 强制隐藏欢迎页覆盖层
     document.getElementById('welcome-overlay')?.classList.add('hidden')
   }
@@ -476,7 +481,7 @@
       if (window.RecentFiles) await RecentFiles.add(filePath)
       ExportManager.showToast(`已保存: ${filePath.split(/[/\\]/).pop()}`)
     } else {
-      ExportManager.showToast('保存失败: ' + saveResult.error)
+      ExportManager.showToast('保存失败: ' + saveResult.error, 'error')
     }
   }
 
@@ -485,7 +490,13 @@
   }
 
   // Menu events from main process
+  // 菜单事件：来自菜单栏点击或快捷键（IPC）
+  // 标记机制：如果快捷键已由渲染层 keydown 处理，跳过 IPC 重复调用
   window.api.onMenuEvent(event => {
+    if (window.__menuEventPending) {
+      window.__menuEventPending = false
+      return
+    }
     const content = EditorManager.getValue()
     switch (event) {
       case 'menu-new': newFile(); break
@@ -581,15 +592,16 @@
   }
 
   // Keyboard shortcuts
+  // 标记 __menuEventPending 防止菜单 IPC 重复执行相同操作
   document.addEventListener('keydown', evt => {
     const ctrl = evt.ctrlKey || evt.metaKey
-    if (ctrl && evt.key === 's') { evt.preventDefault(); saveFile(evt.shiftKey) }
-    if (ctrl && evt.key === 'n') { evt.preventDefault(); newFile() }
-    if (ctrl && evt.key === 'o') { evt.preventDefault(); openFile() }
-    if (ctrl && evt.shiftKey && (evt.key === 'R' || evt.key === 'r')) { evt.preventDefault(); if (window.RecentFiles) RecentFiles.open() }
+    if (ctrl && evt.key === 's') { evt.preventDefault(); window.__menuEventPending = true; saveFile(evt.shiftKey) }
+    if (ctrl && evt.key === 'n') { evt.preventDefault(); window.__menuEventPending = true; newFile() }
+    if (ctrl && evt.key === 'o') { evt.preventDefault(); window.__menuEventPending = true; openFile() }
+    if (ctrl && evt.shiftKey && (evt.key === 'R' || evt.key === 'r')) { evt.preventDefault(); window.__menuEventPending = true; if (window.RecentFiles) RecentFiles.open() }
     if (ctrl && evt.shiftKey && (evt.key === 'P' || evt.key === 'p')) { evt.preventDefault(); if (window.CommandPalette) CommandPalette.open() }
     if (ctrl && evt.key === '\\') {
-      evt.preventDefault()
+      evt.preventDefault(); window.__menuEventPending = true
       if (evt.shiftKey) { togglePaneSwap() }
       else { const idx = viewModes.indexOf(viewMode); setViewMode(viewModes[(idx + 1) % viewModes.length]) }
     }
@@ -622,6 +634,36 @@
       if (evt.target === tabbar || evt.target === tabsContainer) { evt.preventDefault(); newFile() }
     })
   }
+
+  // Drag & drop to open .md files
+  document.addEventListener('dragover', evt => {
+    if (evt.dataTransfer?.types.includes('Files')) {
+      evt.preventDefault()
+      evt.dataTransfer.dropEffect = 'copy'
+    }
+  })
+  document.addEventListener('drop', async evt => {
+    const files = evt.dataTransfer?.files
+    if (!files || files.length === 0) return
+    const isMdFile = name => /\.(md|markdown|txt)$/i.test(name)
+    const mdFiles = Array.from(files).filter(f => isMdFile(f.name))
+    if (mdFiles.length === 0) return
+    evt.preventDefault()
+    for (const file of mdFiles) {
+      try {
+        const text = await file.text()
+        const title = file.name.replace(/\.(md|markdown|txt)$/i, '')
+        const tab = TabManager.createTab({ title: title, content: text, filePath: file.path || null })
+        TabManager.setActive(tab.id)
+        TabManager.markModified(tab.id, false)
+        welcomeDismissed = true
+        document.getElementById('welcome-overlay')?.classList.add('hidden')
+      } catch (err) {
+        console.error('[Drop] 打开文件失败:', file.name, err)
+      }
+    }
+    EditorManager.focus()
+  })
 
   // Initial render
   PreviewManager.render(EditorManager.getValue())

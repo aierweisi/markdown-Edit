@@ -28,7 +28,7 @@ window.ExportManager = (() => {
         el.remove()
       }
     const toast = document.createElement('div')
-    toast.className = 'toast'
+    toast.className = 'toast' + ('error' === _type ? ' toast-error' : 'success' === _type ? ' toast-success' : '')
     toast.textContent = msg
     document.body.appendChild(toast)
     toasts.push(toast)
@@ -58,20 +58,23 @@ window.ExportManager = (() => {
               'msup', 'msub', 'mfrac', 'msqrt',
             ],
             ADD_ATTR: ['target'],
+            FORBID_TAGS: ['style', 'iframe', 'object', 'embed', 'form', 'input'],
+            FORBID_ATTR: ['style'],
+            ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
           })
         : marked.parse(mdContent),
       isDark = document.body.classList.contains('theme-dark'),
       theme = isDark ? 'dark' : 'light'
     let hlCss = ''
     {
-      const linkEl = document.getElementById(isDark ? 'hljs-dark' : 'hljs-light')
-      if (linkEl && linkEl.sheet)
+      const themeName = isDark ? 'github-dark' : 'github'
+      const linkEl = document.getElementById('hljs-theme')
+      if (linkEl && linkEl.sheet && linkEl.href?.includes(themeName))
         try {
           hlCss = [...linkEl.sheet.cssRules].map(r => r.cssText).join('\n')
         } catch (_err) {}
       if (!hlCss)
         try {
-          const themeName = isDark ? 'github-dark' : 'github'
           hlCss = await (await fetch(`vendor/hljs/styles/${themeName}.min.css`)).text()
         } catch (_err) {}
     }
@@ -85,7 +88,7 @@ window.ExportManager = (() => {
       const result = await window.api.fileSave(filePath, content)
       result.success
         ? (showToast(`已导出: ${filePath.split(/[/\\]/).pop()}`), window.api.shellShowItem(filePath))
-        : ExportManager.showToast('导出失败: ' + result.error)
+        : ExportManager.showToast('导出失败: ' + result.error, 'error')
     },
     exportHtml: async function (content) {
       const filePath = await resolveExportPath('html', content)
@@ -94,32 +97,39 @@ window.ExportManager = (() => {
         result = await window.api.fileSave(filePath, html)
       result.success
         ? (showToast(`已导出: ${filePath.split(/[/\\]/).pop()}`), window.api.shellShowItem(filePath))
-        : ExportManager.showToast('导出失败: ' + result.error)
+        : ExportManager.showToast('导出失败: ' + result.error, 'error')
     },
     exportPdf: async function (content) {
       const filePath = await resolveExportPath('pdf', content)
       if (!filePath) return
-      PreviewManager.render(content)
+      // 不触发 PreviewManager.render（会导致预览闪烁），
+      // 只需等待当前预览中的 mermaid 渲染完成
       await new Promise(resolve => {
+        let timedOut = false
+        const timeoutTimer = setTimeout(() => {
+          timedOut = true
+          resolve()  // 超时也继续，可能缺少 mermaid 但至少导出纯文本
+        }, 15000)  // 15 秒超时
         const poll = () => {
+          if (timedOut) return
           const container = document.getElementById('preview-container')
           if (!container) return setTimeout(poll, 80)
           const pending = container.querySelectorAll('.mermaid-block:not(.mermaid-rendered)')
-          0 === pending.length ? resolve() : setTimeout(poll, 80)
+          0 === pending.length ? (clearTimeout(timeoutTimer), resolve()) : setTimeout(poll, 80)
         }
         setTimeout(poll, 80)
       })
       const result = await window.api.exportPDF(filePath)
       result.success
         ? (showToast(`已导出 PDF: ${filePath.split(/[/\\]/).pop()}`), window.api.shellShowItem(filePath))
-        : ExportManager.showToast('PDF 导出失败: ' + result.error)
+        : ExportManager.showToast('PDF 导出失败: ' + result.error, 'error')
     },
     importFile: async function () {
       const result = await window.api.dialogOpenFile()
       if (result.canceled || !result.filePaths.length) return null
       const filePath = result.filePaths[0],
         read = await window.api.fileRead(filePath)
-      if (!read.success) return (ExportManager.showToast('读取文件失败: ' + read.error), null)
+      if (!read.success) return (ExportManager.showToast('读取文件失败: ' + read.error, 'error'), null)
       const name = filePath.split(/[/\\]/).pop()
       return { filePath: filePath, content: read.content, name: name }
     },

@@ -38,7 +38,8 @@
     "no-empty": ["warn", { "allowEmptyCatch": true }],
     "no-prototype-builtins": "off",
     "no-useless-escape": "warn",
-    "no-irregular-whitespace": "off"
+    "no-irregular-whitespace": "off",
+    "no-extra-semi": "off"
   },
   "ignorePatterns": [
     "dist/",
@@ -67,6 +68,20 @@
       "env": {
         "node": true,
         "es2021": true
+      }
+    },
+    {
+      "files": ["scripts/**/*.js"],
+      "parserOptions": {
+        "sourceType": "script"
+      },
+      "env": {
+        "node": true,
+        "es2021": true
+      },
+      "rules": {
+        "no-undef": "error",
+        "no-unused-vars": "warn"
       }
     }
   ]

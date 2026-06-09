@@ -4,7 +4,7 @@ window.escHtml = function (str) {
     ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch],
   )
 }
-window.resolveNamingRule = function (rule, content) {
+function resolveNamingRuleImpl(rule, content) {
   const now = new Date(),
     date = now.toISOString().slice(0, 10),
     time = now.toTimeString().slice(0, 8).replace(/:/g, ''),
@@ -21,3 +21,5 @@ window.resolveNamingRule = function (rule, content) {
     .replace(/{timestamp}/g, timestamp)
     .replace(/{random}/g, random)
 }
+window.resolveNamingRule = resolveNamingRuleImpl
+if (typeof module !== 'undefined' && module.exports) module.exports = { resolveNamingRule: resolveNamingRuleImpl }

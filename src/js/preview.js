@@ -1,7 +1,6 @@
 window.PreviewManager = (() => {
   let previewBody = null,
     syncScrollEnabled = !0,
-    renderTimer = null,
     mermaidIdCounter = 0,
     headingAnchors = [],
     scrollSource = null,
@@ -49,10 +48,16 @@ window.PreviewManager = (() => {
 
   function render(mdContent) {
     if (mdContent === lastMd) return
+    // 编辑-only 模式下跳过渲染
+    const mainArea = document.getElementById('main-area')
+    if (mainArea && mainArea.classList.contains('view-editor-only')) {
+      lastMd = mdContent
+      return
+    }
+    lastMd = mdContent
     previewBody &&
-      (clearTimeout(renderTimer),
-        (renderTimer = setTimeout(() => {
-          try {
+      (function () {
+        try {
             const container = document.getElementById('preview-container'),
               savedScrollTop = container ? container.scrollTop : 0
             mermaidIdCounter = 0
@@ -102,8 +107,9 @@ window.PreviewManager = (() => {
                   'munder', 'mover', 'munderover', 'semantics', 'annotation',
                 ],
                 ADD_ATTR: ['target', 'data-mermaid-src'],
-                FORBID_TAGS: ['style'],
-                ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
+                FORBID_TAGS: ['style', 'iframe', 'object', 'embed', 'form', 'input'],
+                FORBID_ATTR: ['style'],
+                ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
               }))
 
             requestAnimationFrame(() => {
@@ -167,7 +173,9 @@ window.PreviewManager = (() => {
               mermaidBlocks.forEach(async block => {
                 const src = block.getAttribute('data-mermaid-src') || block.textContent
                 if (mermaidCache.has(src)) {
-                  block.innerHTML = mermaidCache.get(src)
+                  if (block.innerHTML !== mermaidCache.get(src)) {
+                    block.innerHTML = mermaidCache.get(src)
+                  }
                   block.classList.add('mermaid-rendered')
                 } else
                   try {
@@ -184,7 +192,7 @@ window.PreviewManager = (() => {
           } catch (err) {
             previewBody.innerHTML = `<pre class="render-error">${escapeHtml(err.message || String(err))}</pre>`
           }
-        }, 60)))
+        })()
   }
 
   function syncPreviewScroll() {
@@ -434,9 +442,8 @@ window.PreviewManager = (() => {
     },
     syncPreviewScroll: syncPreviewScroll,
     updateTheme: function (isDark) {
-      const lightLink = document.getElementById('hljs-light'),
-        darkLink = document.getElementById('hljs-dark')
-      lightLink && darkLink && ((lightLink.disabled = isDark), (darkLink.disabled = !isDark))
+      const linkEl = document.getElementById('hljs-theme')
+      if (linkEl) linkEl.href = `vendor/hljs/styles/${isDark ? 'github-dark' : 'github'}.min.css`
       window.mermaid &&
         (mermaid.initialize({ startOnLoad: !1, theme: isDark ? 'dark' : 'default', securityLevel: 'loose' }),
           window.EditorManager && render(EditorManager.getValue()))

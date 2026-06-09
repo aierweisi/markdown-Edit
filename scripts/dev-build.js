@@ -26,6 +26,15 @@ function copyDirSync(src, dest) {
 let ok = 0
 let fail = 0
 
+// 复制 npm 依赖的 vendor 文件（首次安装后 postinstall 已执行，开发中确保同步）
+console.log('\n[Vendor] 同步 npm 依赖...')
+try {
+  require('./copy-vendor.js')
+} catch (e) {
+  console.error('[Vendor] 复制失败:', e.message)
+  fail++
+}
+
 // JS 文件
 const jsDir = path.join(SRC, 'js')
 if (fs.existsSync(jsDir)) {

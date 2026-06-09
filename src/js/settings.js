@@ -2,32 +2,19 @@ window.SettingsManager = (() => {
   let settings = {}
 
   async function loadFromStore() {
-    const [
-      theme,
-      fontSize,
-      editorFont,
-      autoSaveInterval,
-      exportDir,
-      exportNamingRule,
-      imageSaveDir,
-    ] = await Promise.all([
-      window.api.storeGet('theme'),
-      window.api.storeGet('fontSize'),
-      window.api.storeGet('editorFont'),
-      window.api.storeGet('autoSaveInterval'),
-      window.api.storeGet('exportDir'),
-      window.api.storeGet('exportNamingRule'),
-      window.api.storeGet('imageSaveDir'),
-    ])
+    const keys = ['theme', 'fontSize', 'editorFont', 'autoSaveInterval', 'exportDir', 'exportNamingRule', 'imageSaveDir']
+    const results = await Promise.allSettled(keys.map(k => window.api.storeGet(k)))
+    const get = (idx, fallback) => 'fulfilled' === results[idx]?.status ? results[idx].value : fallback
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     return (
       (settings = {
-        theme: theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
-        fontSize: fontSize || 15,
-        editorFont: editorFont || "'JetBrains Mono', 'Fira Code', monospace",
-        autoSaveInterval: autoSaveInterval || 10,
-        exportDir: exportDir || '',
-        exportNamingRule: exportNamingRule || '{title}_{date}',
-        imageSaveDir: imageSaveDir || 'assets',
+        theme: get(0) || (prefersDark ? 'dark' : 'light'),
+        fontSize: get(1) || 15,
+        editorFont: get(2) || "'JetBrains Mono', 'Fira Code', monospace",
+        autoSaveInterval: get(3) || 10,
+        exportDir: get(4) || '',
+        exportNamingRule: get(5) || '{title}_{date}',
+        imageSaveDir: get(6) || 'assets',
       }),
       settings
     )
@@ -109,10 +96,37 @@ window.SettingsManager = (() => {
     ExportManager.showToast('设置已保存')
   }
 
+  const DEFAULTS = {
+    theme: 'light',
+    fontSize: 15,
+    editorFont: "'JetBrains Mono', 'Fira Code', monospace",
+    autoSaveInterval: 10,
+    exportDir: '',
+    exportNamingRule: '{title}_{date}',
+    imageSaveDir: 'assets',
+  }
+
   return {
     init: function () {
       document.getElementById('settings-close').addEventListener('click', closeModal)
       document.getElementById('settings-save-btn').addEventListener('click', saveSettings)
+      const resetBtn = document.getElementById('settings-reset-btn')
+      resetBtn && resetBtn.addEventListener('click', async () => {
+        if (!await window.showConfirm('重置所有设置为默认值？', { title: '重置设置', okText: '重置', danger: true })) return
+        await window.api.storeSet('theme', DEFAULTS.theme)
+        await window.api.storeSet('fontSize', DEFAULTS.fontSize)
+        await window.api.storeSet('editorFont', DEFAULTS.editorFont)
+        await window.api.storeSet('autoSaveInterval', DEFAULTS.autoSaveInterval)
+        await window.api.storeSet('exportDir', DEFAULTS.exportDir)
+        await window.api.storeSet('exportNamingRule', DEFAULTS.exportNamingRule)
+        await window.api.storeSet('imageSaveDir', DEFAULTS.imageSaveDir)
+        applyTheme(DEFAULTS.theme)
+        applyFontSize(DEFAULTS.fontSize)
+        applyEditorFont(DEFAULTS.editorFont)
+        CacheManager.setAutoSaveInterval(DEFAULTS.autoSaveInterval)
+        closeModal()
+        ExportManager.showToast('设置已重置为默认值')
+      })
       document.getElementById('settings-overlay').addEventListener('click', evt => {
         evt.target === evt.currentTarget && closeModal()
       })
@@ -171,7 +185,7 @@ window.SettingsManager = (() => {
             window.ExportManager && ExportManager.showToast && ExportManager.showToast('缓存已清空' + freed)
           } else
             (clearBtn.textContent = '清空失败'),
-              ExportManager.showToast('清空缓存失败：' + ((result && result.error) || '未知错误'))
+              ExportManager.showToast('清空缓存失败：' + ((result && result.error) || '未知错误'), 'error')
           setTimeout(() => {
             clearBtn.textContent = origText
           }, 2200)

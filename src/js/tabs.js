@@ -19,16 +19,20 @@ window.TabManager = (() => {
       overlay.className = 'modal-overlay confirm-overlay'
       overlay.innerHTML = `\n        <div class="modal modal-small">\n          <div class="modal-header"><h2>${esc(title)}</h2></div>\n          <div class="modal-body">\n            <p class="confirm-message">${esc(msg)}</p>\n            <div class="modal-actions">\n              <button class="btn-secondary confirm-cancel">${esc(cancelText)}</button>\n              <button class="${isDanger ? 'btn-danger' : 'btn-primary'} confirm-ok">${esc(okText)}</button>\n            </div>\n          </div>\n        </div>\n      `
       document.body.appendChild(overlay)
+      let closed = false
       requestAnimationFrame(() => overlay.classList.add('open'))
 
       const onKeydown = evt => {
+          if (closed) return
           'Escape' === evt.key ? (evt.preventDefault(), close(!1)) : 'Enter' === evt.key && (evt.preventDefault(), close(!0))
         },
         close = result => {
+          if (closed) return
+          closed = true
           overlay.classList.remove('open')
           overlay.classList.add('closing')
           document.removeEventListener('keydown', onKeydown, !0)
-          setTimeout(() => overlay.remove(), 220)
+          setTimeout(() => { overlay.parentNode && overlay.remove() }, 220)
           resolve(result)
         }
       overlay.querySelector('.confirm-ok').addEventListener('click', () => close(!0))
@@ -173,7 +177,7 @@ window.TabManager = (() => {
       menu.contains(e.target) || (menu.remove(), document.removeEventListener('mousedown', clickOutside))
       delete menu._cb
     }
-    setTimeout(() => document.addEventListener('mousedown', menu._cb), 0)
+    requestAnimationFrame(() => document.addEventListener('mousedown', menu._cb))
   }
 
   function startRename(tabId) {
@@ -210,7 +214,7 @@ window.TabManager = (() => {
             result = await window.api.fileRename(oldPath, newPath)
           result && result.success
             ? TabManager.setTabTitle(tabId, safeName, result.newPath || newPath)
-            : (ExportManager.showToast('重命名失败：' + (result && result.error ? result.error : '未知错误')),
+            : (ExportManager.showToast('重命名失败：' + (result && result.error ? result.error : '未知错误'), 'error'),
               TabManager.setTabTitle(tabId, tab.title))
         } else TabManager.setTabTitle(tabId, newTitle)
       } else TabManager.setTabTitle(tabId, newTitle)

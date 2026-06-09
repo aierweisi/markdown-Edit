@@ -109,7 +109,7 @@ window.CommandPalette = (() => {
       activeIndex = 0
       inputEl.value = ''
       renderList('')
-      setTimeout(() => inputEl.focus(), 0)
+      requestAnimationFrame(() => inputEl.focus())
     },
     close: close,
   }

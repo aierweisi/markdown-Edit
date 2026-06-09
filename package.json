@@ -2,21 +2,15 @@
   "name": "markdown-editor",
   "version": "1.0.0",
   "description": "A desktop Markdown editor built with Electron",
-  "vendor": {
-    "marked": "15.0.7",
-    "katex": "0.16.21",
-    "dompurify": "3.2.4",
-    "codemirror": "5.65.16",
-    "mermaid": "10.x",
-    "highlight.js": "11.9.0"
-  },
   "main": "main/main.js",
   "scripts": {
+    "postinstall": "node scripts/copy-vendor.js",
+    "copy-vendor": "node scripts/copy-vendor.js",
     "dev": "node scripts/dev-build.js",
     "start": "node scripts/dev-build.js && electron .",
     "minify": "node scripts/minify.js",
-    "build": "npm run minify && electron-builder",
-    "build:win": "npm run minify && electron-builder --win",
+    "build": "npm run copy-vendor && npm run minify && electron-builder",
+    "build:win": "npm run copy-vendor && npm run minify && electron-builder --win",
     "lint": "eslint main/ src/js/ scripts/ tests/",
     "lint:fix": "eslint --fix main/ src/js/ scripts/ tests/",
     "format": "prettier --check main/ src/js/ scripts/ tests/",
@@ -28,9 +22,15 @@
   "author": "Markdown Editor Team",
   "license": "MIT",
   "dependencies": {
-    "electron-store": "^11.0.2"
+    "codemirror": "5.65.16",
+    "dompurify": "3.2.4",
+    "electron-store": "^11.0.2",
+    "katex": "0.16.21",
+    "marked": "15.0.7",
+    "mermaid": "10.9.3"
   },
   "devDependencies": {
+    "@highlightjs/cdn-assets": "11.9.0",
     "csso": "^5.0.5",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",

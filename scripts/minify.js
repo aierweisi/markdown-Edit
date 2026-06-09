@@ -102,6 +102,15 @@ function minifyHTML(inPath, outPath) {
 
 ;(async () => {
   console.log('[minify] 从 src/ 开始压缩...\n')
+
+  // 先同步 npm 依赖的 vendor 文件
+  console.log('[Vendor] 同步 npm 依赖...')
+  try {
+    require('./copy-vendor.js')
+  } catch (e) {
+    console.error('[Vendor] 复制失败:', e.message)
+  }
+
   let ok = 0, fail = 0
 
   // JS 文件

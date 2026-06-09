@@ -66,14 +66,18 @@ window.EditorManager = (() => {
         break
       }
       case 'heading': {
-        const lineText = cm.getLine(cursor.line),
-          match = lineText.match(/^(#{1,6})\s(.*)$/)
-        const replacement = match
-          ? match[1].length < 6
-            ? '#'.repeat(match[1].length + 1) + ' ' + match[2]
-            : match[2]
-          : '# ' + lineText
-        cm.replaceRange(replacement, { line: cursor.line, ch: 0 }, { line: cursor.line, ch: lineText.length })
+        const lineText = cm.getLine(cursor.line) || ''
+        if (!lineText.trim()) {
+          cm.replaceRange('# ', { line: cursor.line, ch: 0 }, { line: cursor.line, ch: 0 })
+        } else {
+          const match = lineText.match(/^(#{1,6})\s(.*)$/)
+          const replacement = match
+            ? match[1].length < 6
+              ? '#'.repeat(match[1].length + 1) + ' ' + match[2]
+              : match[2]
+            : '# ' + lineText
+          cm.replaceRange(replacement, { line: cursor.line, ch: 0 }, { line: cursor.line, ch: lineText.length })
+        }
         break
       }
       case 'codeblock':
@@ -126,12 +130,6 @@ window.EditorManager = (() => {
           'Ctrl-I': () => insertFormat('italic'),
           'Ctrl-K': () => insertFormat('link'),
           'Ctrl-G': 'jumpToLine',
-          'Ctrl-F': () => {
-            window.FindManager && FindManager.show(!1)
-          },
-          'Ctrl-H': () => {
-            window.FindManager && FindManager.show(!0)
-          },
         },
         placeholder: '开始写作...',
         scrollbarStyle: 'native',
@@ -200,7 +198,8 @@ window.EditorManager = (() => {
         }
         const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg'),
           now = new Date(),
-          fileName = `image-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}.${ext}`,
+          ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`,
+          fileName = `image-${ts}.${ext}`,
           toast = document.createElement('div')
         toast.className = 'toast toast-loading'
         toast.textContent = '正在保存图片...'
@@ -231,7 +230,9 @@ window.EditorManager = (() => {
                 toast.parentNode && toast.remove()
               }, 800))
         } catch (err) {
-          throw (toast.parentNode && toast.remove(), err)
+          toast.parentNode && toast.remove()
+          console.error('[Image] 图片保存失败:', err)
+          return !1
         }
         return !0
       }
@@ -244,11 +245,29 @@ window.EditorManager = (() => {
               return (evt.preventDefault(), void (await handleImageFile(item.getAsFile())))
       })
 
+      wrapper.addEventListener('dragenter', evt => {
+        if (evt.dataTransfer && Array.from(evt.dataTransfer.types).includes('Files')) {
+          evt.preventDefault()
+          wrapper.classList.add('drag-over')
+        }
+      })
+
       wrapper.addEventListener('dragover', evt => {
-        evt.dataTransfer && Array.from(evt.dataTransfer.types).includes('Files') && evt.preventDefault()
+        if (evt.dataTransfer && Array.from(evt.dataTransfer.types).includes('Files')) {
+          evt.preventDefault()
+          wrapper.classList.add('drag-over')
+        }
+      })
+
+      wrapper.addEventListener('dragleave', evt => {
+        // 只在离开 wrapper 本身时移除高亮（避免子元素冒泡误触）
+        if (!wrapper.contains(evt.relatedTarget)) {
+          wrapper.classList.remove('drag-over')
+        }
       })
 
       wrapper.addEventListener('drop', async evt => {
+        wrapper.classList.remove('drag-over')
         const files = evt.dataTransfer && evt.dataTransfer.files
         if (!files || 0 === files.length) return
         let handled = !1

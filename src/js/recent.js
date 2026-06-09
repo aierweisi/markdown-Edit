@@ -146,7 +146,7 @@ window.RecentFiles = (() => {
       activeIndex = 0
       searchEl.value = ''
       renderList('')
-      setTimeout(() => searchEl.focus(), 0)
+      requestAnimationFrame(() => searchEl.focus())
     },
     close: close,
     onOpen: function (cb) {

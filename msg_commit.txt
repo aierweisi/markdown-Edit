@@ -1,6 +1,0 @@
-perf: CSS 优化 - 移除未用动画/csso安全去重压缩
-
-- #13: 移除未使用的 modal-in 关键帧动画
-- 使用 csso(restructure:true) 压缩去重，80KB→69KB(-14%)
-
-Co-Authored-By: AtomCode (deepseek-v4-flash) <noreply@atomgit.com>

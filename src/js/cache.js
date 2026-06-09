@@ -2,7 +2,20 @@ window.CacheManager = (() => {
   let timerId = null,
     intervalMs = 1e4,
     lastHash = '',
-    dirty = true
+    dirty = true,
+    lockPromise = null,
+    unlock = null
+
+  async function acquireLock() {
+    while (lockPromise) await lockPromise
+    lockPromise = new Promise(resolve => { unlock = resolve })
+  }
+  function releaseLock() {
+    const u = unlock
+    lockPromise = null
+    unlock = null
+    u && u()
+  }
 
   function startTimer() {
     stopTimer()
@@ -40,12 +53,20 @@ window.CacheManager = (() => {
       savedAt: Date.now(),
     }
 
-    const hashStr =
-      cache.tabs.map(t => `${t.id}:${t.content}|${t.modified}`).join('||') + `|${activeId}`
+    const hashObj = {
+      tabs: cache.tabs.map(t => ({ id: t.id, content: t.content, modified: t.modified })),
+      activeId,
+    }
+    const hashStr = JSON.stringify(hashObj)
     if (hashStr === lastHash) return
     lastHash = hashStr
 
-    await window.api.storeSet('cache', cache)
+    await acquireLock()
+    try {
+      await window.api.storeSet('cache', cache)
+    } finally {
+      releaseLock()
+    }
     ;(function () {
       const el = document.getElementById('status-autosave')
       if (!el) return
@@ -67,6 +88,8 @@ window.CacheManager = (() => {
       intervalMs = 1e3 * (seconds || 10)
     },
     saveAll: saveToStore,
+    acquirePersistLock: acquireLock,
+    releasePersistLock: releaseLock,
     checkAndRestore: async function () {
       let cache
       try {
@@ -84,16 +107,15 @@ window.CacheManager = (() => {
     },
     restore: async function (cache) {
       document.getElementById('tabs-container').innerHTML = ''
+      const idMap = {}  // old ID → new ID
       for (const tabData of cache.tabs) {
         try {
           const newTab = TabManager.createTab({
               title: tabData.title,
               filePath: tabData.filePath,
               content: tabData.content,
-            }),
-            tabEl = document.querySelector(`.tab[data-id="${newTab.id}"]`)
-          newTab.id = tabData.id
-          if (tabEl) tabEl.dataset.id = tabData.id
+            })
+          idMap[tabData.id] = newTab.id
           newTab.scrollTop = tabData.scrollTop || 0
           if (newTab.doc && tabData.cursorPos)
             try {
@@ -101,7 +123,7 @@ window.CacheManager = (() => {
             } catch (_err) {}
           newTab.modified = tabData.modified || !1
           if (newTab.modified) {
-            const el = document.querySelector(`.tab[data-id="${tabData.id}"]`)
+            const el = document.querySelector(`.tab[data-id="${newTab.id}"]`)
             el && el.classList.add('modified')
           }
         } catch (_err) {
@@ -110,7 +132,9 @@ window.CacheManager = (() => {
       }
       TabManager.syncUnsavedClass && TabManager.syncUnsavedClass()
       dirty = true
-      const firstId = cache.activeTabId || cache.tabs[0]?.id
+      const oldActiveId = cache.activeTabId || cache.tabs[0]?.id
+      const newActiveId = oldActiveId ? idMap[oldActiveId] : null
+      const firstId = newActiveId || (cache.tabs.length > 0 ? idMap[cache.tabs[0].id] : null)
       firstId && setTimeout(() => TabManager.setActive(firstId), 100)
     },
     clearCache: async function () {

@@ -3,12 +3,34 @@ const {app: app, BrowserWindow: BrowserWindow, ipcMain: ipcMain, dialog: dialog,
 function isPathSafe(e) {
   try {
     if (!e || "string" != typeof e) return !1;
-    if (e.includes("..")) return !1;
-    const t = path.normalize(e);
+    // 先检查原始输入是否为绝对路径
+    if (!path.isAbsolute(e)) return !1;
+    const t = path.resolve(e);
     if (!path.isAbsolute(t)) return !1;
+    // 检查 .. 穿越：resolve 后原路径仍包含 .. 则拒绝
+    if (e.includes("..")) {
+      const normalized = path.normalize(e);
+      if (normalized !== t || e.split(path.sep).some(p => ".." === p)) return !1;
+    }
     if (process.platform.startsWith("win")) {
       const n = t.toUpperCase();
-      if (n.startsWith("\\\\?\\") || n.startsWith("\\\\.\\") || /^[A-Z]:\\\\(?:NUL|CON|PRN|AUX|COM\d|LPT\d)(?:\.|$)/i.test(t)) return !1;
+      if (n.startsWith("\\\\?\\") || n.startsWith("\\\\.\\") || /^[A-Z]:\\\\(?:NUL|CON|PRN|AUX|COM\d+|LPT\d+)(?:\.|$)/i.test(t)) return !1;
+    }
+    // 检查符号链接：只检查路径末端（或父目录）是否为直接符号链接
+    // 用 lstatSync 判断：如果文件存在且是 symlink 则拒绝；
+    // 如果文件不存在（保存新文件），检查父目录是否安全即可
+    try {
+      const stat = fs.lstatSync(t);
+      if (stat.isSymbolicLink()) return !1;
+    } catch (_) {
+      // 文件不存在：检查父目录是否存在且不是符号链接
+      try {
+        const dir = path.dirname(t);
+        const dirStat = fs.lstatSync(dir);
+        if (dirStat.isSymbolicLink()) return !1;
+      } catch (_2) {
+        return !1;  // 父目录也不存在，不安全
+      }
     }
     return !0;
   } catch {
@@ -88,7 +110,7 @@ async function createWindow() {
     },
     backgroundColor: "#0a0a0c",
     show: !1
-  }), mainWindow.loadFile(app && app.isPackaged ? path.join(__dirname, "../index.html") : path.join(__dirname, "../renderer/index.html")), 
+  }), mainWindow.loadFile(path.join(__dirname, "../dist/index.html")), 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show(), app.isPackaged || mainWindow.webContents.openDevTools({
       mode: "detach"
@@ -372,10 +394,14 @@ function setupIPC() {
   }), ipcMain.handle("shell-show-item", (e, n) => {
     shell.showItemInFolder(n);
   }), ipcMain.handle("clear-cache", async () => {
+    // 冷却保护：防止意外频繁调用
+    const now = Date.now();
+    if (global.__clearCacheCooldown && now - global.__clearCacheCooldown < 3000) return { success: !1, error: "too frequent" };
+    global.__clearCacheCooldown = now;
     try {
       const {session: e} = require("electron"), n = e.defaultSession, i = await n.getCacheSize().catch(() => 0);
       return await n.clearCache(), await n.clearStorageData({
-        storages: [ "cookies", "filesystem", "indexdb", "localstorage", "shadercache", "websql", "serviceworkers", "cachestorage" ]
+        storages: [ "cookies", "filesystem", "indexdb", "shadercache", "websql", "serviceworkers", "cachestorage" ]
       }), {
         success: !0,
         freed: i
@@ -416,7 +442,7 @@ gotTheLock ? (app.on("second-instance", (e, n) => {
   "darwin" !== process.platform && app.quit();
 }), app.on("before-quit", () => {
   isQuitting = !0;
-  mainWindow && mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()").catch(() => {});
+  mainWindow && mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()").catch(() => {});  // before-quit: best-effort cache flush
 }), app.on("activate", () => {
   0 === BrowserWindow.getAllWindows().length && createWindow();
 });
