@@ -199,12 +199,7 @@ window.EditorManager = (() => {
         const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg'),
           now = new Date(),
           ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`,
-          fileName = `image-${ts}.${ext}`,
-          toast = document.createElement('div')
-        toast.className = 'toast toast-loading'
-        toast.textContent = '正在保存图片...'
-        document.body.appendChild(toast)
-        setTimeout(() => toast.classList.add('toast-in'), 10)
+          fileName = `image-${ts}.${ext}`
         try {
           const result = await window.api.imageSave({
             baseDir: baseDir,
@@ -213,24 +208,9 @@ window.EditorManager = (() => {
             imageDir: await getImageSaveDir(),
           })
           result && result.success
-            ? (cm.replaceSelection(`![](${result.relPath})`),
-              (toast.textContent =
-                '图片已保存' +
-                (baseDir ? '' : '（临时目录）') +
-                (result && result.relPath ? ': ' + result.relPath : '')),
-              setTimeout(() => {
-                toast.parentNode && toast.remove()
-              }, 800),
-              !baseDir &&
-                window.ExportManager &&
-                ExportManager.showToast('未保存文档，图片已存到临时目录（建议先保存 .md）'))
-            : ((toast.textContent = '图片保存失败' + (result && result.error ? ': ' + result.error : '')),
-              toast.classList.add('toast-error'),
-              setTimeout(() => {
-                toast.parentNode && toast.remove()
-              }, 800))
+            ? cm.replaceSelection(`![](${result.relPath})`)
+            : console.error('[Image] 图片保存失败:', result && result.error)
         } catch (err) {
-          toast.parentNode && toast.remove()
           console.error('[Image] 图片保存失败:', err)
           return !1
         }

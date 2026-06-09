@@ -43,7 +43,7 @@ window.CacheManager = (() => {
           id: tab.id,
           title: tab.title,
           filePath: tab.filePath,
-          content: tab.id === activeId ? (tab.doc ? tab.doc.getValue() : tab.content || '') : '',
+          content: tab.doc ? tab.doc.getValue() : (tab.content || ''),
           scrollTop: tab.scrollTop || 0,
           cursorPos: tab.doc ? tab.doc.getCursor() : { line: 0, ch: 0 },
           modified: tab.modified,
