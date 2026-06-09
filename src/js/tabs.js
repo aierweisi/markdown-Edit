@@ -207,13 +207,15 @@ window.TabManager = (() => {
             sep = oldPath.includes('\\') ? '\\' : '/',
             lastSep = Math.max(oldPath.lastIndexOf('\\'), oldPath.lastIndexOf('/')),
             dir = lastSep >= 0 ? oldPath.slice(0, lastSep) : '',
-            extMatch = (lastSep >= 0 ? oldPath.slice(lastSep + 1) : oldPath).match(/\.(md|markdown|txt)$/i),
+            extMatch = (lastSep >= 0 ? oldPath.slice(lastSep + 1) : oldPath).match(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i),
             ext = extMatch ? extMatch[0] : '.md',
-            safeName = newTitle.replace(/[\\/:*?"<>|]/g, '_').trim() || tab.title,
+            safeName = newTitle.replace(/[\\/:*?"<>|]/g, '_').replace(/\.\./g, '').trim() || tab.title,
             newPath = (dir ? dir + sep : '') + safeName + ext,
             result = await window.api.fileRename(oldPath, newPath)
           result && result.success
-            ? TabManager.setTabTitle(tabId, safeName, result.newPath || newPath)
+            ? (TabManager.setTabTitle(tabId, safeName, result.newPath || newPath),
+              // 同步 tab.content，确保缓存/恢复时使用重命名后的编辑器内容
+              tab.content = tab.doc ? tab.doc.getValue() : (tab.content || ''))
             : (ExportManager.showToast('重命名失败：' + (result && result.error ? result.error : '未知错误'), 'error'),
               TabManager.setTabTitle(tabId, tab.title))
         } else TabManager.setTabTitle(tabId, newTitle)
@@ -286,6 +288,12 @@ window.TabManager = (() => {
       isActive = tabId === activeId
     tabs.splice(idx, 1)
 
+    // 关闭标签时清理查找高亮标记
+    if (isActive && window.FindManager) {
+      window.FindManager.clearMarkers && window.FindManager.clearMarkers()
+      window.FindManager.isVisible && window.FindManager.isVisible() && window.FindManager.hide()
+    }
+
     const el = document.querySelector(`.tab[data-id="${tabId}"]`)
     el && el.remove()
     CacheManager.removeTab(tabId)
@@ -293,6 +301,7 @@ window.TabManager = (() => {
 
     if (0 === tabs.length) {
       activeId = null
+      window.__allTabsClosed = true
       onCloseCb && onCloseCb()
     } else if (isActive) {
       const next = tabs[Math.min(idx, tabs.length - 1)]
@@ -322,6 +331,38 @@ window.TabManager = (() => {
       draggedEl = container.querySelector(`.tab[data-id="${draggedId}"]`),
       targetEl = container.querySelector(`.tab[data-id="${targetId}"]`)
     draggedEl && targetEl && (fromIdx < toIdx ? targetEl.after(draggedEl) : targetEl.before(draggedEl))
+    CacheManager.markDirty()
+    saveOrder()
+  }
+
+  function getTabOrder() {
+    return tabs.map(t => t.id)
+  }
+
+  function saveOrder() {
+    const ids = getTabOrder()
+    window.api && window.api.storeSet && window.api.storeSet('tabOrder', ids)
+  }
+
+  function loadOrder() {
+    if (!window.api || !window.api.storeGet) return
+    window.api.storeGet('tabOrder').then(savedIds => {
+      if (!savedIds || !Array.isArray(savedIds) || savedIds.length === 0) return
+      const idSet = new Set(tabs.map(t => t.id))
+      const validIds = savedIds.filter(id => idSet.has(id))
+      if (validIds.length === 0) return
+      tabs.sort((a, b) => {
+        const ia = validIds.indexOf(a.id),
+          ib = validIds.indexOf(b.id)
+        return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib)
+      })
+      const container = document.getElementById('tabs-container')
+      if (!container) return
+      tabs.forEach(t => {
+        const el = container.querySelector(`.tab[data-id="${t.id}"]`)
+        el && container.appendChild(el)
+      })
+    })
   }
 
   return (
@@ -362,6 +403,8 @@ window.TabManager = (() => {
         onCloseCb = cb
       },
       syncUnsavedClass: syncUnsavedClass,
+      saveOrder: saveOrder,
+      loadOrder: loadOrder,
       get activeTabId() {
         return activeId
       },

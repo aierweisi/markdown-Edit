@@ -3,18 +3,23 @@ window.CacheManager = (() => {
     intervalMs = 1e4,
     lastHash = '',
     dirty = true,
-    lockPromise = null,
-    unlock = null
+    _persistLockAcquired = false
+  // 持久化缓存已保存的快照，增量保存时只重新序列化变化的 tab
+  const lastSavedTabs = new Map()  // tabId → cachedTabData
 
   async function acquireLock() {
-    while (lockPromise) await lockPromise
-    lockPromise = new Promise(resolve => { unlock = resolve })
+    const startTime = Date.now()
+    while (_persistLockAcquired) {
+      if (Date.now() - startTime > 5000) {
+        console.warn('[Cache] Persist lock wait timeout (5s), forcing release')
+        break
+      }
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+    _persistLockAcquired = true
   }
   function releaseLock() {
-    const u = unlock
-    lockPromise = null
-    unlock = null
-    u && u()
+    _persistLockAcquired = false
   }
 
   function startTimer() {
@@ -31,30 +36,75 @@ window.CacheManager = (() => {
   }
 
   async function saveToStore() {
-    if (window.__isSaving || !dirty) return
+    if (window.__isSaving || _persistLockAcquired || !dirty) return
     dirty = false
     const activeTab = TabManager.getActive(),
       activeId = activeTab ? activeTab.id : null
     activeTab && (activeTab.scrollTop = EditorManager.getScrollTop())
 
-    const cache = {
-      tabs: TabManager.getAllTabs().map(function (tab) {
-        return {
-          id: tab.id,
+    // 增量序列化：只对 active tab 做 getValue()，非活跃 tab 复用上次保存的快照
+    const allTabs = TabManager.getAllTabs()
+    const tabs = []
+
+    for (const tab of allTabs) {
+      const id = tab.id
+      if (id === activeId) {
+        // 活跃 tab：总是重新序列化（内容可能已变化）
+        const content = tab.doc ? tab.doc.getValue() : (tab.content || '')
+        const tabData = {
+          id: id,
           title: tab.title,
           filePath: tab.filePath,
-          content: tab.doc ? tab.doc.getValue() : (tab.content || ''),
+          content: content,
           scrollTop: tab.scrollTop || 0,
           cursorPos: tab.doc ? tab.doc.getCursor() : { line: 0, ch: 0 },
           modified: tab.modified,
         }
-      }),
+        lastSavedTabs.set(id, tabData)
+        tabs.push(tabData)
+      } else {
+        // 非活跃 tab：复用快照（如果快照仍有效）
+        const cached = lastSavedTabs.get(id)
+        if (
+          cached &&
+          cached.title === tab.title &&
+          cached.filePath === tab.filePath &&
+          cached.modified === tab.modified &&
+          cached.scrollTop === (tab.scrollTop || 0)
+        ) {
+          tabs.push(cached)
+        } else {
+          // 快照失效（标题/路径/修改状态变化）：重新序列化
+          const content = tab.doc ? tab.doc.getValue() : (tab.content || '')
+          const tabData = {
+            id: id,
+            title: tab.title,
+            filePath: tab.filePath,
+            content: content,
+            scrollTop: tab.scrollTop || 0,
+            cursorPos: tab.doc ? tab.doc.getCursor() : { line: 0, ch: 0 },
+            modified: tab.modified,
+          }
+          lastSavedTabs.set(id, tabData)
+          tabs.push(tabData)
+        }
+      }
+    }
+
+    // 清理已关闭 tab 的快照
+    const currentIds = new Set(allTabs.map(t => t.id))
+    for (const key of lastSavedTabs.keys()) {
+      if (!currentIds.has(key)) lastSavedTabs.delete(key)
+    }
+
+    const cache = {
+      tabs: tabs,
       activeTabId: activeId,
       savedAt: Date.now(),
     }
 
     const hashObj = {
-      tabs: cache.tabs.map(t => ({ id: t.id, content: t.content, modified: t.modified })),
+      tabs: tabs.map(t => ({ id: t.id, content: t.content, modified: t.modified })),
       activeId,
     }
     const hashStr = JSON.stringify(hashObj)
@@ -136,6 +186,9 @@ window.CacheManager = (() => {
       const newActiveId = oldActiveId ? idMap[oldActiveId] : null
       const firstId = newActiveId || (cache.tabs.length > 0 ? idMap[cache.tabs[0].id] : null)
       firstId && requestAnimationFrame(() => {
+        // 守卫：如果 tab 系统已被清空或目标 tab 已被删除，则跳过激活
+        const allTabs = TabManager.getAllTabs()
+        if (!allTabs || allTabs.length === 0 || !allTabs.some(t => t.id === firstId)) return
         // 确保在 tab 激活前欢迎页覆盖层已被隐藏
         const overlay = document.getElementById('welcome-overlay')
         overlay && overlay.classList.add('hidden')
@@ -146,6 +199,7 @@ window.CacheManager = (() => {
       await window.api.storeSet('cache', {})
     },
     removeTab: async function (tabId) {
+      lastSavedTabs.delete(tabId)
       const cache = await window.api.storeGet('cache')
       if (cache && cache.tabs && Array.isArray(cache.tabs)) {
         cache.tabs = cache.tabs.filter(t => t.id !== tabId)

@@ -5,9 +5,24 @@ window.PreviewManager = (() => {
     headingAnchors = [],
     scrollSource = null,
     debounceTimer = null,
-    lastMd = ''
+    headingAnchorDebounceTimer = null
   const mermaidCache = new Map()
   const MAX_MERMAID_CACHE = 50
+  let mermaidObserver = null
+  let markdownWorker = null
+  let renderSeq = 0  // 递增序列号，用于丢弃过期 worker 响应
+
+  async function renderMermaidBlock(block) {
+    const src = block.getAttribute('data-mermaid-src') || block.textContent
+    try {
+      const { svg } = await mermaid.render(`m-${block.id}-svg`, src)
+      cacheMermaid(src, svg)
+      block.innerHTML = svg
+      block.classList.add('mermaid-rendered')
+    } catch (err) {
+      block.innerHTML = `<pre class="mermaid-error">Mermaid 渲染错误：${escapeHtml(err.message || String(err))}</pre>`
+    }
+  }
 
   function cacheMermaid(key, svg) {
     if (mermaidCache.size >= MAX_MERMAID_CACHE) {
@@ -25,7 +40,27 @@ window.PreviewManager = (() => {
     }, 120)
   }
 
-  const mathExprs = []
+  function buildHeadingAnchors(text) {
+    headingAnchors = []
+    if (!previewBody) return
+    try {
+      const tokens = marked.lexer(text || ''),
+        children = Array.from(previewBody.children)
+      let lineNum = 0,
+        childIdx = 0
+      for (const token of tokens) {
+        if ('space' === token.type) {
+          lineNum += (token.raw.match(/\n/g) || []).length
+          continue
+        }
+        const el = children[childIdx++]
+        el && headingAnchors.push({ line: lineNum, el: el })
+        lineNum += token.raw ? (token.raw.match(/\n/g) || []).length : 0
+      }
+    } catch (_err) {
+      headingAnchors = []
+    }
+  }
 
   function escapeHtml(text) {
     return String(text).replace(
@@ -38,161 +73,173 @@ window.PreviewManager = (() => {
     imageState = null
 
   function closeLightbox() {
-    lightboxEl &&
-      (lightboxEl._cleanup && lightboxEl._cleanup(),
-        lightboxEl.remove(),
+    if (!lightboxEl) return
+    lightboxEl._cleanup && lightboxEl._cleanup()
+    document.body.style.overflow = ''
+    lightboxEl.classList.add('image-lightbox-closing')
+    const onTransitionEnd = () => {
+      lightboxEl && (lightboxEl.remove(),
         (lightboxEl = null),
-        (imageState = null),
-        (document.body.style.overflow = ''))
+        (imageState = null))
+    }
+    lightboxEl.addEventListener('transitionend', onTransitionEnd, { once: !0 })
+    // 如果过渡动画意外未触发，300ms 后强制清理
+    setTimeout(() => {
+      if (lightboxEl && lightboxEl.classList.contains('image-lightbox-closing')) {
+        lightboxEl.removeEventListener('transitionend', onTransitionEnd)
+        onTransitionEnd()
+      }
+    }, 300)
   }
 
-  function render(mdContent) {
-    if (mdContent === lastMd) return
-    // 编辑-only 模式下跳过渲染
+  // 同步渲染管线（无 worker 时的兜底路径 / 内联测试用）
+  function renderSync(mdContent) {
+    const text = mdContent || ''
+    const mathExprs = []
+    const mathProcessed = text
+      .replace(/\$\$([\s\S]+?)\$\$/g, (m, expr) => `\n\n@@MATHBLOCK${mathExprs.push({ display: !0, expr }) - 1}@@\n\n`)
+      .replace(/(^|[^\\$])$([^$\n]+?)$(?!\d)/g, (m, before, expr) => `${before}@@MATHINLINE${mathExprs.push({ display: !1, expr }) - 1}@@`)
+    let html = marked.parse(mathProcessed)
+    html = html
+      .replace(/@@MATHBLOCK(\d+)@@/g, (m, idx) => {
+        const e = mathExprs[+idx]
+        return e ? (() => { try { return `<div class="math-block">${katex.renderToString(e.expr, { displayMode: !0, throwOnError: !1 })}</div>` } catch (err) { return `<pre class="math-error">${escapeHtml(e.expr)}</pre>` } })() : ''
+      })
+      .replace(/@@MATHINLINE(\d+)@@/g, (m, idx) => {
+        const e = mathExprs[+idx]
+        return e ? (() => { try { return katex.renderToString(e.expr, { displayMode: !1, throwOnError: !1 }) } catch (err) { return `<code class="math-error">${escapeHtml(e.expr)}</code>` } })() : ''
+      })
+    return html
+  }
+
+  // 通过 Web Worker 异步渲染（不阻塞主线程）
+  function renderViaWorker(mdContent) {
+    return new Promise((resolve, reject) => {
+      const seq = ++renderSeq
+      const timeout = setTimeout(() => {
+        markdownWorker.removeEventListener('message', onMsg)
+        reject(new Error('Worker timeout'))
+      }, 15000)
+      function onMsg(e) {
+        markdownWorker.removeEventListener('message', onMsg)
+        clearTimeout(timeout)
+        if (seq !== renderSeq) return  // 过期响应，丢弃
+        if (e.data && e.data.html !== undefined) resolve(e.data.html)
+        else reject(new Error(e.data && e.data.error || 'Worker error'))
+      }
+      markdownWorker.addEventListener('message', onMsg)
+      markdownWorker.postMessage({ text: mdContent || '' })
+    })
+  }
+
+  // 公共后处理：DOMPurify + DOM 更新 + 图片路径 + Mermaid + heading anchors
+  function applyHtml(html, mdContent) {
+    // Sanitize
+    if (window.DOMPurify) {
+      html = DOMPurify.sanitize(html, {
+        ADD_TAGS: ['mtable','mtr','mtd','mrow','mi','mn','mo','msup','msub','mfrac','mspace','mstyle','msqrt','munder','mover','munderover','semantics','annotation'],
+        ADD_ATTR: ['target', 'data-mermaid-src'],
+        FORBID_TAGS: ['style', 'iframe', 'object', 'embed', 'form', 'input'],
+        FORBID_ATTR: ['style'],
+        ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|data|file):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
+      })
+    }
+
+    const container = document.getElementById('preview-container')
+    const savedScrollTop = container ? container.scrollTop : 0
+
+    requestAnimationFrame(() => {
+      // 增量 DOM 更新
+      if (window.morphdom) {
+        morphdom(previewBody, `<article class="markdown-body">${html}</article>`, {
+          childrenOnly: true,
+          onBeforeElUpdated: (fromEl, toEl) => {
+            if (fromEl.classList.contains('mermaid-rendered') && !toEl.classList.contains('mermaid-rendered')) return false
+            return true
+          },
+        })
+      } else {
+        previewBody.innerHTML = html
+      }
+    })
+
+    // Resolve relative image paths
+    ;(function () {
+      if (!previewBody || !window.TabManager) return
+      const active = TabManager.getActive && TabManager.getActive()
+      if (!active || !active.filePath) return
+      const lastSlash = Math.max(active.filePath.lastIndexOf('\\'), active.filePath.lastIndexOf('/'))
+      if (lastSlash < 0) return
+      const baseUrl = 'file:///' + active.filePath.slice(0, lastSlash).replace(/\\/g, '/').replace(/^\/+/, '') + '/',
+        hasProtocol = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|data:|blob:)/i
+      previewBody.querySelectorAll('img').forEach(img => {
+        const src = img.getAttribute('src')
+        if (src && !hasProtocol.test(src))
+          try { img.src = new URL(src, baseUrl).href } catch (_err) {}
+      })
+    })()
+
+    container && (container.scrollTop = savedScrollTop)
+
+    // Build heading anchor index
+    if (mdContent && mdContent.length > 50000) {
+      clearTimeout(headingAnchorDebounceTimer)
+      headingAnchorDebounceTimer = setTimeout(() => { buildHeadingAnchors(mdContent); headingAnchorDebounceTimer = null }, 500)
+    } else {
+      buildHeadingAnchors(mdContent || '')
+    }
+
+    // Task list checkboxes
+    previewBody.querySelectorAll('li > input[type="checkbox"]').forEach(cb => {
+      cb.removeAttribute('disabled')
+      cb.classList.add('task-list-checkbox')
+      cb.parentElement.classList.add('task-list-item')
+    })
+
+    // Mermaid lazy rendering
+    mermaidIdCounter = 0
+    const mermaidBlocks = previewBody.querySelectorAll('.mermaid-block:not(.mermaid-rendered)')
+    if (mermaidBlocks.length && window.mermaid) {
+      mermaidBlocks.forEach(block => {
+        const src = block.getAttribute('data-mermaid-src') || block.textContent
+        if (mermaidCache.has(src)) {
+          if (block.innerHTML !== mermaidCache.get(src)) block.innerHTML = mermaidCache.get(src)
+          block.classList.add('mermaid-rendered')
+        } else {
+          if (!mermaidObserver) {
+            mermaidObserver = new IntersectionObserver((entries) => {
+              entries.forEach(entry => {
+                if (entry.isIntersecting) { const b = entry.target; mermaidObserver.unobserve(b); renderMermaidBlock(b) }
+              })
+            }, { rootMargin: '200px 0px' })
+          }
+          mermaidObserver.observe(block)
+        }
+      })
+    }
+
+  }
+
+  async function render(mdContent) {
     const mainArea = document.getElementById('main-area')
     if (mainArea && mainArea.classList.contains('view-editor-only')) {
-      lastMd = mdContent
       return
     }
-    lastMd = mdContent
-    previewBody &&
-      (function () {
-        try {
-            const container = document.getElementById('preview-container'),
-              savedScrollTop = container ? container.scrollTop : 0
-            mermaidIdCounter = 0
+    if (!previewBody) return
 
-            // Extract math expressions
-            const text = mdContent || ''
-            mathExprs.length = 0
-            const mathProcessed = text
-                  .replace(
-                    /\$\$([\s\S]+?)\$\$/g,
-                    (match, expr) => `\n\n@@MATHBLOCK${mathExprs.push({ display: !0, expr }) - 1}@@\n\n`,
-                  )
-                  .replace(
-                    /(^|[^\\$])$([^$\n]+?)$(?!\d)/g,
-                    (match, before, expr) => `${before}@@MATHINLINE${mathExprs.push({ display: !1, expr }) - 1}@@`,
-                  )
-
-            let html = marked.parse(mathProcessed)
-
-            // Render math
-            html = html
-              .replace(/@@MATHBLOCK(\d+)@@/g, (match, idx) => {
-                const expr = mathExprs[+idx]
-                if (!expr) return ''
-                try {
-                  return `<div class="math-block">${katex.renderToString(expr.expr, { displayMode: !0, throwOnError: !1 })}</div>`
-                } catch (err) {
-                  return `<pre class="math-error">${escapeHtml(expr.expr)}</pre>`
-                }
-              })
-              .replace(/@@MATHINLINE(\d+)@@/g, (match, idx) => {
-                const expr = mathExprs[+idx]
-                if (!expr) return ''
-                try {
-                  return katex.renderToString(expr.expr, { displayMode: !1, throwOnError: !1 })
-                } catch (err) {
-                  return `<code class="math-error">${escapeHtml(expr.expr)}</code>`
-                }
-              })
-
-            // Sanitize
-            window.DOMPurify &&
-              (html = DOMPurify.sanitize(html, {
-                ADD_TAGS: [
-                  'mtable', 'mtr', 'mtd', 'mrow', 'mi', 'mn', 'mo',
-                  'msup', 'msub', 'mfrac', 'mspace', 'mstyle', 'msqrt',
-                  'munder', 'mover', 'munderover', 'semantics', 'annotation',
-                ],
-                ADD_ATTR: ['target', 'data-mermaid-src'],
-                FORBID_TAGS: ['style', 'iframe', 'object', 'embed', 'form', 'input'],
-                FORBID_ATTR: ['style'],
-                ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|data|file):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
-              }))
-
-            requestAnimationFrame(() => {
-              previewBody.innerHTML = html
-            })
-
-            // Resolve relative image paths
-            ;(function () {
-              if (!previewBody || !window.TabManager) return
-              const active = TabManager.getActive && TabManager.getActive()
-              if (!active || !active.filePath) return
-              const lastSlash = Math.max(active.filePath.lastIndexOf('\\'), active.filePath.lastIndexOf('/'))
-              if (lastSlash < 0) return
-              const baseUrl = 'file:///' + active.filePath.slice(0, lastSlash).replace(/\\/g, '/').replace(/^\/+/, '') + '/',
-                hasProtocol = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#|data:|blob:)/i
-              previewBody.querySelectorAll('img').forEach(img => {
-                const src = img.getAttribute('src')
-                if (src && !hasProtocol.test(src))
-                  try {
-                    img.src = new URL(src, baseUrl).href
-                  } catch (_err) {}
-              })
-            })()
-
-            container && (container.scrollTop = savedScrollTop)
-
-            // Build heading anchor index
-            ;(function (text) {
-              headingAnchors = []
-              if (!previewBody) return
-              try {
-                const tokens = marked.lexer(text || ''),
-                  children = Array.from(previewBody.children)
-                let lineNum = 0,
-                  childIdx = 0
-                for (const token of tokens) {
-                  if ('space' === token.type) {
-                    lineNum += (token.raw.match(/\n/g) || []).length
-                    continue
-                  }
-                  const el = children[childIdx++]
-                  el && headingAnchors.push({ line: lineNum, el: el })
-                  lineNum += token.raw ? (token.raw.match(/\n/g) || []).length : 0
-                }
-              } catch (_err) {
-                headingAnchors = []
-              }
-            })(mdContent || '')
-
-            // Task list checkboxes
-            previewBody.querySelectorAll('li > input[type="checkbox"]').forEach(cb => {
-              cb.removeAttribute('disabled')
-              cb.classList.add('task-list-checkbox')
-              cb.parentElement.classList.add('task-list-item')
-            })
-
-            // Mermaid rendering
-            const mermaidBlocks = previewBody.querySelectorAll('.mermaid-block:not(.mermaid-rendered)')
-            mermaidBlocks.length &&
-              window.mermaid &&
-              mermaidBlocks.forEach(async block => {
-                const src = block.getAttribute('data-mermaid-src') || block.textContent
-                if (mermaidCache.has(src)) {
-                  if (block.innerHTML !== mermaidCache.get(src)) {
-                    block.innerHTML = mermaidCache.get(src)
-                  }
-                  block.classList.add('mermaid-rendered')
-                } else
-                  try {
-                    const { svg } = await mermaid.render(`m-${block.id}-svg`, src)
-                    cacheMermaid(src, svg)
-                    block.innerHTML = svg
-                    block.classList.add('mermaid-rendered')
-                  } catch (err) {
-                    block.innerHTML = `<pre class="mermaid-error">Mermaid 渲染错误：${escapeHtml(err.message || String(err))}</pre>`
-                  }
-              })
-
-            lastMd = mdContent
-          } catch (err) {
-            previewBody.innerHTML = `<pre class="render-error">${escapeHtml(err.message || String(err))}</pre>`
-          }
-        })()
+    try {
+      let html
+      if (markdownWorker) {
+        html = await renderViaWorker(mdContent)
+      } else {
+        html = renderSync(mdContent)
+      }
+      applyHtml(html, mdContent)
+    } catch (err) {
+      console.error('[Preview] 渲染错误:', err)
+      const errMsg = escapeHtml(err.message || String(err))
+      previewBody.innerHTML = `<div class="render-error">\n  <div class="render-error-icon">⚠️</div>\n  <div class="render-error-msg">渲染错误：${errMsg}</div>\n  <button class="render-error-retry btn-secondary" onclick="PreviewManager.render(window.EditorManager ? EditorManager.getValue() : '')">重试</button>\n</div>`
+    }
   }
 
   function syncPreviewScroll() {
@@ -223,7 +270,14 @@ window.PreviewManager = (() => {
   return {
     init: function () {
       previewBody = document.getElementById('preview-body')
-      window.mermaid && mermaid.initialize({ startOnLoad: !1, theme: 'default', securityLevel: 'loose' })
+      window.mermaid && mermaid.initialize({ startOnLoad: !1, theme: 'default', securityLevel: 'sandbox' })
+
+      // 尝试创建 Web Worker 进行异步 Markdown 解析
+      try {
+        markdownWorker = new Worker('js/markdown-worker.js')
+      } catch (_w) {
+        markdownWorker = null  // Worker 创建失败时降级为同步解析
+      }
 
       const renderer = new marked.Renderer(),
         headingCounters = new Map()
@@ -352,6 +406,11 @@ window.PreviewManager = (() => {
               const hintEl = overlay.querySelector('.image-lightbox-hint')
               imageState = { scale: 1, tx: 0, ty: 0, dragging: !1, sx: 0, sy: 0 }
               const updateTransform = () => {
+                // 边缘吸附：缩放小于 1 时，吸附到居中位置
+                if (imageState.scale < 1) {
+                  imageState.tx = 0
+                  imageState.ty = 0
+                }
                 imgEl.style.transform = `translate(${imageState.tx}px, ${imageState.ty}px) scale(${imageState.scale})`
                 hintEl.textContent = Math.round(100 * imageState.scale) + '%'
                 hintEl.classList.add('show')
@@ -386,6 +445,33 @@ window.PreviewManager = (() => {
                 imageState.sy = evt.clientY - imageState.ty
                 imgEl.classList.add('dragging')
               })
+              // 触摸事件支持：拖拽平移
+              const onTouchStart = evt => {
+                if (1 === evt.touches.length) {
+                  evt.preventDefault()
+                  imageState.dragging = !0
+                  imageState.sx = evt.touches[0].clientX - imageState.tx
+                  imageState.sy = evt.touches[0].clientY - imageState.ty
+                  imgEl.classList.add('dragging')
+                }
+              }
+              const onTouchMove = evt => {
+                if (1 === evt.touches.length && imageState && imageState.dragging) {
+                  evt.preventDefault()
+                  imageState.tx = evt.touches[0].clientX - imageState.sx
+                  imageState.ty = evt.touches[0].clientY - imageState.sy
+                  updateTransform()
+                }
+              }
+              const onTouchEnd = () => {
+                if (imageState) {
+                  imageState.dragging = !1
+                  imgEl && imgEl.classList.remove('dragging')
+                }
+              }
+              imgEl.addEventListener('touchstart', onTouchStart, { passive: !1 })
+              imgEl.addEventListener('touchmove', onTouchMove, { passive: !1 })
+              imgEl.addEventListener('touchend', onTouchEnd)
               window.addEventListener('mousemove', onMouseMove)
               window.addEventListener('mouseup', onMouseUp)
               imgEl.addEventListener('dblclick', () => {
@@ -445,7 +531,7 @@ window.PreviewManager = (() => {
       const linkEl = document.getElementById('hljs-theme')
       if (linkEl) linkEl.href = `vendor/hljs/styles/${isDark ? 'github-dark' : 'github'}.min.css`
       window.mermaid &&
-        (mermaid.initialize({ startOnLoad: !1, theme: isDark ? 'dark' : 'default', securityLevel: 'loose' }),
+        (mermaid.initialize({ startOnLoad: !1, theme: isDark ? 'dark' : 'default', securityLevel: 'sandbox' }),
           window.EditorManager && render(EditorManager.getValue()))
     },
   }

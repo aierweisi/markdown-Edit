@@ -44,6 +44,8 @@
   let restored = false
   if (cache) {
     await CacheManager.restore(cache)
+    // 缓存恢复后，应用持久化的 tab 拖拽排序
+    TabManager.loadOrder && TabManager.loadOrder()
     restored = true
   }
   if (!restored) {
@@ -121,11 +123,12 @@
 
   async function autoSaveToFile() {
     if (window.__isSaving) return
+    window.__isSaving = true
     const tabId = pendingAutoSaveTabId
     pendingAutoSaveTabId = null
-    if (!tabId) return
+    if (!tabId) { window.__isSaving = false; return }
     const tab = TabManager.getTab(tabId)
-    if (!tab || !tab.filePath || !tab.modified) return
+    if (!tab || !tab.filePath || !tab.modified) { window.__isSaving = false; return }
     const content = tab.doc ? tab.doc.getValue() : ''
     // 使用持久化锁防止与缓存写入同时进行
     if (window.CacheManager && CacheManager.acquirePersistLock) {
@@ -147,6 +150,7 @@
       if (window.CacheManager && CacheManager.releasePersistLock) {
         CacheManager.releasePersistLock()
       }
+      window.__isSaving = false
     }
   }
 
@@ -196,7 +200,12 @@
   let panesSwapped = false
 
   async function initPaneOrder() {
-    const order = await window.api.storeGet('paneOrder')
+    let order
+    try {
+      order = await window.api.storeGet('paneOrder')
+    } catch (_err) {
+      order = null
+    }
     if (order === 'editor-first') {
       applyPaneSwap(false, false)
     } else {
@@ -322,7 +331,13 @@
     TabManager.setActive(tab.id)
     EditorManager.focus()
   })
-  TabManager.onClose(() => updateWelcomeVisibility())
+  TabManager.onClose(() => {
+    if (window.__allTabsClosed) {
+      welcomeDismissed = false
+      window.__allTabsClosed = false
+    }
+    updateWelcomeVisibility()
+  })
 
   // Welcome page
   const welcomeNew = document.getElementById('welcome-new')
@@ -383,7 +398,7 @@
     const result = await ExportManager.importFile()
     if (!result) return
     const { filePath, content, name } = result
-    const title = name.replace(/\.(md|markdown|txt)$/i, '')
+    const title = name.replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '')
     // 关闭当前的空白草稿标签
     const cur = TabManager.getActive()
     const curIsBlankDraft =
@@ -425,7 +440,7 @@
       return
     }
     const name = filePath.split(/[/\\]/).pop()
-    const title = name.replace(/\.(md|markdown|txt)$/i, '')
+    const title = name.replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '')
     // 关闭当前的空白草稿标签（未命名、未修改、无路径）
     const cur = TabManager.getActive()
     const curIsBlankDraft =
@@ -444,6 +459,7 @@
     welcomeDismissed = true
     // 强制隐藏欢迎页覆盖层
     document.getElementById('welcome-overlay')?.classList.add('hidden')
+    EventBus && EventBus.emit('file:opened', { filePath, title })
   }
 
   async function saveFile(saveAs = false) {
@@ -463,7 +479,7 @@
       const defaultPath = exportDir ? exportDir + '/' + baseName + '.md' : baseName + '.md'
       const result = await window.api.dialogSaveFile({
         defaultPath: defaultPath,
-        filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }],
+        filters: [{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkdn', 'mkd', 'mdwn', 'txt'] }],
       })
       if (result.canceled || !result.filePath) return
       filePath = result.filePath
@@ -471,18 +487,21 @@
       if (dir) window.api.storeSet('exportDir', dir)
     }
     window.__isSaving = true
-    const saveResult = await window.api.fileSave(filePath, content)
-    window.__isSaving = false
-    if (saveResult.success) {
-      const baseName = filePath.split(/[/\\]/).pop().replace(/\.(md|markdown)$/i, '')
-      const titleToUse = tab.filePath && tab.filePath === filePath ? tab.title : baseName
-      TabManager.setTabTitle(tab.id, titleToUse, filePath)
-      TabManager.markModified(tab.id, false)
-      CacheManager.markDirty()
-      if (window.RecentFiles) await RecentFiles.add(filePath)
-      ExportManager.showToast(`已保存: ${filePath.split(/[/\\]/).pop()}`)
-    } else {
-      ExportManager.showToast('保存失败: ' + saveResult.error, 'error')
+    try {
+      const saveResult = await window.api.fileSave(filePath, content)
+      if (saveResult.success) {
+        const baseName = filePath.split(/[/\\]/).pop().replace(/\.(md|markdown)$/i, '')
+        const titleToUse = tab.filePath && tab.filePath === filePath ? tab.title : baseName
+        TabManager.setTabTitle(tab.id, titleToUse, filePath)
+        TabManager.markModified(tab.id, false)
+        CacheManager.markDirty()
+        if (window.RecentFiles) await RecentFiles.add(filePath)
+        ExportManager.showToast(`已保存: ${filePath.split(/[/\\]/).pop()}`)
+      } else {
+        ExportManager.showToast('保存失败: ' + saveResult.error, 'error')
+      }
+    } finally {
+      window.__isSaving = false
     }
   }
 
@@ -494,8 +513,8 @@
   // 菜单事件：来自菜单栏点击或快捷键（IPC）
   // 标记机制：如果快捷键已由渲染层 keydown 处理，跳过 IPC 重复调用
   window.api.onMenuEvent(event => {
-    if (window.__menuEventPending) {
-      window.__menuEventPending = false
+    if (window.__menuEventPending > 0) {
+      window.__menuEventPending--
       return
     }
     const content = EditorManager.getValue()
@@ -518,35 +537,59 @@
       case 'menu-templates': TemplateManager.open(); break
       case 'menu-recent': if (window.RecentFiles) RecentFiles.open(); break
     }
+    // 通过 EventBus 广播菜单事件，供其他模块监听
+    EventBus && EventBus.emit('menu:' + event, { content })
   })
 
   // Handle file open from OS
   if (window.api && window.api.onOpenFileFromOS) {
     window.api.onOpenFileFromOS(async ({ filePath, content, name }) => {
-      const title = (name || '').replace(/\.(md|markdown|txt)$/i, '') || '未命名'
+      // 防重标记：同一文件路径已处理过则跳过，避免重复收到 IPC
+      if (window._fileOpenedViaOS === filePath) return
+      window._fileOpenedViaOS = filePath
+
+      const title = (name || '').replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '') || '未命名'
       const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
       if (existed) {
         TabManager.setActive(existed.id)
         EditorManager.focus()
         return
       }
-      const cur = TabManager.getActive()
-      const curIsBlankDraft =
-        cur && !cur.filePath && !cur.modified &&
-        (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
+
+      // 情况1：缓存刚被恢复 → 清理所有恢复出来的标签页，只保留传入文件
+      // 情况2：hasPendingFile 为 true → 清理所有旧标签页，避免残留空白草稿
+      if (restored || hasPendingFile) {
+        const allTabs = TabManager.getAllTabs()
+        for (const t of allTabs) {
+          await TabManager.closeTab(t.id)
+        }
+      } else {
+        // 情况3：正常打开，仅关闭当前空白草稿标签
+        const cur = TabManager.getActive()
+        const curIsBlankDraft =
+          cur && !cur.filePath && !cur.modified &&
+          (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
+        if (curIsBlankDraft) {
+          await TabManager.closeTab(cur.id)
+        }
+      }
+
       const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
       TabManager.setActive(tab.id)
       TabManager.markModified(tab.id, false)
       PreviewManager.render(content)
       if (window.RecentFiles) await RecentFiles.add(filePath)
-      if (curIsBlankDraft) {
-        await TabManager.closeTab(cur.id)
-      }
       welcomeDismissed = true
       document.getElementById('welcome-overlay')?.classList.add('hidden')
       EditorManager.focus()
     })
   }
+
+  // Listen for 'app:open-file' custom event dispatched by editor.js
+  document.addEventListener('app:open-file', (event) => {
+    const filePath = event.detail?.filePath
+    if (filePath) openFileByPath(filePath)
+  })
 
   // Recent files
   if (window.RecentFiles) {
@@ -593,16 +636,17 @@
   }
 
   // Keyboard shortcuts
-  // 标记 __menuEventPending 防止菜单 IPC 重复执行相同操作
+  // 使用计数器而非布尔值，防止菜单 IPC 在连续快捷键操作时漏标记
+  window.__menuEventPending = 0
   document.addEventListener('keydown', evt => {
     const ctrl = evt.ctrlKey || evt.metaKey
-    if (ctrl && evt.key === 's') { evt.preventDefault(); window.__menuEventPending = true; saveFile(evt.shiftKey) }
-    if (ctrl && evt.key === 'n') { evt.preventDefault(); window.__menuEventPending = true; newFile() }
-    if (ctrl && evt.key === 'o') { evt.preventDefault(); window.__menuEventPending = true; openFile() }
-    if (ctrl && evt.shiftKey && (evt.key === 'R' || evt.key === 'r')) { evt.preventDefault(); window.__menuEventPending = true; if (window.RecentFiles) RecentFiles.open() }
+    if (ctrl && evt.key === 's') { evt.preventDefault(); window.__menuEventPending++; saveFile(evt.shiftKey) }
+    if (ctrl && evt.key === 'n') { evt.preventDefault(); window.__menuEventPending++; newFile() }
+    if (ctrl && evt.key === 'o') { evt.preventDefault(); window.__menuEventPending++; openFile() }
+    if (ctrl && evt.shiftKey && (evt.key === 'R' || evt.key === 'r')) { evt.preventDefault(); window.__menuEventPending++; if (window.RecentFiles) RecentFiles.open() }
     if (ctrl && evt.shiftKey && (evt.key === 'P' || evt.key === 'p')) { evt.preventDefault(); if (window.CommandPalette) CommandPalette.open() }
     if (ctrl && evt.key === '\\') {
-      evt.preventDefault(); window.__menuEventPending = true
+      evt.preventDefault(); window.__menuEventPending++
       if (evt.shiftKey) { togglePaneSwap() }
       else { const idx = viewModes.indexOf(viewMode); setViewMode(viewModes[(idx + 1) % viewModes.length]) }
     }
@@ -635,36 +679,6 @@
       if (evt.target === tabbar || evt.target === tabsContainer) { evt.preventDefault(); newFile() }
     })
   }
-
-  // Drag & drop to open .md files
-  document.addEventListener('dragover', evt => {
-    if (evt.dataTransfer?.types.includes('Files')) {
-      evt.preventDefault()
-      evt.dataTransfer.dropEffect = 'copy'
-    }
-  })
-  document.addEventListener('drop', async evt => {
-    const files = evt.dataTransfer?.files
-    if (!files || files.length === 0) return
-    const isMdFile = name => /\.(md|markdown|txt)$/i.test(name)
-    const mdFiles = Array.from(files).filter(f => isMdFile(f.name))
-    if (mdFiles.length === 0) return
-    evt.preventDefault()
-    for (const file of mdFiles) {
-      try {
-        const text = await file.text()
-        const title = file.name.replace(/\.(md|markdown|txt)$/i, '')
-        const tab = TabManager.createTab({ title: title, content: text, filePath: file.path || null })
-        TabManager.setActive(tab.id)
-        TabManager.markModified(tab.id, false)
-        welcomeDismissed = true
-        document.getElementById('welcome-overlay')?.classList.add('hidden')
-      } catch (err) {
-        console.error('[Drop] 打开文件失败:', file.name, err)
-      }
-    }
-    EditorManager.focus()
-  })
 
   // Initial render
   PreviewManager.render(EditorManager.getValue())
@@ -708,4 +722,46 @@
       window.api.winIsMaximized().then(updateMaxIcon)
     }, 50)
   })
+
+  // ── Drag-and-drop file opening ──
+  if (editorContainer) {
+    editorContainer.addEventListener('dragover', (evt) => {
+      evt.preventDefault()
+      editorContainer.classList.add('drag-over')
+    })
+    editorContainer.addEventListener('dragleave', () => {
+      editorContainer.classList.remove('drag-over')
+    })
+    editorContainer.addEventListener('drop', async (evt) => {
+      evt.preventDefault()
+      editorContainer.classList.remove('drag-over')
+      const files = Array.from(evt.dataTransfer.files)
+      for (const file of files) {
+        const name = file.name.toLowerCase()
+        if (!name.endsWith('.md') && !name.endsWith('.markdown') && !name.endsWith('.mdown') && !name.endsWith('.txt')) {
+          ExportManager.showToast('不支持的文件类型: ' + file.name, 'error')
+          continue
+        }
+        const readResult = await window.api.fileRead(file.path)
+        if (readResult.success) {
+          const title = file.name.replace(/\.(md|markdown|mdown|txt)$/i, '')
+          const existed = TabManager.getAllTabs().find(t => t.filePath === file.path)
+          if (existed) {
+            TabManager.setActive(existed.id)
+          } else {
+            const tab = TabManager.createTab({ title, filePath: file.path, content: readResult.content })
+            TabManager.setActive(tab.id)
+            TabManager.markModified(tab.id, false)
+            PreviewManager.render(readResult.content)
+          }
+          if (window.RecentFiles) await RecentFiles.add(file.path)
+          welcomeDismissed = true
+          document.getElementById('welcome-overlay')?.classList.add('hidden')
+        } else {
+          ExportManager.showToast('打开失败: ' + readResult.error, 'error')
+        }
+      }
+      EventBus && EventBus.emit('files:dropped', { files })
+    })
+  }
 })()

@@ -1,5 +1,6 @@
 window.SettingsManager = (() => {
   let settings = {}
+  let escapeHandler = null
 
   async function loadFromStore() {
     const keys = ['theme', 'fontSize', 'editorFont', 'autoSaveInterval', 'exportDir', 'exportNamingRule', 'imageSaveDir']
@@ -66,6 +67,10 @@ window.SettingsManager = (() => {
   }
 
   function closeModal() {
+    if (escapeHandler) {
+      document.removeEventListener('keydown', escapeHandler)
+      escapeHandler = null
+    }
     const overlay = document.getElementById('settings-overlay')
     overlay.classList.remove('open')
     overlay.classList.add('closing')
@@ -203,6 +208,10 @@ window.SettingsManager = (() => {
       syncThemeBtns(settings.theme)
       switchPanel(panelId)
       document.getElementById('settings-overlay').classList.add('open')
+      escapeHandler = (evt) => {
+        if ('Escape' === evt.key) closeModal()
+      }
+      document.addEventListener('keydown', escapeHandler)
     },
     close: closeModal,
     save: saveSettings,

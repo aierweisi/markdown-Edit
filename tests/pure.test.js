@@ -189,6 +189,18 @@ describe('isMdFile', () => {
     expect(isMdFile('doc.mdown')).toBe(true)
   })
 
+  it('matches .mkdn', () => {
+    expect(isMdFile('doc.mkdn')).toBe(true)
+  })
+
+  it('matches .mkd', () => {
+    expect(isMdFile('doc.mkd')).toBe(true)
+  })
+
+  it('matches .mdwn', () => {
+    expect(isMdFile('doc.mdwn')).toBe(true)
+  })
+
   it('rejects .html', () => {
     expect(isMdFile('index.html')).toBe(false)
   })
@@ -728,7 +740,7 @@ describe('Template content resolution', () => {
 // ─── isMdFile ──────────────────────────────────────────────────
 describe('isMdFile', () => {
   function isMdFile(name) {
-    return /\.(md|markdown|txt)$/i.test(name)
+    return /\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i.test(name)
   }
 
   it('accepts .md files', () => {
@@ -743,6 +755,13 @@ describe('isMdFile', () => {
 
   it('accepts .txt extension', () => {
     expect(isMdFile('notes.txt')).toBe(true)
+  })
+
+  it('accepts .mdown / .mkdn / .mkd / .mdwn', () => {
+    expect(isMdFile('doc.mdown')).toBe(true)
+    expect(isMdFile('doc.mkdn')).toBe(true)
+    expect(isMdFile('doc.mkd')).toBe(true)
+    expect(isMdFile('doc.mdwn')).toBe(true)
   })
 
   it('rejects non-markdown extensions', () => {
@@ -808,5 +827,112 @@ describe('isPathSafe edge cases', () => {
     expect(isPathSafeCheck(undefined)).toBe(false)
     expect(isPathSafeCheck(123)).toBe(false)
     expect(isPathSafeCheck('')).toBe(false)
+  })
+})
+
+// ─── isPathSafeCheck（独立路径穿越检测，不依赖 require('path')）────
+describe('isPathSafeCheck', () => {
+  function isPathSafeCheck(p) {
+    if (!p || typeof p !== 'string') return false
+    // 检查路径穿越：禁止包含 ..
+    if (p.includes('..')) return false
+    return true
+  }
+
+  it('rejects paths with .. traversal', () => {
+    expect(isPathSafeCheck('../../etc/passwd')).toBe(false)
+    expect(isPathSafeCheck('foo/../../bar')).toBe(false)
+  })
+
+  it('allows normal paths', () => {
+    expect(isPathSafeCheck('/home/user/docs/file.md')).toBe(true)
+    expect(isPathSafeCheck('C:\\Users\\test\\doc.md')).toBe(true)
+  })
+
+  it('rejects null / undefined / non-string', () => {
+    expect(isPathSafeCheck(null)).toBe(false)
+    expect(isPathSafeCheck(undefined)).toBe(false)
+    expect(isPathSafeCheck(123)).toBe(false)
+    expect(isPathSafeCheck('')).toBe(false)
+  })
+})
+
+// ─── isSafeUrl（扩展测试：javascript: XSS 防护）────────────────────
+describe('isSafeUrl', () => {
+  function isSafeUrl(url) {
+    return /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i.test(url)
+  }
+
+  it('allows https URLs', () => {
+    expect(isSafeUrl('https://example.com')).toBe(true)
+  })
+
+  it('rejects javascript: URLs', () => {
+    expect(isSafeUrl('javascript:alert(1)')).toBe(false)
+  })
+
+  it('allows relative paths', () => {
+    expect(isSafeUrl('./relative/path')).toBe(true)
+    expect(isSafeUrl('#anchor')).toBe(true)
+  })
+
+  it('allows http:// URLs', () => {
+    expect(isSafeUrl('http://example.com')).toBe(true)
+  })
+})
+
+// ─── CacheManager 数据结构验证（cache 对象的字段完整性）─────────────
+describe('CacheManager data structure', () => {
+  // 模拟 cache 对象结构：tabs/activeTabId/savedAt
+  function validateCacheStructure(cache) {
+    if (!cache || typeof cache !== 'object') return false
+    if (!Array.isArray(cache.tabs)) return false
+    if (typeof cache.activeTabId !== 'string' && typeof cache.activeTabId !== 'number') return false
+    if (typeof cache.savedAt !== 'number' && typeof cache.savedAt !== 'string') return false
+    return true
+  }
+
+  it('validates a complete cache object', () => {
+    const cache = {
+      tabs: [{ id: 't1', content: 'hello', modified: false }],
+      activeTabId: 't1',
+      savedAt: Date.now(),
+    }
+    expect(validateCacheStructure(cache)).toBe(true)
+  })
+
+  it('rejects cache missing tabs field', () => {
+    const cache = { activeTabId: 't1', savedAt: Date.now() }
+    expect(validateCacheStructure(cache)).toBe(false)
+  })
+
+  it('rejects cache with non-array tabs', () => {
+    const cache = { tabs: 'not-array', activeTabId: 't1', savedAt: Date.now() }
+    expect(validateCacheStructure(cache)).toBe(false)
+  })
+
+  it('rejects cache missing activeTabId', () => {
+    const cache = { tabs: [], savedAt: Date.now() }
+    expect(validateCacheStructure(cache)).toBe(false)
+  })
+
+  it('rejects cache missing savedAt', () => {
+    const cache = { tabs: [], activeTabId: 't1' }
+    expect(validateCacheStructure(cache)).toBe(false)
+  })
+
+  it('rejects null / undefined', () => {
+    expect(validateCacheStructure(null)).toBe(false)
+    expect(validateCacheStructure(undefined)).toBe(false)
+  })
+
+  it('validates cache with numeric savedAt', () => {
+    const cache = { tabs: [], activeTabId: 't1', savedAt: 1700000000000 }
+    expect(validateCacheStructure(cache)).toBe(true)
+  })
+
+  it('validates cache with string savedAt (ISO)', () => {
+    const cache = { tabs: [], activeTabId: 't1', savedAt: '2024-01-01T00:00:00.000Z' }
+    expect(validateCacheStructure(cache)).toBe(true)
   })
 })
