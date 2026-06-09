@@ -135,19 +135,17 @@ async function createWindow() {
   }), mainWindow.on("maximize", () => mainWindow.webContents.send("win-maximized", !0)), 
   mainWindow.on("unmaximize", () => mainWindow.webContents.send("win-maximized", !1)), 
   mainWindow.on("close", e => {
-    e.preventDefault();
     if (!isQuitting) {
-      // 非退出：隐藏到托盘，同步保存缓存
-      mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()").catch(() => {});
-      mainWindow.hide();
-      return;
+      // 关闭按钮：保存缓存后退出应用
+      isQuitting = !0;
+      e.preventDefault();
+      mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()")
+        .catch(() => {})
+        .then(() => {
+          try { mainWindow && !mainWindow.isDestroyed() && mainWindow.destroy(); } catch (_) {}
+        });
     }
-    // 退出时：async 场景用 .then() 链，保存缓存后再销毁窗口
-    mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()")
-      .catch(() => {})
-      .then(() => {
-        try { mainWindow && !mainWindow.isDestroyed() && mainWindow.destroy(); } catch (_) {}
-      });
+    // isQuitting 已为 true（托盘菜单退出或二次回调）：不阻止关闭，让 Electron 正常退出
   }), setupTray(), setupMenu();
 }
 
