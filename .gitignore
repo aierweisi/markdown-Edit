@@ -38,6 +38,8 @@ build
 renderer/js/
 renderer/css/main.css
 renderer/index.html
+renderer/vendor/*
+!renderer/vendor/morphdom/
 
 # temp files from build/commit scripts
 .msg
