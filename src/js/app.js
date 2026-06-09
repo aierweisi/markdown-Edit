@@ -68,9 +68,10 @@
 
   const settings = await SettingsManager.load()
   // 首次 await 之后从 store 读取待打开文件路径（此时 store IPC 已就绪）
+  // 注意：不覆盖 IPC 回调已获取的完整数据（含 content），仅回溯 store 路径
   try {
     const storedPath = await window.api.storeGet('_pendingOpenFile')
-    if (storedPath) {
+    if (storedPath && !pendingOSFileData) {
       pendingOSFileData = { filePath: storedPath }
       await window.api.storeSet('_pendingOpenFile', null)
     }
