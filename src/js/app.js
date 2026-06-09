@@ -556,9 +556,9 @@
         return
       }
 
-      // 情况1：缓存刚被恢复 → 清理所有恢复出来的标签页，只保留传入文件
-      // 情况2：hasPendingFile 为 true → 清理所有旧标签页，避免残留空白草稿
-      if (restored || hasPendingFile) {
+      // 仅启动时通过 OS 打开文件才清理所有标签页
+      // restored 标志在缓存恢复后保持 true，但不能用于判断后续 OS 文件打开
+      if (hasPendingFile) {
         const allTabs = TabManager.getAllTabs()
         for (const t of allTabs) {
           await TabManager.closeTab(t.id)

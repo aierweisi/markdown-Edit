@@ -118,6 +118,10 @@ window.PreviewManager = (() => {
       const seq = ++renderSeq
       const timeout = setTimeout(() => {
         markdownWorker.removeEventListener('message', onMsg)
+        // Worker 超时：销毁并降级为同步渲染，避免重复超时
+        console.warn('[Preview] Worker 响应超时，降级为同步渲染')
+        markdownWorker.terminate()
+        markdownWorker = null
         reject(new Error('Worker timeout'))
       }, 15000)
       function onMsg(e) {
