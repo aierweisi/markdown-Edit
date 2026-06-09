@@ -138,6 +138,7 @@
     }
   }
   // 缓存恢复完成后，处理 OS 文件关联打开的标签（延迟创建，避免被 restore 的清空 DOM 破坏）
+  try {
   if (pendingOSFileData) {
     const { filePath, content, name } = pendingOSFileData
     if (content) {
@@ -156,6 +157,9 @@
       }
     })
     pendingOSFileData = null
+  }
+  } catch (err) {
+    console.error('[App] OS文件打开处理失败，继续初始化:', err)
   }
   requestAnimationFrame(() => updateWelcomeVisibility())
   await CacheManager.loadInterval()
