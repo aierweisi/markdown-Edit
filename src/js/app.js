@@ -57,6 +57,7 @@
   let lastRenderTime = 0
   let autoSaveTimer = null
   let pendingAutoSaveTabId = null
+  let welcomeDismissed = false  // 用户主动操作后不再显示欢迎页
 
   function updateStatusStats(value, wordCount) {
     const text = value || ''
@@ -91,20 +92,30 @@
   function updateWelcomeVisibility() {
     const overlay = document.getElementById('welcome-overlay')
     if (!overlay) return
+    // 用户已主动操作过（新建/打开文件、输入内容），不再显示欢迎页
+    if (welcomeDismissed) {
+      overlay.classList.add('hidden')
+      return
+    }
     const tabs = TabManager.getAllTabs()
-    if (tabs.length === 0) {
+    // 只有在没有任何标签，或唯一标签是空白未保存时才显示欢迎页
+    if (
+      tabs.length === 0 ||
+      (tabs.length === 1 &&
+        (() => {
+          const active = TabManager.getActive()
+          return (
+            active &&
+            !active.filePath &&
+            !active.modified &&
+            (!EditorManager.getValue() || EditorManager.getValue().length === 0)
+          )
+        })())
+    ) {
       overlay.classList.remove('hidden')
     } else {
-      const active = TabManager.getActive()
-      if (
-        active &&
-        !active.filePath &&
-        (!EditorManager.getValue() || EditorManager.getValue().length === 0)
-      ) {
-        overlay.classList.remove('hidden')
-      } else {
-        overlay.classList.add('hidden')
-      }
+      overlay.classList.add('hidden')
+      welcomeDismissed = true
     }
   }
 
@@ -357,6 +368,9 @@
   function newFile(templateContent) {
     const tab = TabManager.createTab({ title: '未命名', content: templateContent || '' })
     TabManager.setActive(tab.id)
+    welcomeDismissed = true
+    // 强制隐藏欢迎页覆盖层，避免阻挡编辑器交互
+    document.getElementById('welcome-overlay')?.classList.add('hidden')
     EditorManager.focus()
   }
 
@@ -365,18 +379,28 @@
     if (!result) return
     const { filePath, content, name } = result
     const title = name.replace(/\.(md|markdown|txt)$/i, '')
+    // 关闭当前的空白草稿标签
+    const cur = TabManager.getActive()
+    const curIsBlankDraft =
+      cur && !cur.filePath && !cur.modified &&
+      (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
     const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
     TabManager.setActive(tab.id)
     TabManager.markModified(tab.id, false)
     CacheManager.markDirty()
     PreviewManager.render(content)
     if (window.RecentFiles) await RecentFiles.add(filePath)
+    if (curIsBlankDraft) {
+      await TabManager.closeTab(cur.id)
+    }
     if (document.activeElement && document.activeElement.blur) {
       document.activeElement.blur()
     }
     if (window.api && window.api.focusWindow) {
       await window.api.focusWindow()
     }
+    welcomeDismissed = true
+    document.getElementById('welcome-overlay')?.classList.add('hidden')
     EditorManager.focus()
     requestAnimationFrame(() => EditorManager.focus())
   }
@@ -397,13 +421,23 @@
     }
     const name = filePath.split(/[/\\]/).pop()
     const title = name.replace(/\.(md|markdown|txt)$/i, '')
+    // 关闭当前的空白草稿标签（未命名、未修改、无路径）
+    const cur = TabManager.getActive()
+    const curIsBlankDraft =
+      cur && !cur.filePath && !cur.modified &&
+      (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
     const tab = TabManager.createTab({ title: title, filePath: filePath, content: readResult.content })
     TabManager.setActive(tab.id)
     TabManager.markModified(tab.id, false)
     CacheManager.markDirty()
     PreviewManager.render(readResult.content)
     if (window.RecentFiles) await RecentFiles.add(filePath)
+    if (curIsBlankDraft) {
+      await TabManager.closeTab(cur.id)
+    }
     EditorManager.focus()
+    // 强制隐藏欢迎页覆盖层
+    document.getElementById('welcome-overlay')?.classList.add('hidden')
   }
 
   async function saveFile(saveAs = false) {
@@ -496,6 +530,8 @@
       if (curIsBlankDraft) {
         await TabManager.closeTab(cur.id)
       }
+      welcomeDismissed = true
+      document.getElementById('welcome-overlay')?.classList.add('hidden')
       EditorManager.focus()
     })
   }
