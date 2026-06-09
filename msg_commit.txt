@@ -1,9 +1,6 @@
-fix: 安全加固 - CSP收紧/Tray跨平台/ESLint清理
+perf: CSS 优化 - 移除未用动画/csso安全去重压缩
 
-- #1: CSP 增加 connect-src 'self' / worker-src 'self' 限制
-- #18: Tray 图标跨平台兼容 - Win用.ico，macOS/Linux用.png
-- 修复 ESLint 配置 vitest.config.js 解析错误
-- 修复 test 中 marked 改为 const、无用转义符清理
-- main.js 多余分号清理
+- #13: 移除未使用的 modal-in 关键帧动画
+- 使用 csso(restructure:true) 压缩去重，80KB→69KB(-14%)
 
 Co-Authored-By: AtomCode (deepseek-v4-flash) <noreply@atomgit.com>
