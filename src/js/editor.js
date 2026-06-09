@@ -272,12 +272,15 @@ window.EditorManager = (() => {
             handled || evt.preventDefault()
             handled = !0
             await handleImageFile(f)
-          } else if (f.path) {
-            const ext = f.name.split('.').pop().toLowerCase()
-            if (['md', 'markdown', 'txt'].includes(ext)) {
-              handled || evt.preventDefault()
-              handled = !0
-              window.dispatchEvent(new CustomEvent('app:open-file', { detail: { filePath: f.path } }))
+          } else {
+            const filePath = await window.api.getFilePath(f)
+            if (filePath) {
+              const ext = f.name.split('.').pop().toLowerCase()
+              if (['md', 'markdown', 'mdown', 'mkdn', 'mkd', 'mdwn', 'txt'].includes(ext)) {
+                handled || evt.preventDefault()
+                handled = !0
+                window.dispatchEvent(new CustomEvent('app:open-file', { detail: { filePath } }))
+              }
             }
           }
         }

@@ -155,7 +155,7 @@ window.CacheManager = (() => {
       )
       return validTabs.length > 0 ? ((cache.tabs = validTabs), cache) : !1
     },
-    restore: async function (cache) {
+    restore: async function (cache, opts = {}) {
       document.getElementById('tabs-container').innerHTML = ''
       const idMap = {}  // old ID → new ID
       for (const tabData of cache.tabs) {
@@ -186,6 +186,7 @@ window.CacheManager = (() => {
       const newActiveId = oldActiveId ? idMap[oldActiveId] : null
       const firstId = newActiveId || (cache.tabs.length > 0 ? idMap[cache.tabs[0].id] : null)
       firstId && requestAnimationFrame(() => {
+        if (opts.skipActivate) return
         // 守卫：如果 tab 系统已被清空或目标 tab 已被删除，则跳过激活
         const allTabs = TabManager.getAllTabs()
         if (!allTabs || allTabs.length === 0 || !allTabs.some(t => t.id === firstId)) return

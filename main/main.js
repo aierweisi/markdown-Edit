@@ -97,6 +97,8 @@ function sendOpenFile(e) {
 
 async function createWindow() {
   await initStore();
+  // 将待打开文件路径写入 store，渲染器初始化时可同步读取（比 IPC 更早到达）
+  pendingOpenFile && store.set("_pendingOpenFile", pendingOpenFile), pendingOSFile && store.set("_pendingOSFile", !0);
   const {width: e, height: n} = store.get("windowBounds"), i = path.join(__dirname, "../assets/icons/icon.ico"), a = "darwin" === process.platform;
   mainWindow = new BrowserWindow({
     width: e,
@@ -123,7 +125,7 @@ async function createWindow() {
       mode: "detach"
     });
   }), mainWindow.webContents.on("did-finish-load", () => {
-    pendingOpenFile && (sendOpenFile(pendingOpenFile), pendingOpenFile = null);
+    pendingOpenFile && (sendOpenFile(pendingOpenFile), pendingOpenFile = null), pendingOSFile = !1;
   }), mainWindow.on("resize", () => {
     const [e, n] = mainWindow.getSize();
     store.set("windowBounds", {

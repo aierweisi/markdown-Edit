@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("api", {
   exportPDF: e => ipcRenderer.invoke("export-pdf", e),
   shellShowItem: e => ipcRenderer.invoke("shell-show-item", e),
   clearCache: () => ipcRenderer.invoke("clear-cache"),
+  getFilePath: file => require("electron").webUtils.getPathForFile(file),
   focusWindow: () => ipcRenderer.invoke("focus-window"),
   hasPendingFile: () => ipcRenderer.invoke("has-pending-file"),
   updateTitleBar: e => ipcRenderer.invoke("update-titlebar", e),

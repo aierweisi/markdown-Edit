@@ -9,8 +9,39 @@
   // 避免 OS 文件 IPC 回调在 TDZ 中访问它抛出 ReferenceError
   let hasPendingFile
 
+  // 从 store 读取 OS 文件关联打开的路径（ main 进程在 loadFile 前已写入）
+  let pendingOSFileData = null
+  let appReady = false  // 初始化完成后设为 true，second-instance 时直接创建标签
+
   // Handle file open from OS — 必须在第一个 await 之前注册，否则 did-finish-load
   // 发送的 IPC 事件会因监听器未注册而丢失
+
+  // 创建/切换到 OS 文件标签
+  function openOSFileTab({ filePath, content, name }) {
+    const title = (name || '').replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '') || '未命名'
+    const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
+    if (existed) {
+      TabManager.setActive(existed.id)
+      EditorManager.focus()
+      return
+    }
+    const cur = TabManager.getActive()
+    const curIsBlankDraft =
+      cur && !cur.filePath && !cur.modified &&
+      (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
+    const tab = TabManager.createTab({ title, filePath, content })
+    TabManager.setActive(tab.id)
+    TabManager.markModified(tab.id, false)
+    PreviewManager.render(content)
+    if (window.RecentFiles) void RecentFiles.add(filePath)
+    if (curIsBlankDraft) {
+      void TabManager.closeTab(cur.id)
+    }
+    welcomeDismissed = true
+    document.getElementById('welcome-overlay')?.classList.add('hidden')
+    EditorManager.focus()
+  }
+
   if (window.api && window.api.onOpenFileFromOS) {
     window.api.onOpenFileFromOS(async ({ filePath, content, name }) => {
       // 防重标记：2 秒内同一路径重复 IPC 则跳过（比永久标记更健壮）
@@ -20,33 +51,14 @@
       openedAt[filePath] = now
       window._fileOpenedTimestamps = openedAt
 
-      const title = (name || '').replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '') || '未命名'
-      const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
-      if (existed) {
-        TabManager.setActive(existed.id)
-        EditorManager.focus()
-        return
-      }
-
-      // 始终只关闭空白草稿，不触碰其他标签页
-      // hasPendingFile 只控制是否恢复缓存，不影响标签页清理
-      const cur = TabManager.getActive()
-      const curIsBlankDraft =
-        cur && !cur.filePath && !cur.modified &&
-        (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
-      if (curIsBlankDraft) {
-        await TabManager.closeTab(cur.id)
+      if (appReady) {
+        // 已初始化完毕（second-instance），直接创建标签
+        openOSFileTab({ filePath, content, name })
+      } else {
+        // 初始化中（首次启动），保存数据等待 restore 后处理
+        pendingOSFileData = { filePath, content, name }
       }
       hasPendingFile = false
-
-      const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
-      TabManager.setActive(tab.id)
-      TabManager.markModified(tab.id, false)
-      PreviewManager.render(content)
-      if (window.RecentFiles) await RecentFiles.add(filePath)
-      welcomeDismissed = true
-      document.getElementById('welcome-overlay')?.classList.add('hidden')
-      EditorManager.focus()
     })
     // 文件读取失败（如已被删除）时显示错误提示
     window.api.onOpenFileError(({ filePath, error }) => {
@@ -55,6 +67,15 @@
   }
 
   const settings = await SettingsManager.load()
+  // 首次 await 之后从 store 读取待打开文件路径（此时 store IPC 已就绪）
+  try {
+    const storedPath = await window.api.storeGet('_pendingOpenFile')
+    if (storedPath) {
+      pendingOSFileData = { filePath: storedPath }
+      await window.api.storeSet('_pendingOpenFile', null)
+    }
+  } catch (_) {}
+
   SettingsManager.applyTheme(settings.theme)
   SettingsManager.applyFontSize(settings.fontSize)
   SettingsManager.applyEditorFont(settings.editorFont)
@@ -90,10 +111,11 @@
   })
 
   hasPendingFile = window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false
-  const cache = hasPendingFile ? false : await CacheManager.checkAndRestore()
+  // 始终尝试恢复缓存（OS 文件关联启动时仍应恢复上次标签页）
+  const cache = await CacheManager.checkAndRestore()
   let restored = false
   if (cache) {
-    await CacheManager.restore(cache)
+    await CacheManager.restore(cache, { skipActivate: !!pendingOSFileData })
     // 缓存恢复后，应用持久化的 tab 拖拽排序
     TabManager.loadOrder && TabManager.loadOrder()
     restored = true
@@ -106,9 +128,31 @@
       TabManager.setActive(tab.id)
     }
   }
+  // 缓存恢复完成后，处理 OS 文件关联打开的标签（延迟创建，避免被 restore 的清空 DOM 破坏）
+  if (pendingOSFileData) {
+    const { filePath, content, name } = pendingOSFileData
+    if (content) {
+      // 从 IPC 获取到完整内容（second-instance 但 store 已设值的边界情况）
+      openOSFileTab({ filePath, content, name })
+    } else if (filePath) {
+      // 仅从 store 获取到路径（首次启动），走 openFileByPath 读取
+      await openFileByPath(filePath)
+    }
+    // restore 的 requestAnimationFrame 可能抢激活，下一帧夺回
+    const _osPath = filePath
+    requestAnimationFrame(() => {
+      if (_osPath) {
+        const tab = TabManager.getAllTabs().find(t => t.filePath === _osPath)
+        if (tab) TabManager.setActive(tab.id)
+      }
+    })
+    pendingOSFileData = null
+  }
   requestAnimationFrame(() => updateWelcomeVisibility())
   await CacheManager.loadInterval()
   CacheManager.start()
+  // 初始化完成，后续 IPC（second-instance）可直接创建标签
+  appReady = true
 
   let changeTimer = null
   let autoSaveTimer = null
@@ -403,14 +447,16 @@
 
   // Toolbar buttons
   const btnNew = document.getElementById('btn-new')
-  btnNew.addEventListener('mousedown', evt => evt.preventDefault())
-  btnNew.addEventListener('click', () => newFile())
-  document.getElementById('btn-open').addEventListener('click', () => openFile())
-  document.getElementById('btn-save').addEventListener('click', () => saveFile())
-  document.getElementById('btn-template').addEventListener('click', () => TemplateManager.open())
-  document.getElementById('btn-theme').addEventListener('click', () => SettingsManager.toggleTheme())
-  document.getElementById('btn-settings').addEventListener('click', () => SettingsManager.open())
-  document.getElementById('status-palette-hint').addEventListener('click', () => CommandPalette?.open?.())
+  if (btnNew) {
+    btnNew.addEventListener('mousedown', evt => evt.preventDefault())
+    btnNew.addEventListener('click', () => newFile())
+  }
+  document.getElementById('btn-open')?.addEventListener('click', () => openFile())
+  document.getElementById('btn-save')?.addEventListener('click', () => saveFile())
+  document.getElementById('btn-template')?.addEventListener('click', () => TemplateManager.open())
+  document.getElementById('btn-theme')?.addEventListener('click', () => SettingsManager.toggleTheme())
+  document.getElementById('btn-settings')?.addEventListener('click', () => SettingsManager.open())
+  document.getElementById('status-palette-hint')?.addEventListener('click', () => CommandPalette?.open?.())
 
   // Format buttons
   document.querySelectorAll('.fmt-btn').forEach(btn => {
@@ -745,20 +791,20 @@
   document.addEventListener('dragover', (evt) => {
     if (evt.dataTransfer?.types.includes('Files')) {
       evt.preventDefault()
-      editorContainer?.classList.add('drag-over')
+      document.getElementById('editor-container')?.classList.add('drag-over')
     }
   })
   document.addEventListener('dragleave', (evt) => {
-    // 只有离开编辑器区域才移除视觉反馈
-    if (!evt.relatedTarget || !editorContainer?.contains(evt.relatedTarget)) {
-      editorContainer?.classList.remove('drag-over')
+    if (!evt.relatedTarget || !document.getElementById('editor-container')?.contains(evt.relatedTarget)) {
+      document.getElementById('editor-container')?.classList.remove('drag-over')
     }
   })
   document.addEventListener('drop', async (evt) => {
+    const alreadyHandled = evt.defaultPrevented
     evt.preventDefault()
-    editorContainer?.classList.remove('drag-over')
-    // 检查拖放目标是否在编辑器区域内
-    if (!editorContainer?.contains(evt.target)) return
+    document.getElementById('editor-container')?.classList.remove('drag-over')
+    // editor.js 已处理（图片插入或 app:open-file 转发），跳过
+    if (alreadyHandled) return
     const files = Array.from(evt.dataTransfer.files || [])
     for (const file of files) {
       const name = file.name.toLowerCase()
@@ -766,19 +812,24 @@
         ExportManager.showToast('不支持的文件类型: ' + file.name, 'error')
         continue
       }
-      const readResult = await window.api.fileRead(file.path)
+      const filePath = await window.api.getFilePath(file)
+      if (!filePath) {
+        ExportManager.showToast('打开失败: 无法获取文件路径', 'error')
+        continue
+      }
+      const readResult = await window.api.fileRead(filePath)
       if (readResult.success) {
         const title = file.name.replace(/\.(md|markdown|mdown|txt)$/i, '')
-        const existed = TabManager.getAllTabs().find(t => t.filePath === file.path)
+        const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
         if (existed) {
           TabManager.setActive(existed.id)
         } else {
-          const tab = TabManager.createTab({ title, filePath: file.path, content: readResult.content })
+          const tab = TabManager.createTab({ title, filePath: filePath, content: readResult.content })
           TabManager.setActive(tab.id)
           TabManager.markModified(tab.id, false)
           PreviewManager.render(readResult.content)
         }
-        if (window.RecentFiles) await RecentFiles.add(file.path)
+        if (window.RecentFiles) await RecentFiles.add(filePath)
         welcomeDismissed = true
         document.getElementById('welcome-overlay')?.classList.add('hidden')
       } else {
