@@ -135,7 +135,12 @@ window.CacheManager = (() => {
       const oldActiveId = cache.activeTabId || cache.tabs[0]?.id
       const newActiveId = oldActiveId ? idMap[oldActiveId] : null
       const firstId = newActiveId || (cache.tabs.length > 0 ? idMap[cache.tabs[0].id] : null)
-      firstId && setTimeout(() => TabManager.setActive(firstId), 100)
+      firstId && requestAnimationFrame(() => {
+        // 确保在 tab 激活前欢迎页覆盖层已被隐藏
+        const overlay = document.getElementById('welcome-overlay')
+        overlay && overlay.classList.add('hidden')
+        TabManager.setActive(firstId)
+      })
     },
     clearCache: async function () {
       await window.api.storeSet('cache', {})

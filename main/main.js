@@ -110,7 +110,7 @@ async function createWindow() {
     },
     backgroundColor: "#0a0a0c",
     show: !1
-  }), mainWindow.loadFile(path.join(__dirname, "../dist/index.html")), 
+  }), mainWindow.loadFile(app && app.isPackaged ? path.join(__dirname, "../index.html") : path.join(__dirname, "../dist/index.html")), 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show(), app.isPackaged || mainWindow.webContents.openDevTools({
       mode: "detach"
@@ -126,7 +126,11 @@ async function createWindow() {
   }), mainWindow.on("maximize", () => mainWindow.webContents.send("win-maximized", !0)), 
   mainWindow.on("unmaximize", () => mainWindow.webContents.send("win-maximized", !1)), 
   mainWindow.on("close", e => {
-    if (!isQuitting) return e.preventDefault(), mainWindow.hide(), !1;
+    if (!isQuitting) {
+      // 窗口关闭时同步保存缓存
+      mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()").catch(() => {});
+      return e.preventDefault(), mainWindow.hide(), !1;
+    }
   }), setupTray(), setupMenu();
 }
 
