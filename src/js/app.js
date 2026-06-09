@@ -1,4 +1,12 @@
 (async function () {
+  // 全局错误捕获：记录所有未捕获的异常到控制台
+  window.addEventListener('error', evt => {
+    console.error('[App] 全局未捕获错误:', evt.error || evt.message, evt)
+  })
+  window.addEventListener('unhandledrejection', evt => {
+    console.error('[App] 未处理的 Promise 拒绝:', evt.reason)
+  })
+  try {
   if (window.api && window.api.platform === 'darwin') {
     document.body.classList.add('platform-mac')
   }
@@ -839,4 +847,7 @@
     }
     EventBus && EventBus.emit('files:dropped', { files })
   })
+  } catch (err) {
+    console.error('[App] 初始化失败:', err)
+  }
 })()
