@@ -28,24 +28,16 @@
         return
       }
 
-      // 仅启动时通过 OS 打开文件才清理所有标签页
-      // restored 标志在缓存恢复后保持 true，但不能用于判断后续 OS 文件打开
-      if (hasPendingFile) {
-        const allTabs = TabManager.getAllTabs()
-        for (const t of allTabs) {
-          await TabManager.closeTab(t.id)
-        }
-        hasPendingFile = false  // 消耗标记，后续 OS 文件打开不再误删已有标签
-      } else {
-        // 仅关闭当前空白草稿标签
-        const cur = TabManager.getActive()
-        const curIsBlankDraft =
-          cur && !cur.filePath && !cur.modified &&
-          (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
-        if (curIsBlankDraft) {
-          await TabManager.closeTab(cur.id)
-        }
+      // 始终只关闭空白草稿，不触碰其他标签页
+      // hasPendingFile 只控制是否恢复缓存，不影响标签页清理
+      const cur = TabManager.getActive()
+      const curIsBlankDraft =
+        cur && !cur.filePath && !cur.modified &&
+        (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
+      if (curIsBlankDraft) {
+        await TabManager.closeTab(cur.id)
       }
+      hasPendingFile = false
 
       const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
       TabManager.setActive(tab.id)
