@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("api", {
   shellShowItem: e => ipcRenderer.invoke("shell-show-item", e),
   clearCache: () => ipcRenderer.invoke("clear-cache"),
   focusWindow: () => ipcRenderer.invoke("focus-window"),
+  hasPendingFile: () => ipcRenderer.invoke("has-pending-file"),
   updateTitleBar: e => ipcRenderer.invoke("update-titlebar", e),
   winMinimize: () => ipcRenderer.invoke("win-minimize"),
   winToggleMaximize: () => ipcRenderer.invoke("win-toggle-maximize"),

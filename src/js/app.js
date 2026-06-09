@@ -39,7 +39,8 @@
     requestAnimationFrame(() => EditorManager.focus())
   })
 
-  const cache = await CacheManager.checkAndRestore()
+  const hasPendingFile = window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false
+  const cache = hasPendingFile ? false : await CacheManager.checkAndRestore()
   let restored = false
   if (cache) {
     await CacheManager.restore(cache)

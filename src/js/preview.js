@@ -109,7 +109,7 @@ window.PreviewManager = (() => {
                 ADD_ATTR: ['target', 'data-mermaid-src'],
                 FORBID_TAGS: ['style', 'iframe', 'object', 'embed', 'form', 'input'],
                 FORBID_ATTR: ['style'],
-                ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
+                ALLOWED_URI_REGEXP: /^(?:(?:https?|ftp|mailto|data|file):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
               }))
 
             requestAnimationFrame(() => {

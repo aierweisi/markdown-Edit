@@ -429,7 +429,8 @@ function setupIPC() {
     } catch (e) {}
   }), ipcMain.handle("win-minimize", () => mainWindow && mainWindow.minimize()), ipcMain.handle("win-toggle-maximize", () => !!mainWindow && (mainWindow.isMaximized() ? (mainWindow.unmaximize(), 
   !1) : (mainWindow.maximize(), !0))), ipcMain.handle("win-close", () => mainWindow && mainWindow.close()), 
-  ipcMain.handle("win-is-maximized", () => !!mainWindow && mainWindow.isMaximized());
+  ipcMain.handle("win-is-maximized", () => !!mainWindow && mainWindow.isMaximized()),
+  ipcMain.handle("has-pending-file", () => !!pendingOpenFile);
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
