@@ -62,7 +62,7 @@ async function initStore() {
   });
 }
 
-let pendingOpenFile = null;
+let pendingOpenFile = null, pendingOSFile = false;
 
 function extractFileArg(e) {
   if (!e || 0 === e.length) return null;
@@ -450,7 +450,7 @@ function setupIPC() {
   }), ipcMain.handle("win-minimize", () => mainWindow && mainWindow.minimize()), ipcMain.handle("win-toggle-maximize", () => !!mainWindow && (mainWindow.isMaximized() ? (mainWindow.unmaximize(), 
   !1) : (mainWindow.maximize(), !0))), ipcMain.handle("win-close", () => mainWindow && mainWindow.close()), 
   ipcMain.handle("win-is-maximized", () => !!mainWindow && mainWindow.isMaximized()),
-  ipcMain.handle("has-pending-file", () => !!pendingOpenFile)
+  ipcMain.handle("has-pending-file", () => pendingOSFile)
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
@@ -461,9 +461,9 @@ gotTheLock ? (app.on("second-instance", (e, n) => {
   i && sendOpenFile(i), mainWindow && (mainWindow.isMinimized() && mainWindow.restore(), 
   mainWindow.isVisible() || mainWindow.show(), mainWindow.focus());
 }), app.on("open-file", (e, n) => {
-  e.preventDefault(), mainWindow ? sendOpenFile(n) : pendingOpenFile = n;
+  e.preventDefault(), mainWindow ? sendOpenFile(n) : (pendingOpenFile = n, pendingOSFile = !0);
 }), app.whenReady().then(() => {
-  pendingOpenFile = extractFileArg(process.argv), setupIPC(), createWindow();
+  pendingOpenFile = extractFileArg(process.argv), pendingOSFile = !!pendingOpenFile, setupIPC(), createWindow();
 })) : app.quit(), app.on("window-all-closed", () => {
   "darwin" !== process.platform && app.quit();
 }), app.on("before-quit", () => {
