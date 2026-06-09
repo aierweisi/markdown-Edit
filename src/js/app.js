@@ -5,13 +5,20 @@
   const editorContainer = document.getElementById('editor-container')
   EditorManager.init(editorContainer)
 
+  // 声明 hasPendingFile 变量，在第一个 await 之前分配变量槽位，
+  // 避免 OS 文件 IPC 回调在 TDZ 中访问它抛出 ReferenceError
+  let hasPendingFile
+
   // Handle file open from OS — 必须在第一个 await 之前注册，否则 did-finish-load
   // 发送的 IPC 事件会因监听器未注册而丢失
   if (window.api && window.api.onOpenFileFromOS) {
     window.api.onOpenFileFromOS(async ({ filePath, content, name }) => {
-      // 防重标记：同一文件路径已处理过则跳过，避免重复收到 IPC
-      if (window._fileOpenedViaOS === filePath) return
-      window._fileOpenedViaOS = filePath
+      // 防重标记：2 秒内同一路径重复 IPC 则跳过（比永久标记更健壮）
+      const now = Date.now()
+      const openedAt = window._fileOpenedTimestamps || {}
+      if (openedAt[filePath] && now - openedAt[filePath] < 2000) return
+      openedAt[filePath] = now
+      window._fileOpenedTimestamps = openedAt
 
       const title = (name || '').replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '') || '未命名'
       const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
@@ -90,7 +97,7 @@
     requestAnimationFrame(() => EditorManager.focus())
   })
 
-  let hasPendingFile = window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false
+  hasPendingFile = window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false
   const cache = hasPendingFile ? false : await CacheManager.checkAndRestore()
   let restored = false
   if (cache) {
