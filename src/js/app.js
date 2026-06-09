@@ -452,6 +452,13 @@
     const result = await ExportManager.importFile()
     if (!result) return
     const { filePath, content, name } = result
+    // 检查是否已打开
+    const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
+    if (existed) {
+      TabManager.setActive(existed.id)
+      EditorManager.focus()
+      return
+    }
     const title = name.replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '')
     // 关闭当前的空白草稿标签
     const cur = TabManager.getActive()
@@ -734,44 +741,50 @@
   })
 
   // ── Drag-and-drop file opening ──
-  if (editorContainer) {
-    editorContainer.addEventListener('dragover', (evt) => {
+  // 在 document 级别监听，避免 CodeMirror 内部 DOM 拦截 drop 事件
+  document.addEventListener('dragover', (evt) => {
+    if (evt.dataTransfer?.types.includes('Files')) {
       evt.preventDefault()
-      editorContainer.classList.add('drag-over')
-    })
-    editorContainer.addEventListener('dragleave', () => {
-      editorContainer.classList.remove('drag-over')
-    })
-    editorContainer.addEventListener('drop', async (evt) => {
-      evt.preventDefault()
-      editorContainer.classList.remove('drag-over')
-      const files = Array.from(evt.dataTransfer.files)
-      for (const file of files) {
-        const name = file.name.toLowerCase()
-        if (!name.endsWith('.md') && !name.endsWith('.markdown') && !name.endsWith('.mdown') && !name.endsWith('.txt')) {
-          ExportManager.showToast('不支持的文件类型: ' + file.name, 'error')
-          continue
-        }
-        const readResult = await window.api.fileRead(file.path)
-        if (readResult.success) {
-          const title = file.name.replace(/\.(md|markdown|mdown|txt)$/i, '')
-          const existed = TabManager.getAllTabs().find(t => t.filePath === file.path)
-          if (existed) {
-            TabManager.setActive(existed.id)
-          } else {
-            const tab = TabManager.createTab({ title, filePath: file.path, content: readResult.content })
-            TabManager.setActive(tab.id)
-            TabManager.markModified(tab.id, false)
-            PreviewManager.render(readResult.content)
-          }
-          if (window.RecentFiles) await RecentFiles.add(file.path)
-          welcomeDismissed = true
-          document.getElementById('welcome-overlay')?.classList.add('hidden')
-        } else {
-          ExportManager.showToast('打开失败: ' + readResult.error, 'error')
-        }
+      editorContainer?.classList.add('drag-over')
+    }
+  })
+  document.addEventListener('dragleave', (evt) => {
+    // 只有离开编辑器区域才移除视觉反馈
+    if (!evt.relatedTarget || !editorContainer?.contains(evt.relatedTarget)) {
+      editorContainer?.classList.remove('drag-over')
+    }
+  })
+  document.addEventListener('drop', async (evt) => {
+    evt.preventDefault()
+    editorContainer?.classList.remove('drag-over')
+    // 检查拖放目标是否在编辑器区域内
+    if (!editorContainer?.contains(evt.target)) return
+    const files = Array.from(evt.dataTransfer.files || [])
+    for (const file of files) {
+      const name = file.name.toLowerCase()
+      if (!name.endsWith('.md') && !name.endsWith('.markdown') && !name.endsWith('.mdown') && !name.endsWith('.txt')) {
+        ExportManager.showToast('不支持的文件类型: ' + file.name, 'error')
+        continue
       }
-      EventBus && EventBus.emit('files:dropped', { files })
-    })
-  }
+      const readResult = await window.api.fileRead(file.path)
+      if (readResult.success) {
+        const title = file.name.replace(/\.(md|markdown|mdown|txt)$/i, '')
+        const existed = TabManager.getAllTabs().find(t => t.filePath === file.path)
+        if (existed) {
+          TabManager.setActive(existed.id)
+        } else {
+          const tab = TabManager.createTab({ title, filePath: file.path, content: readResult.content })
+          TabManager.setActive(tab.id)
+          TabManager.markModified(tab.id, false)
+          PreviewManager.render(readResult.content)
+        }
+        if (window.RecentFiles) await RecentFiles.add(file.path)
+        welcomeDismissed = true
+        document.getElementById('welcome-overlay')?.classList.add('hidden')
+      } else {
+        ExportManager.showToast('打开失败: ' + readResult.error, 'error')
+      }
+    }
+    EventBus && EventBus.emit('files:dropped', { files })
+  })
 })()
