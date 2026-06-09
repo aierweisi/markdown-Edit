@@ -275,6 +275,11 @@ window.PreviewManager = (() => {
       // 尝试创建 Web Worker 进行异步 Markdown 解析
       try {
         markdownWorker = new Worker('js/markdown-worker.js')
+        markdownWorker.onerror = () => {
+          console.warn('[Preview] Worker 加载失败，降级为同步渲染')
+          markdownWorker.terminate()
+          markdownWorker = null
+        }
       } catch (_w) {
         markdownWorker = null  // Worker 创建失败时降级为同步解析
       }

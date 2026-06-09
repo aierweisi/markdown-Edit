@@ -66,9 +66,14 @@ let pendingOpenFile = null;
 
 function extractFileArg(e) {
   if (!e || 0 === e.length) return null;
-  for (let n = 1; n < e.length; n++) {
+  // Electron 打包后文件路径通常在 argv[1]（第一个位置参数），优先检查
+  if (e[1] && !e[1].startsWith("-") && "." !== e[1] && /\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i.test(e[1])) try {
+    if (fs.existsSync(e[1])) return path.resolve(e[1]);
+  } catch (e) {}
+  // 兼容开发环境：从末尾遍历查找
+  for (let n = e.length - 1; n >= 1; n--) {
     const i = e[n];
-    if (i && !i.startsWith("-") && "." !== i && !i.endsWith(".js") && /\.(md|markdown|txt)$/i.test(i)) try {
+    if (i && !i.startsWith("-") && "." !== i && !i.endsWith(".js") && /\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i.test(i)) try {
       if (fs.existsSync(i)) return path.resolve(i);
     } catch (e) {}
   }
@@ -126,11 +131,19 @@ async function createWindow() {
   }), mainWindow.on("maximize", () => mainWindow.webContents.send("win-maximized", !0)), 
   mainWindow.on("unmaximize", () => mainWindow.webContents.send("win-maximized", !1)), 
   mainWindow.on("close", e => {
+    e.preventDefault();
     if (!isQuitting) {
-      // 窗口关闭时同步保存缓存
+      // 非退出：隐藏到托盘，同步保存缓存
       mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()").catch(() => {});
-      return e.preventDefault(), mainWindow.hide(), !1;
+      mainWindow.hide();
+      return;
     }
+    // 退出时：async 场景用 .then() 链，保存缓存后再销毁窗口
+    mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()")
+      .catch(() => {})
+      .then(() => {
+        try { mainWindow && !mainWindow.isDestroyed() && mainWindow.destroy(); } catch (_) {}
+      });
   }), setupTray(), setupMenu();
 }
 
@@ -327,27 +340,34 @@ function setupIPC() {
   }), ipcMain.handle("image-save", async (e, {baseDir: n, fileName: i, dataBase64: a, imageDir: t}) => {
     try {
       const rawDir = t && String(t).trim() || "assets";
-      if (rawDir.includes("..")) return {
-        success: !1,
-        error: "invalid imageDir path"
-      };
+      // (1) 绝对路径：用 isPathSafe 校验；相对路径：禁止 .. 穿越
+      if (path.isAbsolute(rawDir)) {
+        if (!isPathSafe(rawDir)) return { success: !1, error: "invalid imageDir path" };
+      } else {
+        if (rawDir.includes("..")) return { success: !1, error: "invalid imageDir path" };
+      }
       const o = path.isAbsolute(rawDir);
       let s;
       s = o ? rawDir : n ? path.join(path.resolve(n), rawDir) : path.join(app.getPath("userData"), "pasted-images"), 
       fs.existsSync(s) || fs.mkdirSync(s, {
         recursive: !0
       });
-      let r = i, l = path.join(s, r), c = 1;
+      // (2) 对 fileName 做路径穿越过滤（移除 .. 和 / \ 等路径分隔符）
+      let r = i ? i.replace(/[/\\]/g, "_").replace(/\.\./g, "").replace(/^\.+/, "") : "image.png";
+      let l = path.join(s, r), c = 1;
       for (;fs.existsSync(l); ) {
-        const ext = path.extname(i), base = path.basename(i, ext);
+        const ext = path.extname(r), base = path.basename(r, ext);
         r = `${base}-${c}${ext}`, l = path.join(s, r), c++;
       }
+      // (3) 对最终文件路径做 isPathSafe 检查
+      if (!isPathSafe(l)) return { success: !1, error: "invalid final path" };
       const d = Buffer.from(a, "base64"), u = d[0], m = d[1], g = d[2], p = d[3];
       if (!(137 === u && 80 === m && 78 === g && 71 === p || 255 === u && 216 === m && 255 === g || 71 === u && 73 === m && 70 === g || 82 === u && 73 === m && 70 === g && 70 === p && 87 === d[8] && 69 === d[9] && 66 === d[10] && 80 === d[11] || 66 === u && 77 === m)) return {
         success: !1,
         error: "invalid image data"
       };
-      return fs.writeFileSync(l, d), {
+      await fs.promises.writeFile(l, d);
+      return {
         success: !0,
         relPath: !o && n ? path.relative(n, l).replace(/\\/g, "/") : "file:///" + l.replace(/\\/g, "/"),
         absPath: l
@@ -362,7 +382,7 @@ function setupIPC() {
     properties: [ "openFile" ],
     filters: [ {
       name: "Markdown",
-      extensions: [ "md", "markdown", "txt" ]
+      extensions: [ "md", "markdown", "mdown", "mkdn", "mkd", "mdwn", "txt" ]
     }, {
       name: "所有文件",
       extensions: [ "*" ]
@@ -430,13 +450,14 @@ function setupIPC() {
   }), ipcMain.handle("win-minimize", () => mainWindow && mainWindow.minimize()), ipcMain.handle("win-toggle-maximize", () => !!mainWindow && (mainWindow.isMaximized() ? (mainWindow.unmaximize(), 
   !1) : (mainWindow.maximize(), !0))), ipcMain.handle("win-close", () => mainWindow && mainWindow.close()), 
   ipcMain.handle("win-is-maximized", () => !!mainWindow && mainWindow.isMaximized()),
-  ipcMain.handle("has-pending-file", () => !!pendingOpenFile);
+  ipcMain.handle("has-pending-file", () => !!pendingOpenFile)
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
 
 gotTheLock ? (app.on("second-instance", (e, n) => {
   const i = extractFileArg(n);
+  console.log("[second-instance] argv:", n, "extracted:", i);
   i && sendOpenFile(i), mainWindow && (mainWindow.isMinimized() && mainWindow.restore(), 
   mainWindow.isVisible() || mainWindow.show(), mainWindow.focus());
 }), app.on("open-file", (e, n) => {
@@ -447,7 +468,6 @@ gotTheLock ? (app.on("second-instance", (e, n) => {
   "darwin" !== process.platform && app.quit();
 }), app.on("before-quit", () => {
   isQuitting = !0;
-  mainWindow && mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()").catch(() => {});  // before-quit: best-effort cache flush
 }), app.on("activate", () => {
   0 === BrowserWindow.getAllWindows().length && createWindow();
 });

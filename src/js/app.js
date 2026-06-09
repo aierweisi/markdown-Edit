@@ -39,7 +39,7 @@
     requestAnimationFrame(() => EditorManager.focus())
   })
 
-  const hasPendingFile = window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false
+  let hasPendingFile = window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false
   const cache = hasPendingFile ? false : await CacheManager.checkAndRestore()
   let restored = false
   if (cache) {
@@ -563,6 +563,7 @@
         for (const t of allTabs) {
           await TabManager.closeTab(t.id)
         }
+        hasPendingFile = false  // 消耗标记，后续 OS 文件打开不再误删已有标签
       } else {
         // 情况3：正常打开，仅关闭当前空白草稿标签
         const cur = TabManager.getActive()

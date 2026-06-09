@@ -179,18 +179,34 @@ window.EditorManager = (() => {
         }
       }
 
+      function arrayBufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer)
+        let binary = ''
+        const chunkSize = 8192
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize))
+        }
+        return btoa(binary)
+      }
+
       async function handleImageFile(file) {
         if (!file || !file.type || !file.type.startsWith('image/')) return !1
-        const base64Data = await new Promise(function (resolve) {
-          const reader = new FileReader()
-          reader.onload = function () {
-            resolve(reader.result.split(',')[1])
-          }
-          reader.onerror = function () {
-            resolve('')
-          }
-          reader.readAsDataURL(file)
-        })
+        // 对大图片（>5MB）弹出确认，防止意外粘贴导致内存溢出
+        if (file.size > 5 * 1024 * 1024) {
+          const ok = await window.showConfirm(
+            `图片大小 ${(file.size / 1024 / 1024).toFixed(1)}MB，超过 5MB 限制。是否继续插入？`,
+            { title: '图片过大', okText: '继续插入', cancelText: '取消' },
+          )
+          if (!ok) return !1
+        }
+        let base64Data = ''
+        try {
+          const buffer = await file.arrayBuffer()
+          base64Data = arrayBufferToBase64(buffer)
+        } catch (err) {
+          console.error('[Image] 文件读取失败:', err)
+          return !1
+        }
         let baseDir = null
         if (window.TabManager) {
           const active = TabManager.getActive && TabManager.getActive()
@@ -251,8 +267,20 @@ window.EditorManager = (() => {
         const files = evt.dataTransfer && evt.dataTransfer.files
         if (!files || 0 === files.length) return
         let handled = !1
-        for (const f of files)
-          f.type && f.type.startsWith('image/') && (handled || evt.preventDefault(), (handled = !0), await handleImageFile(f))
+        for (const f of files) {
+          if (f.type && f.type.startsWith('image/')) {
+            handled || evt.preventDefault()
+            handled = !0
+            await handleImageFile(f)
+          } else if (f.path) {
+            const ext = f.name.split('.').pop().toLowerCase()
+            if (['md', 'markdown', 'txt'].includes(ext)) {
+              handled || evt.preventDefault()
+              handled = !0
+              window.dispatchEvent(new CustomEvent('app:open-file', { detail: { filePath: f.path } }))
+            }
+          }
+        }
       })
 
       return cm
@@ -265,7 +293,7 @@ window.EditorManager = (() => {
       return cm
     },
     setValue: function (val) {
-      cm && (cm.setValue(val || ''), cm.clearHistory())
+      cm && cm.setValue(val || '')
     },
     setValuePreserve: function (val) {
       if (!cm) return

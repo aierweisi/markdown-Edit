@@ -23,7 +23,9 @@
     "RecentFiles": "writable",
     "escHtml": "writable",
     "resolveNamingRule": "writable",
-    "showConfirm": "writable"
+    "showConfirm": "writable",
+    "EventBus": "writable",
+    "morphdom": "readonly"
   },
   "extends": ["eslint:recommended"],
   "parserOptions": {
