@@ -88,8 +88,10 @@ function sendOpenFile(e) {
       content: n,
       name: i
     });
-  } catch (e) {
-    console.error("open-file-from-os failed:", e);
+  } catch (err) {
+    console.error("open-file-from-os failed:", err);
+    // 文件读取失败（如已被删除）时通知渲染层显示提示
+    mainWindow.webContents.send("open-file-error", { filePath: e, error: err.message });
   }
 }
 

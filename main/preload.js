@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("api", {
   winIsMaximized: () => ipcRenderer.invoke("win-is-maximized"),
   onWinMaximized: e => ipcRenderer.on("win-maximized", (i, n) => e(n)),
   onOpenFileFromOS: e => ipcRenderer.on("open-file-from-os", (i, n) => e(n)),
+  onOpenFileError: e => ipcRenderer.on("open-file-error", (i, n) => e(n)),
   onMenuEvent: e => {
     [ "menu-new", "menu-open", "menu-save", "menu-save-as", "menu-import", "menu-export-md", "menu-export-html", "menu-export-pdf", "menu-toggle-theme", "menu-toggle-view", "menu-templates", "menu-settings", "menu-recent" ].forEach(i => {
       ipcRenderer.on(i, () => e(i));

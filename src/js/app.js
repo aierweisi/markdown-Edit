@@ -4,6 +4,57 @@
   }
   const editorContainer = document.getElementById('editor-container')
   EditorManager.init(editorContainer)
+
+  // Handle file open from OS — 必须在第一个 await 之前注册，否则 did-finish-load
+  // 发送的 IPC 事件会因监听器未注册而丢失
+  if (window.api && window.api.onOpenFileFromOS) {
+    window.api.onOpenFileFromOS(async ({ filePath, content, name }) => {
+      // 防重标记：同一文件路径已处理过则跳过，避免重复收到 IPC
+      if (window._fileOpenedViaOS === filePath) return
+      window._fileOpenedViaOS = filePath
+
+      const title = (name || '').replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '') || '未命名'
+      const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
+      if (existed) {
+        TabManager.setActive(existed.id)
+        EditorManager.focus()
+        return
+      }
+
+      // 仅启动时通过 OS 打开文件才清理所有标签页
+      // restored 标志在缓存恢复后保持 true，但不能用于判断后续 OS 文件打开
+      if (hasPendingFile) {
+        const allTabs = TabManager.getAllTabs()
+        for (const t of allTabs) {
+          await TabManager.closeTab(t.id)
+        }
+        hasPendingFile = false  // 消耗标记，后续 OS 文件打开不再误删已有标签
+      } else {
+        // 仅关闭当前空白草稿标签
+        const cur = TabManager.getActive()
+        const curIsBlankDraft =
+          cur && !cur.filePath && !cur.modified &&
+          (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
+        if (curIsBlankDraft) {
+          await TabManager.closeTab(cur.id)
+        }
+      }
+
+      const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
+      TabManager.setActive(tab.id)
+      TabManager.markModified(tab.id, false)
+      PreviewManager.render(content)
+      if (window.RecentFiles) await RecentFiles.add(filePath)
+      welcomeDismissed = true
+      document.getElementById('welcome-overlay')?.classList.add('hidden')
+      EditorManager.focus()
+    })
+    // 文件读取失败（如已被删除）时显示错误提示
+    window.api.onOpenFileError(({ filePath, error }) => {
+      ExportManager.showToast(`打开文件失败: ${error}`, 'error')
+    })
+  }
+
   const settings = await SettingsManager.load()
   SettingsManager.applyTheme(settings.theme)
   SettingsManager.applyFontSize(settings.fontSize)
@@ -540,51 +591,6 @@
     // 通过 EventBus 广播菜单事件，供其他模块监听
     EventBus && EventBus.emit('menu:' + event, { content })
   })
-
-  // Handle file open from OS
-  if (window.api && window.api.onOpenFileFromOS) {
-    window.api.onOpenFileFromOS(async ({ filePath, content, name }) => {
-      // 防重标记：同一文件路径已处理过则跳过，避免重复收到 IPC
-      if (window._fileOpenedViaOS === filePath) return
-      window._fileOpenedViaOS = filePath
-
-      const title = (name || '').replace(/\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i, '') || '未命名'
-      const existed = TabManager.getAllTabs().find(t => t.filePath === filePath)
-      if (existed) {
-        TabManager.setActive(existed.id)
-        EditorManager.focus()
-        return
-      }
-
-      // 仅启动时通过 OS 打开文件才清理所有标签页
-      // restored 标志在缓存恢复后保持 true，但不能用于判断后续 OS 文件打开
-      if (hasPendingFile) {
-        const allTabs = TabManager.getAllTabs()
-        for (const t of allTabs) {
-          await TabManager.closeTab(t.id)
-        }
-        hasPendingFile = false  // 消耗标记，后续 OS 文件打开不再误删已有标签
-      } else {
-        // 情况3：正常打开，仅关闭当前空白草稿标签
-        const cur = TabManager.getActive()
-        const curIsBlankDraft =
-          cur && !cur.filePath && !cur.modified &&
-          (!EditorManager.getValue() || EditorManager.getValue().trim() === '')
-        if (curIsBlankDraft) {
-          await TabManager.closeTab(cur.id)
-        }
-      }
-
-      const tab = TabManager.createTab({ title: title, filePath: filePath, content: content })
-      TabManager.setActive(tab.id)
-      TabManager.markModified(tab.id, false)
-      PreviewManager.render(content)
-      if (window.RecentFiles) await RecentFiles.add(filePath)
-      welcomeDismissed = true
-      document.getElementById('welcome-overlay')?.classList.add('hidden')
-      EditorManager.focus()
-    })
-  }
 
   // Listen for 'app:open-file' custom event dispatched by editor.js
   document.addEventListener('app:open-file', (event) => {
