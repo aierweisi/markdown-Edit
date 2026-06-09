@@ -107,8 +107,12 @@
     restored = true
   }
   if (!restored) {
-    const tab = TabManager.createTab({ title: '未命名' })
-    TabManager.setActive(tab.id)
+    // 仅在没有任何标签时创建空白草稿
+    // OS 文件关联启动时回调可能已在暂停期间打开了文件
+    if (TabManager.getAllTabs().length === 0) {
+      const tab = TabManager.createTab({ title: '未命名' })
+      TabManager.setActive(tab.id)
+    }
   }
   requestAnimationFrame(() => updateWelcomeVisibility())
   await CacheManager.loadInterval()
