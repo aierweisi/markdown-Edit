@@ -1,48 +1,50 @@
-const {app: app, BrowserWindow: BrowserWindow, ipcMain: ipcMain, dialog: dialog, shell: shell, Menu: Menu, Tray: Tray, nativeImage: nativeImage} = require("electron"), path = require("path"), fs = require("fs");
+const {app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, nativeImage} = require("electron"),
+  path = require("path"),
+  fs = require("fs");
 
-function isPathSafe(e) {
+function isPathSafe(rawPath) {
   try {
-    if (!e || "string" != typeof e) return !1;
+    if (!rawPath || "string" != typeof rawPath) return false;
     // 先检查原始输入是否为绝对路径
-    if (!path.isAbsolute(e)) return !1;
-    const t = path.resolve(e);
-    if (!path.isAbsolute(t)) return !1;
+    if (!path.isAbsolute(rawPath)) return false;
+    const resolvedPath = path.resolve(rawPath);
+    if (!path.isAbsolute(resolvedPath)) return false;
     // 检查 .. 穿越：resolve 后原路径仍包含 .. 则拒绝
-    if (e.includes("..")) {
-      const normalized = path.normalize(e);
-      if (normalized !== t || e.split(path.sep).some(p => ".." === p)) return !1;
+    if (rawPath.includes("..")) {
+      const normalized = path.normalize(rawPath);
+      if (normalized !== resolvedPath || rawPath.split(path.sep).some(p => ".." === p)) return false;
     }
     if (process.platform.startsWith("win")) {
-      const n = t.toUpperCase();
-      if (n.startsWith("\\\\?\\") || n.startsWith("\\\\.\\") || /^[A-Z]:\\\\(?:NUL|CON|PRN|AUX|COM\d+|LPT\d+)(?:\.|$)/i.test(t)) return !1;
+      const upperPath = resolvedPath.toUpperCase();
+      if (upperPath.startsWith("\\\\?\\") || upperPath.startsWith("\\\\.\\") || /^[A-Z]:\\\\(?:NUL|CON|PRN|AUX|COM\d+|LPT\d+)(?:\.|$)/i.test(resolvedPath)) return false;
     }
     // 检查符号链接：只检查路径末端（或父目录）是否为直接符号链接
     // 用 lstatSync 判断：如果文件存在且是 symlink 则拒绝；
     // 如果文件不存在（保存新文件），检查父目录是否安全即可
     try {
-      const stat = fs.lstatSync(t);
-      if (stat.isSymbolicLink()) return !1;
+      const stat = fs.lstatSync(resolvedPath);
+      if (stat.isSymbolicLink()) return false;
     } catch (_) {
       // 文件不存在：检查父目录是否存在且不是符号链接
       try {
-        const dir = path.dirname(t);
+        const dir = path.dirname(resolvedPath);
         const dirStat = fs.lstatSync(dir);
-        if (dirStat.isSymbolicLink()) return !1;
+        if (dirStat.isSymbolicLink()) return false;
       } catch (_2) {
-        return !1;  // 父目录也不存在，不安全
+        return false;  // 父目录也不存在，不安全
       }
     }
-    return !0;
+    return true;
   } catch {
-    return !1;
+    return false;
   }
 }
 
-let Store, store, mainWindow, tray = null, isQuitting = !1;
+let Store, store, mainWindow, tray = null, isQuitting = false;
 
 async function initStore() {
-  const {default: e} = await import("electron-store");
-  Store = e, store = new Store({
+  const {default: ElectronStore} = await import("electron-store");
+  Store = ElectronStore, store = new Store({
     defaults: {
       windowBounds: {
         width: 1280,
@@ -64,78 +66,78 @@ async function initStore() {
 
 let pendingOpenFile = null, pendingOSFile = false;
 
-function extractFileArg(e) {
-  if (!e || 0 === e.length) return null;
+function extractFileArg(argv) {
+  if (!argv || 0 === argv.length) return null;
   // Electron 打包后文件路径通常在 argv[1]（第一个位置参数），优先检查
-  if (e[1] && !e[1].startsWith("-") && "." !== e[1] && /\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i.test(e[1])) try {
-    if (fs.existsSync(e[1])) return path.resolve(e[1]);
-  } catch (e) {}
+  if (argv[1] && !argv[1].startsWith("-") && "." !== argv[1] && /\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i.test(argv[1])) try {
+    if (fs.existsSync(argv[1])) return path.resolve(argv[1]);
+  } catch (_) {}
   // 兼容开发环境：从末尾遍历查找
-  for (let n = e.length - 1; n >= 1; n--) {
-    const i = e[n];
-    if (i && !i.startsWith("-") && "." !== i && !i.endsWith(".js") && /\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i.test(i)) try {
-      if (fs.existsSync(i)) return path.resolve(i);
-    } catch (e) {}
+  for (let idx = argv.length - 1; idx >= 1; idx--) {
+    const arg = argv[idx];
+    if (arg && !arg.startsWith("-") && "." !== arg && !arg.endsWith(".js") && /\.(md|markdown|mdown|mkdn|mkd|mdwn|txt)$/i.test(arg)) try {
+      if (fs.existsSync(arg)) return path.resolve(arg);
+    } catch (_) {}
   }
   return null;
 }
 
-function sendOpenFile(e) {
-  if (e && mainWindow) try {
-    const n = fs.readFileSync(e, "utf-8"), i = path.basename(e);
+function sendOpenFile(filePath) {
+  if (filePath && mainWindow) try {
+    const content = fs.readFileSync(filePath, "utf-8"), basename = path.basename(filePath);
     mainWindow.webContents.send("open-file-from-os", {
-      filePath: e,
-      content: n,
-      name: i
+      filePath: filePath,
+      content: content,
+      name: basename
     });
   } catch (err) {
     console.error("open-file-from-os failed:", err);
     // 文件读取失败（如已被删除）时通知渲染层显示提示
-    mainWindow.webContents.send("open-file-error", { filePath: e, error: err.message });
+    mainWindow.webContents.send("open-file-error", { filePath: filePath, error: err.message });
   }
 }
 
 async function createWindow() {
   await initStore();
   // 将待打开文件路径写入 store，渲染器初始化时可同步读取（比 IPC 更早到达）
-  pendingOpenFile && store.set("_pendingOpenFile", pendingOpenFile), pendingOSFile && store.set("_pendingOSFile", !0);
-  const {width: e, height: n} = store.get("windowBounds"), i = path.join(__dirname, "../assets/icons/icon.ico"), a = "darwin" === process.platform;
+  pendingOpenFile && store.set("_pendingOpenFile", pendingOpenFile), pendingOSFile && store.set("_pendingOSFile", true);
+  const {width, height} = store.get("windowBounds"), iconPath = path.join(__dirname, "../assets/icons/icon.ico"), isMac = "darwin" === process.platform;
   mainWindow = new BrowserWindow({
-    width: e,
-    height: n,
+    width: width,
+    height: height,
     minWidth: 800,
     minHeight: 600,
-    icon: fs.existsSync(i) ? i : void 0,
-    frame: a,
-    titleBarStyle: a ? "hiddenInset" : void 0,
-    trafficLightPosition: a ? {
+    icon: fs.existsSync(iconPath) ? iconPath : void 0,
+    frame: isMac,
+    titleBarStyle: isMac ? "hiddenInset" : void 0,
+    trafficLightPosition: isMac ? {
       x: 14,
       y: 16
     } : void 0,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
-      contextIsolation: !0,
-      nodeIntegration: !1
+      contextIsolation: true,
+      nodeIntegration: false
     },
     backgroundColor: "#0a0a0c",
-    show: !1
-  }), mainWindow.loadFile(app && app.isPackaged ? path.join(__dirname, "../index.html") : path.join(__dirname, "../dist/index.html")), 
+    show: false
+  }), mainWindow.loadFile(app && app.isPackaged ? path.join(__dirname, "../index.html") : path.join(__dirname, "../dist/index.html")),
   mainWindow.once("ready-to-show", () => {
     mainWindow.show(), app.isPackaged || mainWindow.webContents.openDevTools({
       mode: "detach"
     });
   }), mainWindow.webContents.on("did-finish-load", () => {
-    pendingOpenFile && (sendOpenFile(pendingOpenFile), pendingOpenFile = null), pendingOSFile = !1;
+    pendingOpenFile && (sendOpenFile(pendingOpenFile), pendingOpenFile = null), pendingOSFile = false;
   }), mainWindow.on("resize", () => {
-    const [e, n] = mainWindow.getSize();
+    const [w, h] = mainWindow.getSize();
     store.set("windowBounds", {
-      width: e,
-      height: n
+      width: w,
+      height: h
     });
-  }), mainWindow.on("maximize", () => mainWindow.webContents.send("win-maximized", !0)), 
-  mainWindow.on("unmaximize", () => mainWindow.webContents.send("win-maximized", !1)), 
-  mainWindow.on("close", e => {
-    e.preventDefault();
+  }), mainWindow.on("maximize", () => mainWindow.webContents.send("win-maximized", true)),
+  mainWindow.on("unmaximize", () => mainWindow.webContents.send("win-maximized", false)),
+  mainWindow.on("close", evt => {
+    evt.preventDefault();
     if (!isQuitting) {
       // 非退出：隐藏到托盘，同步保存缓存
       mainWindow.webContents.executeJavaScript("typeof CacheManager!=='undefined'&&CacheManager.saveAll()").catch(() => {});
@@ -155,28 +157,28 @@ function setupTray() {
   if (tray) return;
   const isWin = "win32" === process.platform;
   const iconName = isWin ? "icon.ico" : "icon.png";
-  const e = path.join(__dirname, "../assets/icons/" + iconName), n = fs.existsSync(e) ? nativeImage.createFromPath(e) : nativeImage.createEmpty();
-  if (!isWin) n.setTemplateImage(!0);
-  tray = new Tray(n), tray.setToolTip("Markdown Editor");
-  const i = () => {
-    mainWindow && (mainWindow.isMinimized() && mainWindow.restore(), mainWindow.show(), 
+  const iconPath = path.join(__dirname, "../assets/icons/" + iconName), iconImage = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
+  if (!isWin) iconImage.setTemplateImage(true);
+  tray = new Tray(iconImage), tray.setToolTip("Markdown Editor");
+  const showWindow = () => {
+    mainWindow && (mainWindow.isMinimized() && mainWindow.restore(), mainWindow.show(),
     mainWindow.focus());
-  }, a = Menu.buildFromTemplate([ {
+  }, contextMenu = Menu.buildFromTemplate([ {
     label: "显示 Markdown Editor",
-    click: i
+    click: showWindow
   }, {
     type: "separator"
   }, {
     label: "退出",
     click: () => {
-      isQuitting = !0, app.quit();
+      isQuitting = true, app.quit();
     }
   } ]);
-  tray.setContextMenu(a), tray.on("click", i), tray.on("double-click", i);
+  tray.setContextMenu(contextMenu), tray.on("click", showWindow), tray.on("double-click", showWindow);
 }
 
 function setupMenu() {
-  const e = [ {
+  const template = [ {
     label: "文件",
     submenu: [ {
       label: "新建",
@@ -218,7 +220,7 @@ function setupMenu() {
       label: "退出",
       accelerator: "CmdOrCtrl+Q",
       click: () => {
-        isQuitting = !0, app.quit();
+        isQuitting = true, app.quit();
       }
     } ]
   }, {
@@ -275,111 +277,112 @@ function setupMenu() {
   }, {
     label: "设置",
     click: () => mainWindow.webContents.send("menu-settings")
-  } ], n = Menu.buildFromTemplate(e);
-  Menu.setApplicationMenu(n);
+  } ], menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
 }
 
 function setupIPC() {
-  ipcMain.handle("store-get", (e, n) => store.get(n)), ipcMain.handle("store-set", (e, n, i) => store.set(n, i)), 
-  ipcMain.handle("file-read", async (e, n) => {
+  ipcMain.handle("store-get", (_event, key) => store.get(key)), ipcMain.handle("store-set", (_event, key, value) => store.set(key, value)),
+  ipcMain.handle("file-read", async (_event, filePath) => {
     try {
-      const t = path.resolve(n);
-      if (!isPathSafe(t)) return {
-        success: !1,
+      const resolvedPath = path.resolve(filePath);
+      if (!isPathSafe(resolvedPath)) return {
+        success: false,
         error: "invalid path"
       };
       return {
-        success: !0,
-        content: fs.readFileSync(t, "utf-8")
+        success: true,
+        content: fs.readFileSync(resolvedPath, "utf-8")
       };
-    } catch (e) {
+    } catch (err) {
       return {
-        success: !1,
-        error: e.message
+        success: false,
+        error: err.message
       };
     }
-  }), ipcMain.handle("file-save", async (e, n, i) => {
+  }), ipcMain.handle("file-save", async (_event, filePath, content) => {
     try {
-      const t = path.resolve(n);
-      if (!isPathSafe(t)) return {
-        success: !1,
+      const resolvedPath = path.resolve(filePath);
+      if (!isPathSafe(resolvedPath)) return {
+        success: false,
         error: "invalid path"
       };
-      const e = t + ".tmp";
-      return await fs.promises.writeFile(e, i, "utf-8"), await fs.promises.rename(e, t), 
+      const tmpPath = resolvedPath + ".tmp";
+      return await fs.promises.writeFile(tmpPath, content, "utf-8"), await fs.promises.rename(tmpPath, resolvedPath),
       {
-        success: !0
+        success: true
       };
-    } catch (e) {
+    } catch (err) {
       return {
-        success: !1,
-        error: e.message
+        success: false,
+        error: err.message
       };
     }
-  }), ipcMain.handle("file-rename", async (e, n, i) => {
+  }), ipcMain.handle("file-rename", async (_event, oldPath, newPath) => {
     try {
-      const t = path.resolve(n), e = path.resolve(i);
-      return n && i ? t === e ? {
-        success: !0,
-        newPath: e
-      } : !isPathSafe(t) || !isPathSafe(e) ? {
-        success: !1,
+      const resolvedOld = path.resolve(oldPath), resolvedNew = path.resolve(newPath);
+      return oldPath && newPath ? resolvedOld === resolvedNew ? {
+        success: true,
+        newPath: resolvedNew
+      } : !isPathSafe(resolvedOld) || !isPathSafe(resolvedNew) ? {
+        success: false,
         error: "invalid path"
-      } : fs.existsSync(e) ? {
-        success: !1,
+      } : fs.existsSync(resolvedNew) ? {
+        success: false,
         error: "target exists"
-      } : (await fs.promises.rename(t, e), {
-        success: !0,
-        newPath: e
+      } : (await fs.promises.rename(resolvedOld, resolvedNew), {
+        success: true,
+        newPath: resolvedNew
       }) : {
-        success: !1,
+        success: false,
         error: "invalid path"
       };
-    } catch (e) {
+    } catch (err) {
       return {
-        success: !1,
-        error: e.message
+        success: false,
+        error: err.message
       };
     }
-  }), ipcMain.handle("image-save", async (e, {baseDir: n, fileName: i, dataBase64: a, imageDir: t}) => {
+  }), ipcMain.handle("image-save", async (_event, {baseDir, fileName, dataBase64, imageDir}) => {
     try {
-      const rawDir = t && String(t).trim() || "assets";
+      const rawDir = imageDir && String(imageDir).trim() || "assets";
       // (1) 绝对路径：用 isPathSafe 校验；相对路径：禁止 .. 穿越
       if (path.isAbsolute(rawDir)) {
-        if (!isPathSafe(rawDir)) return { success: !1, error: "invalid imageDir path" };
+        if (!isPathSafe(rawDir)) return { success: false, error: "invalid imageDir path" };
       } else {
-        if (rawDir.includes("..")) return { success: !1, error: "invalid imageDir path" };
+        if (rawDir.includes("..")) return { success: false, error: "invalid imageDir path" };
       }
-      const o = path.isAbsolute(rawDir);
-      let s;
-      s = o ? rawDir : n ? path.join(path.resolve(n), rawDir) : path.join(app.getPath("userData"), "pasted-images"), 
-      fs.existsSync(s) || fs.mkdirSync(s, {
-        recursive: !0
+      const isAbsolute = path.isAbsolute(rawDir);
+      let saveDir;
+      saveDir = isAbsolute ? rawDir : baseDir ? path.join(path.resolve(baseDir), rawDir) : path.join(app.getPath("userData"), "pasted-images"),
+      fs.existsSync(saveDir) || fs.mkdirSync(saveDir, {
+        recursive: true
       });
       // (2) 对 fileName 做路径穿越过滤（移除 .. 和 / \ 等路径分隔符）
-      let r = i ? i.replace(/[/\\]/g, "_").replace(/\.\./g, "").replace(/^\.+/, "") : "image.png";
-      let l = path.join(s, r), c = 1;
-      for (;fs.existsSync(l); ) {
-        const ext = path.extname(r), base = path.basename(r, ext);
-        r = `${base}-${c}${ext}`, l = path.join(s, r), c++;
+      let safeName = fileName ? fileName.replace(/[/\\]/g, "_").replace(/\.\./g, "").replace(/^\.+/, "") : "image.png";
+      let fullPath = path.join(saveDir, safeName), counter = 1;
+      for (;fs.existsSync(fullPath); ) {
+        const ext = path.extname(safeName), base = path.basename(safeName, ext);
+        safeName = `${base}-${counter}${ext}`, fullPath = path.join(saveDir, safeName), counter++;
       }
       // (3) 对最终文件路径做 isPathSafe 检查
-      if (!isPathSafe(l)) return { success: !1, error: "invalid final path" };
-      const d = Buffer.from(a, "base64"), u = d[0], m = d[1], g = d[2], p = d[3];
-      if (!(137 === u && 80 === m && 78 === g && 71 === p || 255 === u && 216 === m && 255 === g || 71 === u && 73 === m && 70 === g || 82 === u && 73 === m && 70 === g && 70 === p && 87 === d[8] && 69 === d[9] && 66 === d[10] && 80 === d[11] || 66 === u && 77 === m)) return {
-        success: !1,
+      if (!isPathSafe(fullPath)) return { success: false, error: "invalid final path" };
+      const imgBuffer = Buffer.from(dataBase64, "base64"), b0 = imgBuffer[0], b1 = imgBuffer[1], b2 = imgBuffer[2], b3 = imgBuffer[3];
+      // 校验图片魔数：PNG(89 50 4E 47), JPEG(FF D8 FF), GIF(47 49 46), WEBP(52 49 46 46 ... 57 45 42 50), BMP(42 4D)
+      if (!(137 === b0 && 80 === b1 && 78 === b2 && 71 === b3 || 255 === b0 && 216 === b1 && 255 === b2 || 71 === b0 && 73 === b1 && 70 === b2 || 82 === b0 && 73 === b1 && 70 === b2 && 70 === b3 && 87 === imgBuffer[8] && 69 === imgBuffer[9] && 66 === imgBuffer[10] && 80 === imgBuffer[11] || 66 === b0 && 77 === b1)) return {
+        success: false,
         error: "invalid image data"
       };
-      await fs.promises.writeFile(l, d);
+      await fs.promises.writeFile(fullPath, imgBuffer);
       return {
-        success: !0,
-        relPath: !o && n ? path.relative(n, l).replace(/\\/g, "/") : "file:///" + l.replace(/\\/g, "/"),
-        absPath: l
+        success: true,
+        relPath: !isAbsolute && baseDir ? path.relative(baseDir, fullPath).replace(/\\/g, "/") : "file:///" + fullPath.replace(/\\/g, "/"),
+        absPath: fullPath
       };
-    } catch (e) {
+    } catch (err) {
       return {
-        success: !1,
-        error: e.message
+        success: false,
+        error: err.message
       };
     }
   }), ipcMain.handle("dialog-open-file", async () => await dialog.showOpenDialog(mainWindow, {
@@ -391,87 +394,87 @@ function setupIPC() {
       name: "所有文件",
       extensions: [ "*" ]
     } ]
-  })), ipcMain.handle("dialog-save-file", async (e, n) => {
-    const i = n.defaultPath || "";
-    const a = i.includes("/") || i.includes("\\") ? i : path.join(app.getPath("documents"), i);
+  })), ipcMain.handle("dialog-save-file", async (_event, opts) => {
+    const defaultName = opts.defaultPath || "";
+    const resolvedPath = defaultName.includes("/") || defaultName.includes("\\") ? defaultName : path.join(app.getPath("documents"), defaultName);
     return await dialog.showSaveDialog(mainWindow, {
-      defaultPath: a,
-      filters: n.filters || [ {
+      defaultPath: resolvedPath,
+      filters: opts.filters || [ {
         name: "Markdown",
         extensions: [ "md" ]
       } ]
     });
   }), ipcMain.handle("dialog-select-dir", async () => await dialog.showOpenDialog(mainWindow, {
     properties: [ "openDirectory", "createDirectory" ]
-  })), ipcMain.handle("export-pdf", async (e, n) => {
+  })), ipcMain.handle("export-pdf", async (_event, savePath) => {
     try {
-      const e = await mainWindow.webContents.printToPDF({
+      const pdfBuffer = await mainWindow.webContents.printToPDF({
         marginsType: 0,
-        printBackground: !0,
+        printBackground: true,
         pageSize: "A4"
       });
-      return fs.writeFileSync(n, e), {
-        success: !0
+      return fs.writeFileSync(savePath, pdfBuffer), {
+        success: true
       };
-    } catch (e) {
+    } catch (err) {
       return {
-        success: !1,
-        error: e.message
+        success: false,
+        error: err.message
       };
     }
-  }), ipcMain.handle("shell-show-item", (e, n) => {
-    shell.showItemInFolder(n);
+  }), ipcMain.handle("shell-show-item", (_event, itemPath) => {
+    shell.showItemInFolder(itemPath);
   }), ipcMain.handle("clear-cache", async () => {
     // 冷却保护：防止意外频繁调用
     const now = Date.now();
-    if (global.__clearCacheCooldown && now - global.__clearCacheCooldown < 3000) return { success: !1, error: "too frequent" };
+    if (global.__clearCacheCooldown && now - global.__clearCacheCooldown < 3000) return { success: false, error: "too frequent" };
     global.__clearCacheCooldown = now;
     try {
-      const {session: e} = require("electron"), n = e.defaultSession, i = await n.getCacheSize().catch(() => 0);
-      return await n.clearCache(), await n.clearStorageData({
+      const {session} = require("electron"), defaultSession = session.defaultSession, cacheSize = await defaultSession.getCacheSize().catch(() => 0);
+      return await defaultSession.clearCache(), await defaultSession.clearStorageData({
         storages: [ "cookies", "filesystem", "indexdb", "shadercache", "websql", "serviceworkers", "cachestorage" ]
       }), {
-        success: !0,
-        freed: i
+        success: true,
+        freed: cacheSize
       };
-    } catch (e) {
+    } catch (err) {
       return {
-        success: !1,
-        error: e.message
+        success: false,
+        error: err.message
       };
     }
   }), ipcMain.handle("focus-window", () => {
-    mainWindow && ("win32" === process.platform && mainWindow.blur(), mainWindow.focus(), 
+    mainWindow && ("win32" === process.platform && mainWindow.blur(), mainWindow.focus(),
     mainWindow.webContents.focus());
-  }), ipcMain.handle("update-titlebar", (e, {color: n, symbolColor: i}) => {
+  }), ipcMain.handle("update-titlebar", (_event, {color, symbolColor}) => {
     if (mainWindow && "win32" === process.platform && mainWindow.setTitleBarOverlay) try {
       mainWindow.setTitleBarOverlay({
-        color: n,
-        symbolColor: i,
+        color: color,
+        symbolColor: symbolColor,
         height: 46
       });
-    } catch (e) {}
-  }), ipcMain.handle("win-minimize", () => mainWindow && mainWindow.minimize()), ipcMain.handle("win-toggle-maximize", () => !!mainWindow && (mainWindow.isMaximized() ? (mainWindow.unmaximize(), 
-  !1) : (mainWindow.maximize(), !0))), ipcMain.handle("win-close", () => mainWindow && mainWindow.close()), 
+    } catch (_) {}
+  }), ipcMain.handle("win-minimize", () => mainWindow && mainWindow.minimize()), ipcMain.handle("win-toggle-maximize", () => !!mainWindow && (mainWindow.isMaximized() ? (mainWindow.unmaximize(),
+  false) : (mainWindow.maximize(), true))), ipcMain.handle("win-close", () => mainWindow && mainWindow.close()),
   ipcMain.handle("win-is-maximized", () => !!mainWindow && mainWindow.isMaximized()),
   ipcMain.handle("has-pending-file", () => pendingOSFile)
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
 
-gotTheLock ? (app.on("second-instance", (e, n) => {
-  const i = extractFileArg(n);
-  console.log("[second-instance] argv:", n, "extracted:", i);
-  i && sendOpenFile(i), mainWindow && (mainWindow.isMinimized() && mainWindow.restore(), 
+gotTheLock ? (app.on("second-instance", (_event, argv) => {
+  const fileArg = extractFileArg(argv);
+  console.log("[second-instance] argv:", argv, "extracted:", fileArg);
+  fileArg && sendOpenFile(fileArg), mainWindow && (mainWindow.isMinimized() && mainWindow.restore(),
   mainWindow.isVisible() || mainWindow.show(), mainWindow.focus());
-}), app.on("open-file", (e, n) => {
-  e.preventDefault(), mainWindow ? sendOpenFile(n) : (pendingOpenFile = n, pendingOSFile = !0);
+}), app.on("open-file", (_event, filePath) => {
+  _event.preventDefault(), mainWindow ? sendOpenFile(filePath) : (pendingOpenFile = filePath, pendingOSFile = true);
 }), app.whenReady().then(() => {
   pendingOpenFile = extractFileArg(process.argv), pendingOSFile = !!pendingOpenFile, setupIPC(), createWindow();
 })) : app.quit(), app.on("window-all-closed", () => {
   "darwin" !== process.platform && app.quit();
 }), app.on("before-quit", () => {
-  isQuitting = !0;
+  isQuitting = true;
 }), app.on("activate", () => {
   0 === BrowserWindow.getAllWindows().length && createWindow();
 });

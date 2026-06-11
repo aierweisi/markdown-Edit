@@ -1,4 +1,10 @@
 window.PreviewManager = (() => {
+  // ── 常量定义 ──
+  const WORKER_TIMEOUT_MS = 15000      // Worker 超时（15 秒）
+  const WORKER_REBUILD_DELAY_MS = 3000 // Worker 超时后延迟重建（3 秒）
+  const MAX_MERMAID_CACHE = 50         // Mermaid SVG 缓存上限
+  const RENDER_RETRY_DELAY_MS = 80     // Mermaid 渲染轮询间隔
+
   let previewBody = null,
     syncScrollEnabled = !0,
     mermaidIdCounter = 0,
@@ -7,7 +13,6 @@ window.PreviewManager = (() => {
     debounceTimer = null,
     headingAnchorDebounceTimer = null
   const mermaidCache = new Map()
-  const MAX_MERMAID_CACHE = 50
   let mermaidObserver = null
   let markdownWorker = null
   let renderSeq = 0  // 递增序列号，用于丢弃过期 worker 响应
@@ -112,18 +117,38 @@ window.PreviewManager = (() => {
     return html
   }
 
+  // 创建 Web Worker（延迟重建，防止频繁创建）
+  function createWorker() {
+    try {
+      const w = new Worker('js/markdown-worker.js')
+      markdownWorker = w
+      return w
+    } catch (err) {
+      console.warn('[Preview] Worker 创建失败，使用同步渲染:', err)
+      markdownWorker = null
+      return null
+    }
+  }
+  let workerRebuildTimer = null
+
   // 通过 Web Worker 异步渲染（不阻塞主线程）
   function renderViaWorker(mdContent) {
     return new Promise((resolve, reject) => {
       const seq = ++renderSeq
       const timeout = setTimeout(() => {
         markdownWorker.removeEventListener('message', onMsg)
-        // Worker 超时：销毁并降级为同步渲染，避免重复超时
-        console.warn('[Preview] Worker 响应超时，降级为同步渲染')
+        // Worker 超时：销毁并延迟重建，避免永久降级
+        console.warn('[Preview] Worker 响应超时，销毁并准备重建')
         markdownWorker.terminate()
         markdownWorker = null
+        // 延迟后重建 Worker，避免频繁超时循环创建
+        if (workerRebuildTimer) clearTimeout(workerRebuildTimer)
+        workerRebuildTimer = setTimeout(() => {
+          workerRebuildTimer = null
+          createWorker()
+        }, WORKER_REBUILD_DELAY_MS)
         reject(new Error('Worker timeout'))
-      }, 15000)
+      }, WORKER_TIMEOUT_MS)
       function onMsg(e) {
         markdownWorker.removeEventListener('message', onMsg)
         clearTimeout(timeout)

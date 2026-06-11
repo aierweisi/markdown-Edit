@@ -1,4 +1,5 @@
 window.FindManager = (() => {
+  const FIND_SEL_MAX_LENGTH = 200  // 查找时自动填入的选中文本最大长度
   let panelEl,
     findInput,
     replaceInput,
@@ -20,7 +21,7 @@ window.FindManager = (() => {
     panelEl.classList.add('open')
     setReplaceMode(!!hasReplace)
     const sel = cm && cm.getSelection()
-    sel && sel.length > 0 && sel.length < 200 && (findInput.value = sel)
+    sel && sel.length > 0 && sel.length < FIND_SEL_MAX_LENGTH && (findInput.value = sel)
     findInput.focus()
     findInput.select()
     updateMatches()
@@ -160,7 +161,15 @@ window.FindManager = (() => {
         optCase = document.getElementById('find-opt-case')
         optWord = document.getElementById('find-opt-word')
         optRegex = document.getElementById('find-opt-regex')
-        cm = window.EditorManager && EditorManager.getCM && EditorManager.getCM()
+        // 如果 CM 尚未就绪，延迟重试（最多重试 5 次，间隔 200ms）
+        ;(function tryGetCM(tryCount) {
+          cm = window.EditorManager && EditorManager.getCM && EditorManager.getCM()
+          if (!cm && tryCount < 5) {
+            setTimeout(function () { tryGetCM(tryCount + 1) }, 200)
+          } else if (!cm) {
+            console.warn('[FindManager] CodeMirror 实例获取失败，查找功能可能不完整')
+          }
+        })(0)
         document.getElementById('find-prev').addEventListener('click', () => navigateMatches(-1))
         document.getElementById('find-next').addEventListener('click', () => navigateMatches(1))
         document.getElementById('find-close').addEventListener('click', hide)

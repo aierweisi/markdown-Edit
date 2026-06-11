@@ -1,0 +1,182 @@
+/* =============================================================
+   Markdown Editor — CSS Variables & Theme Definitions
+   ============================================================= */
+
+:root {
+  --radius: 8px;
+  --radius-sm: 5px;
+  --radius-xs: 3px;
+  --transition: 0.15s ease;
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, 'Courier New', monospace;
+}
+
+/* ── Light Theme ──────────────────────────────────────────── */
+.theme-light {
+  --tab-active-indicator: var(--accent);
+  --bg-base: #f0f2f5;
+  --bg-panel: #ffffff;
+  --bg-toolbar: #ffffff;
+  --bg-tabbar: #e8eaed;
+  --bg-tab: #dfe1e5;
+  --bg-tab-hover: #e8eaed;
+  --bg-tab-active: #ffffff;
+  --bg-editor: #ffffff;
+  --bg-preview: #fafafa;
+  --bg-statusbar: #e2e4e8;
+  --bg-modal: #ffffff;
+  --bg-modal-overlay: rgba(15, 20, 30, 0.45);
+  --bg-hover: #f0f2f5;
+  --bg-input: #f6f8fa;
+  --bg-code: #f6f8fa;
+  --bg-tag: #eef2ff;
+  --text-primary: #1c1e21;
+  --text-secondary: #444950;
+  --text-muted: #8a9099;
+  --text-tab: #6b737d;
+  --text-tab-active: #1c1e21;
+  --text-tag: #4a6cf7;
+  --border: #e2e5e9;
+  --border-input: #d0d4da;
+  --border-focus: #4a6cf7;
+  --divider-bg: #e2e5e9;
+  --divider-active: #4a6cf7;
+  --accent: #4a6cf7;
+  --accent-hover: #3558e8;
+  --accent-light: #eef2ff;
+  --danger: #e5484d;
+  --danger-hover: #c73237;
+  --success: #1a9e6b;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.08);
+  --accent-grad: linear-gradient(135deg, #6366f1 0%, #8b5cf6 55%, #ec4899 100%);
+  --accent-glow: 0 0 24px rgba(99, 102, 241, 0.28);
+  --accent-grad-h: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #db2777 100%);
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --accent-soft-h: rgba(99, 102, 241, 0.16);
+  --accent-2: #06b6d4;
+  --accent-2-hover: #0891b2;
+  --accent-2-soft: rgba(6, 182, 212, 0.1);
+  --accent-2-grad: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 50%, #14b8a6 100%);
+  --accent-tri-grad: linear-gradient(135deg, #06b6d4 0%, #6366f1 35%, #8b5cf6 70%, #ec4899 100%);
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-info: #06b6d4;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-bg-strong: rgba(255, 255, 255, 0.86);
+  --glass-bg-soft: rgba(255, 255, 255, 0.4);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-stroke: rgba(255, 255, 255, 0.55);
+  --z1-bg: rgba(255, 255, 255, 0.3);
+  --z2-bg: rgba(255, 255, 255, 0.55);
+  --z2-bg-strong: rgba(255, 255, 255, 0.72);
+  --z3-bg: rgba(255, 255, 255, 0.86);
+  --z4-bg: rgba(255, 255, 255, 0.94);
+  --shadow-lift: 0 6px 24px rgba(31, 41, 55, 0.1), 0 2px 6px rgba(31, 41, 55, 0.06);
+  --shadow-glass: 0 10px 40px rgba(31, 41, 55, 0.1), 0 2px 8px rgba(31, 41, 55, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --shadow-z1: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-z2: 0 2px 8px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-z3: 0 10px 28px rgba(15, 23, 42, 0.12), 0 3px 8px rgba(15, 23, 42, 0.06);
+  --shadow-z4: 0 28px 72px rgba(15, 23, 42, 0.2), 0 10px 24px rgba(15, 23, 42, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --bg-app-gradient:
+    radial-gradient(1200px 600px at 0% 0%, #eef2ff 0%, transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, #e8f5ff 0%, transparent 60%),
+    linear-gradient(180deg, #f0f2f5 0%, #e8ebf0 100%);
+  --bg-mesh:
+    radial-gradient(at 5% 0%, rgba(99, 102, 241, 0.14) 0%, transparent 45%),
+    radial-gradient(at 80% 0%, rgba(6, 182, 212, 0.12) 0%, transparent 50%),
+    radial-gradient(at 100% 50%, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.1) 0%, transparent 50%),
+    radial-gradient(at 60% 100%, rgba(245, 158, 11, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, #f4f6fb 0%, #ecf0f7 100%);
+}
+
+/* ── Dark Theme ───────────────────────────────────────────── */
+.theme-dark {
+  --bg-base: #0b0d12;
+  --bg-panel: #1a1d24;
+  --bg-toolbar: #15181f;
+  --bg-tabbar: #0e1116;
+  --bg-tab: #1a1d24;
+  --bg-tab-hover: #262a33;
+  --bg-tab-active: #2d323d;
+  --bg-editor: #161920;
+  --bg-preview: #12151b;
+  --bg-statusbar: #0a0c11;
+  --bg-modal: #1f232c;
+  --bg-modal-overlay: rgba(0, 0, 0, 0.78);
+  --bg-hover: #2a2f3a;
+  --bg-input: #14171d;
+  --bg-code: #11141a;
+  --bg-tag: #1f2a52;
+  --text-primary: #f3f5f9;
+  --text-secondary: #c2c8d4;
+  --text-muted: #848995;
+  --text-tab: #9097a5;
+  --text-tab-active: #ffffff;
+  --text-tag: #93aaff;
+  --border: #303642;
+  --border-input: #3a4150;
+  --border-focus: #6b8aff;
+  --divider-bg: #2a2f3a;
+  --divider-active: #6b8aff;
+  --accent: #6b8aff;
+  --accent-hover: #8aa2ff;
+  --accent-light: #25305a;
+  --danger: #ff5f64;
+  --danger-hover: #e5484d;
+  --success: #2bd99a;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.7);
+  --accent-grad: linear-gradient(135deg, #818cf8 0%, #a78bfa 55%, #f472b6 100%);
+  --accent-glow: 0 0 32px rgba(129, 140, 248, 0.42);
+  --accent-grad-h: linear-gradient(135deg, #a5b4fc 0%, #c4b5fd 55%, #f9a8d4 100%);
+  --accent-soft: rgba(129, 140, 248, 0.16);
+  --accent-soft-h: rgba(129, 140, 248, 0.24);
+  --accent-2: #22d3ee;
+  --accent-2-hover: #67e8f9;
+  --accent-2-soft: rgba(34, 211, 238, 0.14);
+  --accent-2-grad: linear-gradient(135deg, #38bdf8 0%, #22d3ee 50%, #2dd4bf 100%);
+  --accent-tri-grad: linear-gradient(135deg, #22d3ee 0%, #818cf8 35%, #a78bfa 70%, #f472b6 100%);
+  --status-success: #34d399;
+  --status-warning: #fbbf24;
+  --status-info: #22d3ee;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --glass-bg: rgba(22, 25, 33, 0.55);
+  --glass-bg-strong: rgba(16, 19, 27, 0.86);
+  --glass-bg-soft: rgba(28, 32, 42, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-stroke: rgba(255, 255, 255, 0.06);
+  --z1-bg: rgba(18, 21, 30, 0.28);
+  --z2-bg: rgba(16, 19, 27, 0.55);
+  --z2-bg-strong: rgba(26, 29, 38, 0.68);
+  --z3-bg: rgba(20, 24, 34, 0.88);
+  --z4-bg: rgba(15, 18, 26, 0.94);
+  --shadow-lift: 0 6px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-glass: 0 10px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-z1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-z2: 0 2px 10px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-z3: 0 14px 36px rgba(0, 0, 0, 0.58), 0 4px 12px rgba(0, 0, 0, 0.38);
+  --shadow-z4: 0 32px 88px rgba(0, 0, 0, 0.7), 0 12px 28px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --bg-app-gradient:
+    radial-gradient(900px 500px at 0% 0%, rgba(107, 138, 255, 0.1) 0%, transparent 60%),
+    radial-gradient(700px 400px at 100% 100%, rgba(199, 146, 234, 0.07) 0%, transparent 60%),
+    linear-gradient(180deg, #0d1018 0%, #090b10 100%);
+  --bg-mesh:
+    radial-gradient(at 8% 0%, rgba(99, 102, 241, 0.26) 0%, transparent 50%),
+    radial-gradient(at 90% 5%, rgba(34, 211, 238, 0.18) 0%, transparent 55%),
+    radial-gradient(at 100% 60%, rgba(168, 85, 247, 0.2) 0%, transparent 55%),
+    radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.16) 0%, transparent 60%),
+    radial-gradient(at 50% 100%, rgba(244, 114, 182, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #0a0c14 0%, #060810 100%);
+}

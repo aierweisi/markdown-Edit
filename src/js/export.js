@@ -1,4 +1,11 @@
 window.ExportManager = (() => {
+  // ── 常量定义 ──
+  const TOAST_DURATION_MS = 2200    // Toast 显示时长
+  const TOAST_FADE_MS = 200        // Toast 淡出动画时长
+  const TOAST_BOTTOM_BASE = 24     // Toast 底部起始位置（px）
+  const TOAST_STACK_GAP = 56       // 多个 Toast 堆叠间距（px）
+  const MERMAID_POLL_DELAY = 80    // Mermaid 渲染轮询间隔（ms）
+  const MERMAID_TIMEOUT = 15000    // Mermaid 渲染超时（ms）
   async function resolveExportPath(ext, content) {
     const namingRule = (await window.api.storeGet('exportNamingRule')) || '{title}_{date}',
       exportDir = (await window.api.storeGet('exportDir')) || '',
@@ -21,6 +28,7 @@ window.ExportManager = (() => {
   const toasts = []
 
   function showToast(msg, _type = 'default') {
+    // 清理已退出的 Toast（直接用 CSS 处理堆叠位置）
     for (let i = toasts.length - 1; i >= 0; i--)
       if (toasts[i].classList.contains('toast-out')) {
         const el = toasts[i]
@@ -30,24 +38,19 @@ window.ExportManager = (() => {
     const toast = document.createElement('div')
     toast.className = 'toast' + ('error' === _type ? ' toast-error' : 'success' === _type ? ' toast-success' : '')
     toast.textContent = msg
+    toast.style.setProperty('--toast-index', toasts.length)
     document.body.appendChild(toast)
     toasts.push(toast)
-    toast.style.bottom = 24 + 56 * (toasts.length - 1) + 'px'
     setTimeout(() => {
       toast.classList.add('toast-out')
-      setTimeout(
-        () =>
-          (function (el) {
-            const idx = toasts.indexOf(el)
-            ;-1 !== idx && toasts.splice(idx, 1)
-            el.remove()
-            toasts.forEach((t, i) => {
-              t.style.bottom = 24 + 56 * i + 'px'
-            })
-          })(toast),
-        200,
-      )
-    }, 2200)
+      setTimeout(() => {
+        const idx = toasts.indexOf(toast)
+        if (-1 !== idx) toasts.splice(idx, 1)
+        toast.remove()
+        // 更新剩余 Toast 的索引
+        toasts.forEach((t, i) => t.style.setProperty('--toast-index', i))
+      }, TOAST_FADE_MS)
+    }, TOAST_DURATION_MS)
   }
 
   async function buildHtmlPage(mdContent) {
@@ -100,6 +103,7 @@ window.ExportManager = (() => {
 
   return {
     exportMd: async function (content) {
+      if (!content || !content.trim()) { showToast('没有内容可导出', 'error'); return }
       const filePath = await resolveExportPath('md', content)
       if (!filePath) return
       const result = await window.api.fileSave(filePath, content)
@@ -108,6 +112,7 @@ window.ExportManager = (() => {
         : ExportManager.showToast('导出失败: ' + result.error, 'error')
     },
     exportHtml: async function (content) {
+      if (!content || !content.trim()) { showToast('没有内容可导出', 'error'); return }
       const filePath = await resolveExportPath('html', content)
       if (!filePath) return
       const html = await buildHtmlPage(content),
@@ -127,15 +132,15 @@ window.ExportManager = (() => {
           timedOut = true
           showToast('Mermaid 图表渲染超时，PDF 中可能缺少部分图表', 'error')
           resolve()  // 超时也继续，可能缺少 mermaid 但至少导出纯文本
-        }, 15000)  // 15 秒超时
+        }, MERMAID_TIMEOUT)  // 超时时间
         const poll = () => {
           if (timedOut) return
           const container = document.getElementById('preview-container')
-          if (!container) return setTimeout(poll, 80)
+          if (!container) return setTimeout(poll, MERMAID_POLL_DELAY)
           const pending = container.querySelectorAll('.mermaid-block:not(.mermaid-rendered)')
-          0 === pending.length ? (clearTimeout(timeoutTimer), resolve()) : setTimeout(poll, 80)
+          0 === pending.length ? (clearTimeout(timeoutTimer), resolve()) : setTimeout(poll, MERMAID_POLL_DELAY)
         }
-        setTimeout(poll, 80)
+        setTimeout(poll, MERMAID_POLL_DELAY)
       })
       const result = await window.api.exportPDF(filePath)
       result.success

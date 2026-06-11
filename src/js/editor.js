@@ -1,4 +1,7 @@
 window.EditorManager = (() => {
+  // ── 常量定义 ──
+  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  // 粘贴图片大小限制（5MB）
+  const FIND_SEL_MAX_LENGTH = 200               // 查找时自动填入的选中文本最大长度
   let cm = null,
     onChangeCallback = null
 
@@ -192,7 +195,7 @@ window.EditorManager = (() => {
       async function handleImageFile(file) {
         if (!file || !file.type || !file.type.startsWith('image/')) return !1
         // 对大图片（>5MB）弹出确认，防止意外粘贴导致内存溢出
-        if (file.size > 5 * 1024 * 1024) {
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
           const ok = await window.showConfirm(
             `图片大小 ${(file.size / 1024 / 1024).toFixed(1)}MB，超过 5MB 限制。是否继续插入？`,
             { title: '图片过大', okText: '继续插入', cancelText: '取消' },

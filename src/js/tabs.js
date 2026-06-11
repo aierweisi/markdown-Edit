@@ -288,6 +288,14 @@ window.TabManager = (() => {
       isActive = tabId === activeId
     tabs.splice(idx, 1)
 
+    // 关闭标签时清理 CodeMirror 实例，防止 DOM/内存泄漏
+    if (tab.doc && tab.doc.toTextArea) {
+      try {
+        tab.doc.toTextArea()
+      } catch (_) {}
+      tab.doc = null
+    }
+
     // 关闭标签时清理查找高亮标记
     if (isActive && window.FindManager) {
       window.FindManager.clearMarkers && window.FindManager.clearMarkers()

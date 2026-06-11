@@ -17,21 +17,21 @@ const jsFiles = [
   'app.js',
   'cache.js',
   'editor.js',
+  'eventbus.js',
   'export.js',
   'find.js',
   'palette.js',
   'preview.js',
   'recent.js',
   'settings.js',
+  'shortcuts.js',
   'tabs.js',
   'templates.js',
   'utils.js',
 ]
 
-// ====== CSS 文件（从 src/css/ 读取） ======
-const cssFiles = [
-  'main.css',
-]
+// ====== CSS 文件（从 src/css/ 读取所有 *.css，csso 压缩并内联 @import） ======
+const cssFiles = fs.readdirSync(path.join(SRC, 'css')).filter(f => f.endsWith('.css'))
 
 // ====== HTML 文件（从 src/ 读取） ======
 const htmlFiles = [
@@ -86,7 +86,11 @@ async function minifyJS(inPath, outPath) {
 
 function minifyCSS(inPath, outPath) {
   const code = fs.readFileSync(inPath, 'utf8')
-  const result = csso.minify(code, { restructure: true })
+  const result = csso.minify(code, {
+    restructure: true,
+    filename: path.basename(inPath),
+    sourceMap: false,
+  })
   fs.mkdirSync(path.dirname(outPath), { recursive: true })
   fs.writeFileSync(outPath, result.css)
 }

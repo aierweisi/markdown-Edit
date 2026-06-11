@@ -1,3 +1,4 @@
+/* global ShortcutManager */
 window.SettingsManager = (() => {
   let settings = {}
   let escapeHandler = null
@@ -110,12 +111,25 @@ window.SettingsManager = (() => {
     exportNamingRule: '{title}_{date}',
     imageSaveDir: 'assets',
   }
+  const CLEAR_BTN_RESET_DELAY = 2200  // 清空缓存按钮文字恢复延迟（ms）
 
   return {
     init: function () {
-      document.getElementById('settings-close').addEventListener('click', closeModal)
-      document.getElementById('settings-save-btn').addEventListener('click', saveSettings)
-      const resetBtn = document.getElementById('settings-reset-btn')
+      const $ = document.getElementById.bind(document)
+      const $$ = document.querySelectorAll.bind(document)
+      const closeBtn = $('settings-close')
+      const saveBtn = $('settings-save-btn')
+      const resetBtn = $('settings-reset-btn')
+      const overlay = $('settings-overlay')
+      const namingInput = $('setting-namingrule')
+      const exportDirInput = $('setting-exportdir')
+      const imageDirInput = $('setting-imagedir')
+      const exportDirBtn = $('setting-exportdir-btn')
+      const imageDirBtn = $('setting-imagedir-btn')
+      const clearBtn = $('setting-clear-cache-btn')
+
+      closeBtn && closeBtn.addEventListener('click', closeModal)
+      saveBtn && saveBtn.addEventListener('click', saveSettings)
       resetBtn && resetBtn.addEventListener('click', async () => {
         if (!await window.showConfirm('重置所有设置为默认值？', { title: '重置设置', okText: '重置', danger: true })) return
         await window.api.storeSet('theme', DEFAULTS.theme)
@@ -132,44 +146,43 @@ window.SettingsManager = (() => {
         closeModal()
         ExportManager.showToast('设置已重置为默认值')
       })
-      document.getElementById('settings-overlay').addEventListener('click', evt => {
+      overlay && overlay.addEventListener('click', evt => {
         evt.target === evt.currentTarget && closeModal()
       })
-      document.querySelectorAll('.settings-nav-item').forEach(el => {
+      $$('.settings-nav-item').forEach(el => {
         el.addEventListener('click', () => switchPanel(el.dataset.panel))
       })
-      document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
+      $$('.theme-toggle-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          document.querySelectorAll('.theme-toggle-btn').forEach(b => b.classList.remove('active'))
+          $$('.theme-toggle-btn').forEach(b => b.classList.remove('active'))
           btn.classList.add('active')
         })
       })
-      document.querySelectorAll('.naming-var-chip').forEach(chip => {
+      $$('.naming-var-chip').forEach(chip => {
         chip.addEventListener('click', () => {
-          const input = document.getElementById('setting-namingrule'),
-            varStr = chip.dataset.var,
-            start = input.selectionStart,
-            end = input.selectionEnd,
-            currentVal = input.value
-          input.value = currentVal.slice(0, start) + varStr + currentVal.slice(end)
+          if (!namingInput) return
+          const varStr = chip.dataset.var,
+            start = namingInput.selectionStart,
+            end = namingInput.selectionEnd,
+            currentVal = namingInput.value
+          namingInput.value = currentVal.slice(0, start) + varStr + currentVal.slice(end)
           const newPos = start + varStr.length
-          input.setSelectionRange(newPos, newPos)
-          input.focus()
+          namingInput.setSelectionRange(newPos, newPos)
+          namingInput.focus()
         })
       })
-      document.getElementById('setting-exportdir-btn').addEventListener('click', async () => {
+      exportDirBtn && exportDirBtn.addEventListener('click', async () => {
         const result = await window.api.dialogSelectDir()
         !result.canceled &&
           result.filePaths.length &&
-          (document.getElementById('setting-exportdir').value = result.filePaths[0])
+          exportDirInput && (exportDirInput.value = result.filePaths[0])
       })
-      document.getElementById('setting-imagedir-btn').addEventListener('click', async () => {
+      imageDirBtn && imageDirBtn.addEventListener('click', async () => {
         const result = await window.api.dialogSelectDir()
         !result.canceled &&
           result.filePaths.length &&
-          (document.getElementById('setting-imagedir').value = result.filePaths[0])
+          imageDirInput && (imageDirInput.value = result.filePaths[0])
       })
-      const clearBtn = document.getElementById('setting-clear-cache-btn')
       clearBtn &&
         clearBtn.addEventListener('click', async () => {
           if (
@@ -193,7 +206,7 @@ window.SettingsManager = (() => {
               ExportManager.showToast('清空缓存失败：' + ((result && result.error) || '未知错误'), 'error')
           setTimeout(() => {
             clearBtn.textContent = origText
-          }, 2200)
+          }, CLEAR_BTN_RESET_DELAY)
         })
     },
     load: loadFromStore,
@@ -207,6 +220,13 @@ window.SettingsManager = (() => {
       document.getElementById('setting-imagedir').value = settings.imageSaveDir
       syncThemeBtns(settings.theme)
       switchPanel(panelId)
+      // 如果切换到快捷键面板，渲染快捷键列表
+      if (panelId === 'shortcuts') {
+        const container = document.getElementById('panel-shortcuts-content')
+        if (container && window.ShortcutManager) {
+          ShortcutManager.renderPanel(container)
+        }
+      }
       document.getElementById('settings-overlay').classList.add('open')
       escapeHandler = (evt) => {
         if ('Escape' === evt.key) closeModal()

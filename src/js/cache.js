@@ -1,6 +1,11 @@
 window.CacheManager = (() => {
+  // ── 常量定义 ──
+  const LOCK_TIMEOUT_MS = 5000     // 持久化锁等待超时（5 秒）
+  const LOCK_POLL_MS = 50         // 锁轮询间隔
+  const DEFAULT_INTERVAL_S = 10   // 默认自动保存间隔（秒）
+
   let timerId = null,
-    intervalMs = 1e4,
+    intervalMs = DEFAULT_INTERVAL_S * 1e3,
     lastHash = '',
     dirty = true,
     _persistLockAcquired = false
@@ -10,11 +15,11 @@ window.CacheManager = (() => {
   async function acquireLock() {
     const startTime = Date.now()
     while (_persistLockAcquired) {
-      if (Date.now() - startTime > 5000) {
+      if (Date.now() - startTime > LOCK_TIMEOUT_MS) {
         console.warn('[Cache] Persist lock wait timeout (5s), forcing release')
         break
       }
-      await new Promise(resolve => setTimeout(resolve, 50))
+      await new Promise(resolve => setTimeout(resolve, LOCK_POLL_MS))
     }
     _persistLockAcquired = true
   }
@@ -24,6 +29,7 @@ window.CacheManager = (() => {
 
   function startTimer() {
     stopTimer()
+    lastHash = ''  // 重置哈希，确保首次保存不被跳过
     timerId = setInterval(saveToStore, intervalMs)
   }
 
@@ -104,7 +110,7 @@ window.CacheManager = (() => {
     }
 
     const hashObj = {
-      tabs: tabs.map(t => ({ id: t.id, content: t.content, modified: t.modified })),
+      tabs: tabs.map(t => ({ id: t.id, content: t.content, modified: t.modified, filePath: t.filePath, scrollTop: t.scrollTop })),
       activeId,
     }
     const hashStr = JSON.stringify(hashObj)

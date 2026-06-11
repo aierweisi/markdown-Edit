@@ -165,9 +165,11 @@ window.TemplateManager = (() => {
       return builtin ? ('function' == typeof builtin.content ? builtin.content() : builtin.content) : tpl.content
     })(tpl)
 
+    // 用户自定义模板内容过 DOMPurify 消毒，防止 XSS
+    const safeContent = tpl.builtin ? content : (window.DOMPurify ? DOMPurify.sanitize(content, { ALLOWED_TAGS: [] }) : content)
     document.activeElement && document.activeElement.blur && document.activeElement.blur()
     document.getElementById('tpl-overlay').classList.remove('open')
-    onApplyCb && onApplyCb(content, tpl.name)
+    onApplyCb && onApplyCb(safeContent, tpl.name)
     window.api && window.api.focusWindow && (await window.api.focusWindow())
     EditorManager.focus()
     requestAnimationFrame(() => EditorManager.focus())

@@ -119,7 +119,9 @@
     requestAnimationFrame(() => EditorManager.focus())
   })
 
-  hasPendingFile = window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false
+  // hasPendingFile 变量槽位用于防止 OS 文件 IPC 回调在 TDZ 中访问变量报错
+  // 实际值通过 onOpenFileFromOS 回调判断，无需在此读取
+  void (window.api && window.api.hasPendingFile ? await window.api.hasPendingFile() : false)
   // 始终尝试恢复缓存（OS 文件关联启动时仍应恢复上次标签页）
   const cache = await CacheManager.checkAndRestore()
   let restored = false
@@ -469,6 +471,7 @@
   document.getElementById('btn-template')?.addEventListener('click', () => TemplateManager.open())
   document.getElementById('btn-theme')?.addEventListener('click', () => SettingsManager.toggleTheme())
   document.getElementById('btn-settings')?.addEventListener('click', () => SettingsManager.open())
+  document.getElementById('btn-shortcuts')?.addEventListener('click', () => openShortcutsPanel())
   document.getElementById('status-palette-hint')?.addEventListener('click', () => CommandPalette?.open?.())
 
   // Format buttons
@@ -708,7 +711,8 @@
     P.register({ id: 'tab.new', group: '标签', title: '新建标签页', run: () => { const t = TabManager.createTab({ title: '未命名' }); TabManager.setActive(t.id) } })
     P.register({ id: 'tab.close', group: '标签', title: '关闭当前标签', hint: 'Ctrl+W', run: () => { const t = TabManager.getActive(); if (t) TabManager.closeTab(t.id) } })
     P.register({ id: 'app.templates', group: '工具', title: '模板库', run: () => TemplateManager.open() })
-    P.register({ id: 'app.settings', group: '工具', title: '设置', run: () => SettingsManager.open() })
+    P.register({ id: 'app.settings', group: '工具', title: '设置', hint: 'Ctrl+,', run: () => SettingsManager.open() })
+    P.register({ id: 'app.shortcuts', group: '工具', title: '快捷键展示', hint: 'Ctrl+Shift+/', run: () => openShortcutsPanel() })
   }
 
   // Keyboard shortcuts
@@ -737,6 +741,10 @@
       const dir = evt.shiftKey ? -1 : 1
       const next = tabs[(curIdx + dir + tabs.length) % tabs.length]
       if (next) TabManager.setActive(next.id)
+    }
+    if (ctrl && evt.shiftKey && (evt.key === '/' || evt.key === '?')) {
+      evt.preventDefault()
+      openShortcutsPanel()
     }
   })
 
@@ -779,6 +787,12 @@
     } else {
       winMaxIcon.innerHTML = '<rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/>'
       winMaxBtn.title = '最大化'
+    }
+  }
+
+  function openShortcutsPanel() {
+    if (window.SettingsManager) {
+      SettingsManager.open('shortcuts')
     }
   }
 
