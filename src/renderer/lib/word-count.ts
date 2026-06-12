@@ -1,36 +1,21 @@
 /**
- * Count "words" the way the markdown editor displays in the status bar:
- *  - CJK characters each count as 1.
- *  - Latin word groups (letters/digits/underscores/dashes) count as 1 each.
- *  - Whitespace and punctuation do not count.
+ * Word counter aligned with the v1 editor:
+ *   total = (CJK char count) + (latin word group count)
+ * where "latin word" means a contiguous run of [A-Za-z], split by anything
+ * else. Digits, punctuation, whitespace, and non-CJK Unicode (e.g. Korean,
+ * emoji) do not contribute.
  *
- * Suitable for incremental use: pass a delta and the existing total to update
- * without rescanning the whole document. For full-document recounts, call
- * `countWords(text)`.
+ * Two single-pass regex scans keep this O(n) and predictable for documents
+ * up to a few MB; status bar callers debounce before invoking.
  */
-const CJK = /[一-鿿぀-ゟ゠-ヿ]/
-const WORD_CHAR = /[A-Za-z0-9_-]/
+const CJK_RE = /[一-龥]/g
+const LATIN_WORD_RE = /[A-Za-z]+/g
 
 export function countWords(text: string): number {
   if (!text) return 0
-  let total = 0
-  let inWord = false
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    if (!ch) continue
-    if (CJK.test(ch)) {
-      total++
-      inWord = false
-    } else if (WORD_CHAR.test(ch)) {
-      if (!inWord) {
-        total++
-        inWord = true
-      }
-    } else {
-      inWord = false
-    }
-  }
-  return total
+  const cjk = text.match(CJK_RE)?.length ?? 0
+  const latin = text.match(LATIN_WORD_RE)?.length ?? 0
+  return cjk + latin
 }
 
 export interface CharCounts {

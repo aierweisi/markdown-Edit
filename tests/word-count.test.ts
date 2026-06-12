@@ -21,8 +21,15 @@ describe('countWords', () => {
   it('ignores punctuation', () => {
     expect(countWords('hello, world.')).toBe(2)
   })
-  it('hyphenated word is single word', () => {
-    expect(countWords('state-of-the-art')).toBe(1)
+  it('splits hyphenated phrases into separate words', () => {
+    expect(countWords('state-of-the-art')).toBe(4)
+  })
+  it('ignores digits (matches v1 behavior)', () => {
+    expect(countWords('hello 123 world')).toBe(2)
+    expect(countWords('99')).toBe(0)
+  })
+  it('handles CJK punctuation between chars', () => {
+    expect(countWords('你好，世界！')).toBe(4)
   })
 })
 
