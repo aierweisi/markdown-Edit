@@ -9,7 +9,7 @@ export interface ConfirmOpts {
 export function showConfirm(opts: ConfirmOpts): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
-    overlay.className = 'modal-overlay modal-overlay--open'
+    overlay.className = 'modal-overlay open'
 
     const modal = document.createElement('div')
     modal.className = 'modal modal--small'

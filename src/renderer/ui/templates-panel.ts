@@ -148,7 +148,7 @@ export function createTemplatesPanel(ctx: AppContext): TemplatesPanelApi {
   }
 
   function close(): void {
-    overlay?.classList.remove('modal-overlay--open')
+    overlay?.classList.remove('open')
     if (escHandler) {
       document.removeEventListener('keydown', escHandler)
       escHandler = null
@@ -162,7 +162,7 @@ export function createTemplatesPanel(ctx: AppContext): TemplatesPanelApi {
       selectedId = templates[0]?.id ?? null
       if (selectedId) select(selectedId)
       else renderList()
-      overlay!.classList.add('modal-overlay--open')
+      overlay!.classList.add('open')
       escHandler = (evt) => {
         if (evt.key === 'Escape') close()
       }

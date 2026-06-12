@@ -144,7 +144,7 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
   }
 
   function close(): void {
-    overlay?.classList.remove('modal-overlay--open')
+    overlay?.classList.remove('open')
     if (escapeHandler) {
       document.removeEventListener('keydown', escapeHandler)
       escapeHandler = null
@@ -156,7 +156,7 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
       ensureBuilt()
       fillForm(ctx.store.settings())
       switchPanel(panel)
-      overlay!.classList.add('modal-overlay--open')
+      overlay!.classList.add('open')
       escapeHandler = (evt) => {
         if (evt.key === 'Escape') close()
       }

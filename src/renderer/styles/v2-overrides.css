@@ -116,8 +116,8 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
-/* ── Confirm modal (v2 lightweight) ──────────────────────── */
-.modal-overlay--open { display: flex; }
+/* Confirm/recent/settings/templates modals: visibility handled by v1
+   .modal-overlay.open rule in v1.css. No extra rule needed here. */
 
 /* ── Recent panel rows ───────────────────────────────────── */
 .recent-item {

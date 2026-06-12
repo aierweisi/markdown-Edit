@@ -58,7 +58,7 @@ export function createRecentPanel(deps: RecentDeps): RecentPanelApi {
   }
 
   function close(): void {
-    overlay?.classList.remove('modal-overlay--open')
+    overlay?.classList.remove('open')
     if (escHandler) {
       document.removeEventListener('keydown', escHandler)
       escHandler = null
@@ -69,7 +69,7 @@ export function createRecentPanel(deps: RecentDeps): RecentPanelApi {
     async open() {
       if (!overlay) build()
       render(await deps.recent.list())
-      overlay!.classList.add('modal-overlay--open')
+      overlay!.classList.add('open')
       escHandler = (evt) => {
         if (evt.key === 'Escape') close()
       }
