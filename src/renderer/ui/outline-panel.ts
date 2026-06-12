@@ -39,20 +39,19 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
   let visible = false
   let lastHeadings: Heading[] = []
 
-  /** Anchor outline below the tab bar by measuring real DOM offsets. */
-  function alignTop(): void {
+  /** Anchor outline between tabbar's bottom and statusbar's top. */
+  function alignBounds(): void {
     const tabbar = document.getElementById('tabbar')
-    const rect = tabbar?.getBoundingClientRect()
-    if (rect && rect.bottom > 0) {
-      panel.style.top = `${rect.bottom}px`
-    } else {
-      panel.style.top = '108px' // sensible fallback
-    }
+    const statusbar = document.getElementById('statusbar')
+    const tabRect = tabbar?.getBoundingClientRect()
+    const statusRect = statusbar?.getBoundingClientRect()
+    panel.style.top = tabRect && tabRect.bottom > 0 ? `${tabRect.bottom}px` : '108px'
+    const bottomGap = statusRect ? window.innerHeight - statusRect.top : 0
+    panel.style.bottom = `${Math.max(0, bottomGap)}px`
   }
 
-  // re-align on resize and on initial show
-  window.addEventListener('resize', alignTop, { passive: true })
-  alignTop()
+  window.addEventListener('resize', alignBounds, { passive: true })
+  alignBounds()
 
   panel.addEventListener('click', (evt) => {
     const t = evt.target as HTMLElement
@@ -89,7 +88,7 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
 
   function setVisible(v: boolean): void {
     visible = v
-    if (v) alignTop()
+    if (v) alignBounds()
     panel.classList.toggle('outline-pane--open', v)
     document.body.classList.toggle('has-outline-open', v)
     const btn = document.getElementById('btn-outline')

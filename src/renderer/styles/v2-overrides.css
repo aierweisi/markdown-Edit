@@ -155,7 +155,7 @@
 .outline-pane {
   position: fixed;
   left: 0;
-  bottom: 30px; /* statusbar */
+  /* top + bottom are set in outline-panel.ts to hug the tabbar and statusbar */
   width: 244px;
   display: flex;
   flex-direction: column;
