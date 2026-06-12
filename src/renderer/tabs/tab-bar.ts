@@ -1,9 +1,6 @@
 import type { AppContext } from '../context'
 import type { TabManager } from './tab-manager'
 
-const TAB_CLASS = 'tab-bar__item'
-const ACTIVE_CLASS = 'tab-bar__item--active'
-
 interface TabBarOpts {
   ctx: AppContext
   tabs: TabManager
@@ -18,27 +15,40 @@ export function mountTabBar(opts: TabBarOpts): () => void {
     return () => undefined
   }
 
+  function escape(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c
+    })
+  }
+
   function render(): void {
     const tabs = opts.tabs.getAll()
     const activeId = opts.ctx.store.activeTabId()
     container!.innerHTML = ''
     for (const tab of tabs) {
       const el = document.createElement('div')
-      el.className = TAB_CLASS + (tab.id === activeId ? ' ' + ACTIVE_CLASS : '')
+      el.className =
+        'tab' + (tab.id === activeId ? ' active' : '') + (tab.modified ? ' modified' : '')
       el.dataset.tabId = tab.id
 
-      const label = document.createElement('span')
-      label.className = 'tab-bar__label'
-      label.textContent = (tab.modified ? '● ' : '') + tab.title
-      el.appendChild(label)
+      const title = document.createElement('span')
+      title.className = 'tab-title'
+      title.textContent = tab.title
+      el.appendChild(title)
+
+      const dot = document.createElement('span')
+      dot.className = 'tab-dot'
+      el.appendChild(dot)
 
       const closeBtn = document.createElement('button')
       closeBtn.type = 'button'
-      closeBtn.className = 'tab-bar__close'
-      closeBtn.textContent = '✕'
-      closeBtn.dataset.action = 'close'
+      closeBtn.className = 'tab-close'
+      closeBtn.innerHTML = '✕'
+      closeBtn.dataset.action = 'tab-close'
       el.appendChild(closeBtn)
 
+      el.title = tab.title
+      el.dataset.titleEsc = escape(tab.title)
       container!.appendChild(el)
     }
   }
@@ -50,7 +60,7 @@ export function mountTabBar(opts: TabBarOpts): () => void {
     if (!tabEl) return
     const id = tabEl.dataset.tabId
     if (!id) return
-    if (target.dataset.action === 'close') {
+    if (target.dataset.action === 'tab-close' || target.classList.contains('tab-close')) {
       opts.onClose(id)
       return
     }

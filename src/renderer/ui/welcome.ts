@@ -17,7 +17,7 @@ export function attachWelcome(deps: WelcomeDeps): () => void {
 
   function update(): void {
     if (dismissed) {
-      overlay!.classList.add('welcome-overlay--hidden')
+      overlay!.classList.add('hidden')
       return
     }
     const all = deps.tabs.getAll()
@@ -28,18 +28,31 @@ export function attachWelcome(deps: WelcomeDeps): () => void {
         !active?.filePath &&
         !active?.modified &&
         deps.tabs.getContent(active?.id ?? '').trim().length === 0)
-    overlay!.classList.toggle('welcome-overlay--hidden', !showWelcome)
+    overlay!.classList.toggle('hidden', !showWelcome)
   }
 
   function onClick(evt: MouseEvent): void {
     const t = evt.target as HTMLElement
-    if (t.dataset.welcomeAction === 'new') {
+    // v1 uses #welcome-new / #welcome-open / #welcome-template button IDs
+    const action =
+      t.dataset.welcomeAction ??
+      ({
+        'welcome-new': 'new',
+        'welcome-open': 'open',
+        'welcome-template': 'template',
+      }[t.id] ??
+        ({
+          'welcome-new': 'new',
+          'welcome-open': 'open',
+          'welcome-template': 'template',
+        }[t.closest<HTMLElement>('button')?.id ?? ''] ?? ''))
+    if (action === 'new') {
       dismissed = true
       deps.onNew()
-    } else if (t.dataset.welcomeAction === 'open') {
+    } else if (action === 'open') {
       dismissed = true
       deps.onOpen()
-    } else if (t.dataset.welcomeAction === 'template') {
+    } else if (action === 'template') {
       dismissed = true
       deps.onTemplate()
     }

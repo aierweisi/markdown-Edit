@@ -298,10 +298,71 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  // ── Toolbar buttons (event delegation via data-action) ──────────────
+  // ── Toolbar buttons: v1 element IDs + v2 data-action delegation ─────
+  const onBtnId = (id: string, fn: () => void): void => {
+    document.getElementById(id)?.addEventListener('click', fn)
+  }
+  onBtnId('btn-new', newFile)
+  onBtnId('btn-open', () => void openFile())
+  onBtnId('btn-save', () => void save())
+  onBtnId('btn-template', () => templatesPanel.open())
+  onBtnId('btn-theme', () => ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark'))
+  onBtnId('btn-settings', () => settingsPanel.open())
+  onBtnId('btn-tab-new', () => {
+    const tab = tabs.create({ title: '未命名' })
+    tabs.setActive(tab.id)
+    editor.setValue('')
+    preview.render('')
+    statusBar.setText('')
+    editor.focus()
+  })
+  onBtnId('btn-view-toggle', () => {
+    const idx = VIEW_MODES.indexOf(ctx.store.viewMode())
+    ctx.store.viewMode.set(VIEW_MODES[(idx + 1) % VIEW_MODES.length])
+  })
+  onBtnId('btn-swap-panes', () => {
+    const next = ctx.store.paneOrder() === 'preview-first' ? 'editor-first' : 'preview-first'
+    ctx.store.paneOrder.set(next)
+  })
+  onBtnId('status-palette-hint', () => palette.open())
+
+  // v1 export menu (.export-wrap → .export-menu .export-item[data-type])
+  const exportBtn = document.getElementById('btn-export')
+  const exportMenu = document.getElementById('export-menu')
+  exportBtn?.addEventListener('click', (evt) => {
+    evt.stopPropagation()
+    exportMenu?.classList.toggle('open')
+  })
+  document.addEventListener('click', () => exportMenu?.classList.remove('open'))
+  document.querySelectorAll<HTMLElement>('.export-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      exportMenu?.classList.remove('open')
+      const type = item.dataset.type
+      const content = editor.getValue()
+      const title = tabs.getActive()?.title ?? '未命名'
+      if (type === 'md') void exportMarkdown({ ctx, content, title })
+      else if (type === 'html') void exportHtml({ ctx, content, title, theme: ctx.store.theme() })
+      else if (type === 'pdf') void exportPdf({ ctx, content, title })
+      else if (type === 'settings') settingsPanel.open()
+    })
+  })
+
+  // v1 format buttons (.fmt-btn[data-action])
+  document.querySelectorAll<HTMLElement>('.fmt-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action
+      if (action) editor.insertFormat(action as Parameters<typeof editor.insertFormat>[0])
+    })
+  })
+
+  // ── Generic data-action delegation (for v2-only buttons) ────────────
   document.addEventListener('click', (evt) => {
     const t = (evt.target as HTMLElement).closest<HTMLElement>('[data-action]')
     if (!t) return
+    // Skip ones already handled by direct binding to avoid double-trigger
+    if (t.classList.contains('fmt-btn')) return
+    if (t.id && ['btn-new', 'btn-open', 'btn-save', 'btn-template', 'btn-theme',
+      'btn-settings', 'btn-tab-new', 'btn-view-toggle', 'btn-swap-panes'].includes(t.id)) return
     const action = t.dataset.action
     switch (action) {
       case 'new':

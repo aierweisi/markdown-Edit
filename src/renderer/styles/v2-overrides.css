@@ -1,0 +1,138 @@
+/* v2-specific UI: 命令面板 / 模板抽屉 / 快捷键面板 / toast / lightbox / confirm。
+   这些类名是 v2 新增的，v1 CSS 不会涉及。 */
+
+/* ── Command palette ───────────────────────────────────────── */
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: none;
+  justify-content: center;
+  padding-top: 100px;
+  z-index: 200;
+}
+
+.palette-overlay--open {
+  display: flex;
+}
+
+.palette {
+  width: 560px;
+  max-height: 60vh;
+  background: var(--bg-base);
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.palette__input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.palette__list {
+  flex: 1;
+  overflow: auto;
+}
+
+.palette__item {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.palette__item--active {
+  background: var(--bg-active, rgba(0, 0, 0, 0.05));
+}
+
+.palette__group {
+  font-size: 11px;
+  color: var(--text-muted, var(--text-secondary));
+}
+
+.palette__hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted, var(--text-secondary));
+}
+
+/* ── Toast ───────────────────────────────────────────────── */
+#toast-host {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 400;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--bg-toolbar, #fff);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-primary);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  animation: toast-in 0.18s ease-out;
+}
+
+.toast--success { border-color: rgba(46, 160, 67, 0.4); }
+.toast--error { border-color: rgba(215, 58, 73, 0.4); }
+.toast--leaving { animation: toast-out 0.22s ease-in forwards; }
+
+/* ── Image lightbox ──────────────────────────────────────── */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  cursor: zoom-out;
+}
+
+.lightbox__image {
+  max-width: 92vw;
+  max-height: 92vh;
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Confirm modal (v2 lightweight) ──────────────────────── */
+.modal-overlay--open { display: flex; }
+
+/* ── Recent panel rows ───────────────────────────────────── */
+.recent-item {
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.recent-item:hover { background: var(--bg-hover, rgba(0, 0, 0, 0.04)); }
+.recent-item__name { font-size: 13px; color: var(--text-primary); }
+.recent-item__path { font-size: 11px; color: var(--text-muted, var(--text-secondary)); }
+
+/* ── Misc helpers needed by v2 components ─────────────────── */
+.empty-tip {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 12px;
+}

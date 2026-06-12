@@ -1,16 +1,4 @@
-@import './tokens.css';
-@import './reset.css';
-@import './layout.css';
-@import './components/toolbar.css';
-@import './components/tab-bar.css';
-@import './components/status-bar.css';
-@import './components/welcome.css';
-@import './components/modal.css';
-@import './components/settings.css';
-@import './components/palette.css';
-@import './components/templates.css';
-@import './components/preview.css';
-@import './components/lightbox.css';
-@import './components/toast.css';
-@import './themes/light.css';
-@import './themes/dark.css';
+/* v1 视觉栈：variables → animations → 主体 → print。
+   保留 v2 自有的 palette / settings / templates / shortcuts / toast 样式覆盖。 */
+@import './v1.css';
+@import './v2-overrides.css';
