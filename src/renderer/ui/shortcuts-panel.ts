@@ -15,13 +15,30 @@ export const SHORTCUTS: ShortcutGroup[] = [
     ],
   },
   {
-    group: '编辑',
+    group: '查找',
     items: [
       { key: 'Ctrl+F', label: '查找' },
       { key: 'Ctrl+H', label: '替换' },
+      { key: 'F3', label: '查找下一个' },
+      { key: 'Shift+F3', label: '查找上一个' },
+    ],
+  },
+  {
+    group: '格式（编辑器内）',
+    items: [
       { key: 'Ctrl+B', label: '粗体' },
       { key: 'Ctrl+I', label: '斜体' },
       { key: 'Ctrl+K', label: '链接' },
+      { key: 'Ctrl+Shift+I', label: '图片' },
+      { key: 'Ctrl+`', label: '行内代码' },
+      { key: 'Ctrl+Shift+C', label: '代码块' },
+      { key: 'Ctrl+Shift+X', label: '删除线' },
+      { key: 'Ctrl+Shift+.', label: '引用' },
+      { key: 'Ctrl+Shift+7', label: '有序列表' },
+      { key: 'Ctrl+Shift+8', label: '无序列表' },
+      { key: 'Ctrl+Alt+T', label: '插入表格' },
+      { key: 'Ctrl+Alt+H', label: '循环标题级别' },
+      { key: 'Ctrl+Alt+R', label: '分割线' },
     ],
   },
   {

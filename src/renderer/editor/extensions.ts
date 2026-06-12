@@ -11,6 +11,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
 import { continueList } from '../lib/markdown-inline'
+import { formatKeymap } from './format-keymap'
 
 /** Holds the theme compartment so callers can swap light↔dark at runtime. */
 export const themeCompartment = new Compartment()
@@ -61,6 +62,7 @@ export function buildBaseExtensions(opts: BaseExtensionsOpts): Extension[] {
     langCompartment.of(markdown({ base: markdownLanguage, codeLanguages: languages })),
     themeCompartment.of(opts.theme),
     continueListKeymap,
+    formatKeymap,
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
   ]
 }

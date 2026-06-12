@@ -567,8 +567,8 @@ async function bootstrap(): Promise<void> {
     } else if (key === 'r' && evt.shiftKey) {
       evt.preventDefault()
       void recentPanel.open()
-    } else if ((key === 'p' && evt.shiftKey) || (key === 'k' && !evt.shiftKey)) {
-      // Ctrl+Shift+P or Ctrl+K
+    } else if (key === 'p' && evt.shiftKey) {
+      // Ctrl+Shift+P → palette (Ctrl+K is reserved for link insert)
       evt.preventDefault()
       palette.open()
     } else if (key === ',') {
