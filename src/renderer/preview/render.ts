@@ -66,6 +66,11 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
   function applyHtml(rawHtml: string): void {
     const clean = DOMPurify.sanitize(rawHtml, {
       ADD_ATTR: ['target', 'rel'],
+      // Allow file:// URIs (default whitelist only allows http/https/mailto/...).
+      // Electron renderer can safely load local files; users routinely paste
+      // images at file:///… paths and embed local relative assets.
+      ALLOWED_URI_REGEXP:
+        /^(?:(?:(?:f|ht)tps?|file|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
     })
     const tmp = document.createElement('article')
     tmp.className = opts.body.className
