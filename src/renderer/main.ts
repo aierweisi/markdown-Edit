@@ -96,6 +96,14 @@ async function bootstrap(): Promise<void> {
   })
 
   const preview = createPreview({ body: dom.previewBody })
+  // Sync preview's base-URL with the active tab so relative <img>/<a> resolve
+  // against the document's directory, not against `out/renderer/`.
+  const syncPreviewBase = (): void => {
+    const tab = tabs.getActive()
+    preview.setBaseFilePath(tab?.filePath ?? null)
+  }
+  ctx.store.activeTabId.subscribe(syncPreviewBase)
+  ctx.store.tabs.subscribe(syncPreviewBase)
   if (dom.previewContainer) attachSyncScroll({ editor, previewContainer: dom.previewContainer })
   attachImageLightbox(dom.previewBody)
 

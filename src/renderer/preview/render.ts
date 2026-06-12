@@ -6,6 +6,8 @@ import { renderMathIn } from './lazy-katex'
 
 export interface PreviewApi {
   render(text: string): void
+  /** Tell preview which file's directory to use as base URL for relative <img>/<a> hrefs. */
+  setBaseFilePath(filePath: string | null): void
   destroy(): void
 }
 
@@ -13,11 +15,22 @@ interface PreviewOpts {
   body: HTMLElement
 }
 
+const HAS_PROTOCOL = /^[a-z][a-z0-9+\-.]*:/i
+
+function toFileBaseUrl(filePath: string): string {
+  // Strip filename — keep the directory plus trailing slash, then file:// it.
+  const dir = filePath.replace(/\\/g, '/').replace(/\/[^/]*$/, '')
+  // Ensure leading slash so URL constructor treats it as absolute.
+  const normalized = dir.startsWith('/') ? dir : '/' + dir
+  return 'file://' + normalized + '/'
+}
+
 export function createPreview(opts: PreviewOpts): PreviewApi {
   const worker: MarkdownWorkerClient = createMarkdownWorkerClient()
   let pendingText: string | null = null
   let renderingFor: string | null = null
   let idleHandle: number | null = null
+  let baseFilePath: string | null = null
 
   function scheduleRender(text: string): void {
     pendingText = text
@@ -34,7 +47,7 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
         .then((html) => {
           if (renderingFor !== text) return
           applyHtml(html)
-          // post-processing: mermaid + katex
+          rewriteRelativeAssets(opts.body, baseFilePath)
           void renderMermaidIn(opts.body)
           void renderMathIn(opts.body)
         })
@@ -76,6 +89,9 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
     render(text) {
       scheduleRender(text)
     },
+    setBaseFilePath(filePath) {
+      baseFilePath = filePath
+    },
     destroy() {
       worker.destroy()
       if (idleHandle != null && typeof cancelIdleCallback === 'function') {
@@ -83,4 +99,36 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
       }
     },
   }
+}
+
+/**
+ * Resolve any <img src> / <a href> in `host` that lacks a protocol into a
+ * `file://` absolute URL relative to the active document's directory. Without
+ * this rewrite the renderer's file:// base would resolve relative paths
+ * against `out/renderer/` rather than the actual document folder.
+ */
+function rewriteRelativeAssets(host: HTMLElement, baseFilePath: string | null): void {
+  if (!baseFilePath) return
+  const baseUrl = toFileBaseUrl(baseFilePath)
+
+  host.querySelectorAll<HTMLImageElement>('img').forEach((img) => {
+    const src = img.getAttribute('src')
+    if (!src || HAS_PROTOCOL.test(src) || src.startsWith('data:') || src.startsWith('blob:')) return
+    try {
+      img.src = new URL(src, baseUrl).href
+    } catch {
+      /* leave untouched */
+    }
+  })
+
+  host.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((a) => {
+    const href = a.getAttribute('href')
+    if (!href || HAS_PROTOCOL.test(href) || href.startsWith('#') || href.startsWith('mailto:'))
+      return
+    try {
+      a.href = new URL(href, baseUrl).href
+    } catch {
+      /* leave untouched */
+    }
+  })
 }
