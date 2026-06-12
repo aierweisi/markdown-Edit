@@ -33,9 +33,9 @@ export default defineConfig({
     },
   },
   renderer: {
-    root: 'src/renderer',
+    root: resolve(__dirname, 'src/renderer'),
     build: {
-      outDir: '../../out/renderer',
+      outDir: resolve(__dirname, 'out/renderer'),
       emptyOutDir: true,
       sourcemap: true,
       rollupOptions: {

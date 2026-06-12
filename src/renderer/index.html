@@ -3,10 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: file:; font-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    />
     <title>Markdown Editor</title>
   </head>
-  <body>
-    <div id="app">Phase 0 scaffold — UI lands in later phases.</div>
+  <body class="theme-light">
+    <header id="toolbar" class="toolbar">
+      <div class="toolbar__logo">M↓ Markdown Editor</div>
+      <div class="toolbar__actions">
+        <button type="button" data-action="bold" title="粗体">B</button>
+        <button type="button" data-action="italic" title="斜体"><em>I</em></button>
+        <button type="button" data-action="heading" title="标题">H</button>
+        <button type="button" data-action="quote" title="引用">"</button>
+        <button type="button" data-action="ul" title="无序列表">·</button>
+        <button type="button" data-action="ol" title="有序列表">1.</button>
+        <button type="button" data-action="codeblock" title="代码块">{ }</button>
+        <button type="button" data-action="toggle-theme" title="切换主题">☾</button>
+      </div>
+    </header>
+
+    <nav id="tabbar" class="tab-bar">
+      <div id="tabs-container" class="tab-bar__list"></div>
+      <button id="btn-tab-new" type="button" data-action="tab-new" class="tab-bar__new">+</button>
+    </nav>
+
+    <main id="main-area" class="main-area">
+      <section id="editor-pane" class="pane">
+        <div id="editor-container" class="pane__body"></div>
+      </section>
+      <div id="divider" class="divider"></div>
+      <section id="preview-pane" class="pane">
+        <article id="preview-body" class="markdown-body"></article>
+      </section>
+    </main>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

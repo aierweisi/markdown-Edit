@@ -1,0 +1,46 @@
+body {
+  display: grid;
+  grid-template-rows: var(--toolbar-height) var(--tabbar-height) 1fr;
+  grid-template-areas: 'toolbar' 'tabbar' 'main';
+}
+
+.toolbar {
+  grid-area: toolbar;
+}
+
+.tab-bar {
+  grid-area: tabbar;
+}
+
+.main-area {
+  grid-area: main;
+  display: grid;
+  grid-template-columns: 1fr 4px 1fr;
+  min-height: 0;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.divider {
+  background: var(--border);
+  cursor: col-resize;
+}
+
+#editor-container {
+  height: 100%;
+}
+
+#editor-container .cm-editor {
+  height: 100%;
+}

@@ -1,0 +1,12 @@
+:root {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  --editor-font-size: 15px;
+
+  --toolbar-height: 42px;
+  --tabbar-height: 36px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+}
