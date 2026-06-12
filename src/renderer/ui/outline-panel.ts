@@ -86,6 +86,17 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
       .join('')
   }
 
+  function onOutsideMouseDown(evt: MouseEvent): void {
+    if (!visible) return
+    const target = evt.target as Node | null
+    if (!target) return
+    // Clicks inside the panel itself never close it.
+    if (panel.contains(target)) return
+    // Let the toolbar toggle button handle its own click → don't double-close.
+    if ((target as Element).closest?.('#btn-outline')) return
+    setVisible(false)
+  }
+
   function setVisible(v: boolean): void {
     visible = v
     if (v) alignBounds()
@@ -93,6 +104,8 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
     document.body.classList.toggle('has-outline-open', v)
     const btn = document.getElementById('btn-outline')
     if (btn) btn.classList.toggle('active', v)
+    if (v) document.addEventListener('mousedown', onOutsideMouseDown, true)
+    else document.removeEventListener('mousedown', onOutsideMouseDown, true)
   }
 
   return {
