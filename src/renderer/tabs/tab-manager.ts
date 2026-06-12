@@ -13,6 +13,8 @@ export interface TabManager {
   setActive(id: string): void
   setTitle(id: string, title: string, filePath?: string | null): void
   markModified(id: string, modified: boolean): void
+  /** Move tab `draggedId` to the position currently held by `targetId`. */
+  reorder(draggedId: string, targetId: string): void
   getActive(): TabState | null
   getAll(): TabState[]
   getById(id: string): TabState | null
@@ -77,6 +79,19 @@ export function createTabManager(ctx: AppContext): TabManager {
 
     markModified(id, modified) {
       mutate((tabs) => tabs.map((t) => (t.id === id ? { ...t, modified } : t)))
+    },
+
+    reorder(draggedId, targetId) {
+      if (draggedId === targetId) return
+      mutate((tabs) => {
+        const from = tabs.findIndex((t) => t.id === draggedId)
+        const to = tabs.findIndex((t) => t.id === targetId)
+        if (from < 0 || to < 0) return tabs
+        const next = tabs.slice()
+        const [moved] = next.splice(from, 1)
+        next.splice(to, 0, moved)
+        return next
+      })
     },
 
     getActive() {

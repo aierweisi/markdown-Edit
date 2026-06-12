@@ -195,31 +195,73 @@ async function bootstrap(): Promise<void> {
   })
 
   // ── Tab bar (event delegated) ───────────────────────────────────────
+  const switchActive = (id: string): void => {
+    const cur = ctx.store.activeTabId()
+    if (cur === id) return
+    if (cur) tabs.setContent(cur, editor.getValue())
+    ctx.store.activeTabId.set(id)
+    editor.setValue(tabs.getContent(id))
+    preview.render(tabs.getContent(id))
+    statusBar.setText(tabs.getContent(id))
+  }
+  const closeTabAndUpdate = (id: string): void => {
+    tabs.close(id)
+    const next = ctx.store.activeTabId()
+    if (next) {
+      editor.setValue(tabs.getContent(next))
+      preview.render(tabs.getContent(next))
+      statusBar.setText(tabs.getContent(next))
+    } else {
+      editor.setValue('')
+      preview.render('')
+      statusBar.setText('')
+    }
+  }
   mountTabBar({
     ctx,
     tabs,
-    onActivate(id) {
-      const cur = ctx.store.activeTabId()
-      if (cur === id) return
-      // Flush current content before switch
-      if (cur) tabs.setContent(cur, editor.getValue())
-      ctx.store.activeTabId.set(id)
-      editor.setValue(tabs.getContent(id))
-      preview.render(tabs.getContent(id))
-      statusBar.setText(tabs.getContent(id))
+    onActivate: switchActive,
+    onClose: closeTabAndUpdate,
+    onCloseOthers(id) {
+      tabs
+        .getAll()
+        .filter((t) => t.id !== id)
+        .forEach((t) => tabs.close(t.id))
+      switchActive(id)
     },
-    onClose(id) {
-      tabs.close(id)
-      const next = ctx.store.activeTabId()
-      if (next) {
-        editor.setValue(tabs.getContent(next))
-        preview.render(tabs.getContent(next))
-        statusBar.setText(tabs.getContent(next))
-      } else {
-        editor.setValue('')
-        preview.render('')
-        statusBar.setText('')
+    onCloseRight(id) {
+      const all = tabs.getAll()
+      const idx = all.findIndex((t) => t.id === id)
+      if (idx < 0) return
+      all.slice(idx + 1).forEach((t) => tabs.close(t.id))
+    },
+    onRename(id) {
+      const tab = tabs.getById(id)
+      if (!tab) return
+      const tabEl = document.querySelector<HTMLElement>(`[data-tab-id="${id}"]`)
+      const titleEl = tabEl?.querySelector<HTMLElement>('.tab-title')
+      if (!tabEl || !titleEl) return
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.value = tab.title
+      input.className = 'tab-rename-input'
+      input.style.cssText =
+        'background:transparent;border:1px solid var(--accent,#4f7ef7);border-radius:3px;color:inherit;font:inherit;padding:0 4px;width:8em'
+      titleEl.replaceWith(input)
+      input.focus()
+      input.select()
+      const commit = (apply: boolean): void => {
+        if (apply) {
+          const value = input.value.trim() || tab.title
+          tabs.setTitle(id, value)
+        }
+        input.replaceWith(titleEl)
       }
+      input.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Enter') commit(true)
+        if (evt.key === 'Escape') commit(false)
+      })
+      input.addEventListener('blur', () => commit(true))
     },
   })
 
