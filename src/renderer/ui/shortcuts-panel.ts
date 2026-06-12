@@ -54,15 +54,15 @@ export const SHORTCUTS: ShortcutGroup[] = [
 export function renderShortcutsHTML(): string {
   return SHORTCUTS.map(
     (g) => `
-    <section class="shortcuts__section">
-      <h3 class="shortcuts__group">${g.group}</h3>
-      <div class="shortcuts__table">
+    <section class="shortcuts-section">
+      <h3 class="shortcuts-group-title">${g.group}</h3>
+      <div class="shortcuts-table">
         ${g.items
           .map(
             (i) => `
-          <div class="shortcuts__row">
-            <kbd class="shortcuts__key">${i.key}</kbd>
-            <span class="shortcuts__label">${i.label}</span>
+          <div class="shortcuts-row">
+            <kbd class="shortcuts-key">${i.key}</kbd>
+            <span class="shortcuts-label">${i.label}</span>
           </div>`,
           )
           .join('')}

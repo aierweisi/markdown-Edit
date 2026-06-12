@@ -136,3 +136,112 @@
   color: var(--text-muted, var(--text-secondary));
   font-size: 12px;
 }
+
+/* ── Shortcuts panel polish ───────────────────────────────────
+   v1 base styles are at v1.css:3375+. Overrides below tighten the
+   layout, add card-style sections with stronger visual separation,
+   and zebra rows for easier scanning. */
+#panel-shortcuts-content,
+.shortcuts-panel-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  padding: 4px 2px 16px;
+}
+
+.shortcuts-section {
+  border: 1px solid var(--border-muted, rgba(0, 0, 0, 0.08));
+  border-radius: 8px;
+  padding: 12px 14px 10px;
+  background: var(--bg-card, rgba(0, 0, 0, 0.018));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.theme-dark .shortcuts-section {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.shortcuts-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px dashed var(--border-muted, rgba(0, 0, 0, 0.08));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-secondary, #6b7280);
+}
+
+.theme-dark .shortcuts-group-title {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: #a8a8b4;
+}
+
+.shortcuts-group-title::before {
+  content: '';
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--accent, #4f7ef7);
+}
+
+.shortcuts-table {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.shortcuts-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 4px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.shortcuts-row + .shortcuts-row {
+  border-top: 1px solid var(--border-muted, rgba(0, 0, 0, 0.05));
+}
+
+.theme-dark .shortcuts-row + .shortcuts-row {
+  border-top-color: rgba(255, 255, 255, 0.04);
+}
+
+.shortcuts-row:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.theme-dark .shortcuts-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.shortcuts-key {
+  min-width: 96px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  border-radius: 5px;
+  border: 1px solid var(--border-key, rgba(0, 0, 0, 0.12));
+  background: var(--bg-key, #fff);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.theme-dark .shortcuts-key {
+  background: #1c1c24;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+  color: #e4e4ec;
+}
+
+.shortcuts-label {
+  font-size: 12.5px;
+  color: var(--text-primary, #1f2937);
+  flex: 1;
+}
