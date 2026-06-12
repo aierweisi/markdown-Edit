@@ -1,153 +1,131 @@
 <!doctype html>
-<html lang="zh-CN"
-  ><head
-    ><meta charset="UTF-8" /><meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0" /><meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: file:; font-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" /><title
-      >Markdown Editor</title
-    ><link rel="stylesheet" href="vendor/codemirror/codemirror.min.css" /><link
-      rel="stylesheet"
-      href="vendor/codemirror/dialog.min.css" /><link
-      rel="stylesheet"
-      href="vendor/codemirror/matchesonscrollbar.min.css" /><link
-      rel="stylesheet"
-      href="vendor/hljs/styles/github.min.css"
-      id="hljs-theme" /><link rel="stylesheet" href="vendor/katex/katex.min.css" /><link
-      rel="stylesheet"
-      href="css/main.css" /></head
-  ><body class="theme-light" id="app-body"
-    ><!-- ── Toolbar ─────────────────────────────────────────── --><div
-      class="toolbar"
-      id="toolbar"
-      ><div class="toolbar-left"
-        ><!-- Logo --><div class="app-logo"
-          ><div class="app-logo-icon">M↓</div><span>Markdown Editor</span></div
-        ></div
-      ><div class="toolbar-right"
-        ><!-- Custom window controls --><div class="window-controls" id="window-controls"
-          ><button class="win-ctrl" id="win-min" title="最小化" aria-label="Minimize"
-            ><svg aria-hidden="true" viewBox="0 0 10 10" width="10" height="10">
-              <path d="M0 5h10" stroke="currentColor" stroke-width="1" /></svg></button
-          ><button class="win-ctrl" id="win-max" title="最大化" aria-label="Maximize"
-            ><svg aria-hidden="true" viewBox="0 0 10 10" width="10" height="10" id="win-max-icon">
-              <rect
-                x="0.5"
-                y="0.5"
-                width="9"
-                height="9"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1"
-              /></svg></button
-          ><button class="win-ctrl win-ctrl-close" id="win-close" title="关闭" aria-label="Close"
-            ><svg aria-hidden="true" viewBox="0 0 10 10" width="10" height="10">
-              <path
-                d="M0 0l10 10M10 0l-10 10"
-                stroke="currentColor"
-                stroke-width="1"
-              /></svg></button></div></div></div
-    ><!-- ── Format Toolbar (second row) ──────────────────────── --><div
-      class="format-toolbar"
-      id="format-toolbar"
-      ><!-- File ops --><div class="toolbar-btn-group"
-        ><button class="toolbar-btn" id="btn-new" title="新建 (Ctrl+N)"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="12" y1="18" x2="12" y2="12" />
-            <line x1="9" y1="15" x2="15" y2="15" /></svg></button
-        ><button class="toolbar-btn" id="btn-open" title="打开 (Ctrl+O)"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path
-              d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-            /></svg></button
-        ><button class="toolbar-btn" id="btn-save" title="保存 (Ctrl+S)"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-            <polyline points="17 21 17 13 7 13 7 21" />
-            <polyline points="7 3 7 8 15 8" /></svg></button></div
-      ><div class="toolbar-separator"></div
-      ><!-- Format buttons --><div class="toolbar-btn-group"
-        ><button class="toolbar-btn fmt-btn" data-action="heading" title="标题 (循环 H1→H2→H3)"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M6 12h12M6 4v16M18 4v16" stroke-width="2.2" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="bold" title="粗体 (Ctrl+B)"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
-            <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="italic" title="斜体 (Ctrl+I)"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <line x1="19" y1="4" x2="10" y2="4" />
-            <line x1="14" y1="20" x2="5" y2="20" />
-            <line x1="15" y1="4" x2="9" y2="20" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="strikethrough" title="删除线"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M16 4H9a3 3 0 0 0-2.83 4" />
-            <path d="M14 20H8a3 3 0 0 1-2.83-4" />
-            <path d="M4 12h16" /></svg></button
-        ><div class="toolbar-separator" style="margin: 0 6px"></div
-        ><button class="toolbar-btn fmt-btn" data-action="link" title="插入链接"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="image" title="插入图片"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="code" title="行内代码"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="codeblock" title="代码块"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <polyline points="16 18 22 12 16 6" />
-            <polyline points="8 6 2 12 8 18" />
-            <line x1="12" y1="2" x2="12" y2="22" opacity="0.3" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="quote" title="引用"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <path
-              d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"
-            />
-            <path
-              d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"
-            /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="table" title="插入表格"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="1" />
-            <path d="M3 9h18M3 15h18M9 3v18" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="ul" title="无序列表"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <line x1="9" y1="6" x2="20" y2="6" />
-            <line x1="9" y1="12" x2="20" y2="12" />
-            <line x1="9" y1="18" x2="20" y2="18" />
-            <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
-            <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
-            <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="ol" title="有序列表"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <line x1="10" y1="6" x2="21" y2="6" />
-            <line x1="10" y1="12" x2="21" y2="12" />
-            <line x1="10" y1="18" x2="21" y2="18" />
-            <path d="M4 6h1v4" stroke-width="1.8" />
-            <path d="M4 10h2" stroke-width="1.8" />
-            <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" stroke-width="1.8" /></svg></button
-        ><button class="toolbar-btn fmt-btn" data-action="hr" title="分割线"
-          ><svg aria-hidden="true" viewBox="0 0 24 24">
-            <line x1="3" y1="12" x2="21" y2="12" stroke-width="2.5" />
-            <line x1="3" y1="6" x2="21" y2="6" opacity="0.2" />
-            <line x1="3" y1="18" x2="21" y2="18" opacity="0.2" /></svg></button></div
-      ><div class="format-toolbar-spacer"></div
-      ><!-- Template --><button
-        class="toolbar-btn toolbar-action-btn"
-        id="btn-template"
-        title="模板库"
-        ><svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          style="
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: file:; font-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" />
+  <title>Markdown Editor</title>
+  <link rel="stylesheet" href="vendor/codemirror/codemirror.min.css" />
+  <link rel="stylesheet" href="vendor/codemirror/dialog.min.css" />
+  <link rel="stylesheet" href="vendor/codemirror/matchesonscrollbar.min.css" />
+  <link rel="stylesheet" href="vendor/hljs/styles/github.min.css" id="hljs-theme" />
+  <link rel="stylesheet" href="vendor/katex/katex.min.css" />
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+
+<body class="theme-light" id="app-body"><!-- ── Toolbar ─────────────────────────────────────────── -->
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar-left"><!-- Logo -->
+      <div class="app-logo">
+        <div class="app-logo-icon">M↓</div><span>Markdown Editor</span>
+      </div>
+    </div>
+    <div class="toolbar-right"><!-- Custom window controls -->
+      <div class="window-controls" id="window-controls"><button class="win-ctrl" id="win-min" title="最小化"
+          aria-label="Minimize"><svg aria-hidden="true" viewBox="0 0 10 10" width="10" height="10">
+            <path d="M0 5h10" stroke="currentColor" stroke-width="1" />
+          </svg></button><button class="win-ctrl" id="win-max" title="最大化" aria-label="Maximize"><svg aria-hidden="true"
+            viewBox="0 0 10 10" width="10" height="10" id="win-max-icon">
+            <rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1" />
+          </svg></button><button class="win-ctrl win-ctrl-close" id="win-close" title="关闭" aria-label="Close"><svg
+            aria-hidden="true" viewBox="0 0 10 10" width="10" height="10">
+            <path d="M0 0l10 10M10 0l-10 10" stroke="currentColor" stroke-width="1" />
+          </svg></button></div>
+    </div>
+  </div>
+  <!-- ── Format Toolbar (second row) ──────────────────────── -->
+  <div class="format-toolbar" id="format-toolbar"><!-- File ops -->
+    <div class="toolbar-btn-group"><button class="toolbar-btn" id="btn-new" title="新建 (Ctrl+N)"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="12" y1="18" x2="12" y2="12" />
+          <line x1="9" y1="15" x2="15" y2="15" />
+        </svg></button><button class="toolbar-btn" id="btn-open" title="打开 (Ctrl+O)"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg></button><button class="toolbar-btn" id="btn-save" title="保存 (Ctrl+S)"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+          <polyline points="17 21 17 13 7 13 7 21" />
+          <polyline points="7 3 7 8 15 8" />
+        </svg></button></div>
+    <div class="toolbar-separator"></div><!-- Format buttons -->
+    <div class="toolbar-btn-group"><button class="toolbar-btn fmt-btn" data-action="heading"
+        title="标题 (循环 H1→H2→H3)"><svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M6 12h12M6 4v16M18 4v16" stroke-width="2.2" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="bold" title="粗体 (Ctrl+B)"><svg
+          aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+          <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="italic" title="斜体 (Ctrl+I)"><svg
+          aria-hidden="true" viewBox="0 0 24 24">
+          <line x1="19" y1="4" x2="10" y2="4" />
+          <line x1="14" y1="20" x2="5" y2="20" />
+          <line x1="15" y1="4" x2="9" y2="20" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="strikethrough" title="删除线"><svg
+          aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M16 4H9a3 3 0 0 0-2.83 4" />
+          <path d="M14 20H8a3 3 0 0 1-2.83-4" />
+          <path d="M4 12h16" />
+        </svg></button>
+      <div class="toolbar-separator" style="margin: 0 6px"></div><button class="toolbar-btn fmt-btn" data-action="link"
+        title="插入链接"><svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="image" title="插入图片"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <polyline points="21 15 16 10 5 21" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="code" title="行内代码"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="codeblock" title="代码块"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <polyline points="16 18 22 12 16 6" />
+          <polyline points="8 6 2 12 8 18" />
+          <line x1="12" y1="2" x2="12" y2="22" opacity="0.3" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="quote" title="引用"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <path
+            d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z" />
+          <path
+            d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="table" title="插入表格"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="1" />
+          <path d="M3 9h18M3 15h18M9 3v18" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="ul" title="无序列表"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <line x1="9" y1="6" x2="20" y2="6" />
+          <line x1="9" y1="12" x2="20" y2="12" />
+          <line x1="9" y1="18" x2="20" y2="18" />
+          <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
+          <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
+          <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="ol" title="有序列表"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <line x1="10" y1="6" x2="21" y2="6" />
+          <line x1="10" y1="12" x2="21" y2="12" />
+          <line x1="10" y1="18" x2="21" y2="18" />
+          <path d="M4 6h1v4" stroke-width="1.8" />
+          <path d="M4 10h2" stroke-width="1.8" />
+          <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" stroke-width="1.8" />
+        </svg></button><button class="toolbar-btn fmt-btn" data-action="hr" title="分割线"><svg aria-hidden="true"
+          viewBox="0 0 24 24">
+          <line x1="3" y1="12" x2="21" y2="12" stroke-width="2.5" />
+          <line x1="3" y1="6" x2="21" y2="6" opacity="0.2" />
+          <line x1="3" y1="18" x2="21" y2="18" opacity="0.2" />
+        </svg></button>
+    </div>
+    <div class="format-toolbar-spacer"></div>
+    <!-- Template -->
+    <button class="toolbar-btn toolbar-action-btn" id="btn-template" title="模板库"><svg aria-hidden="true"
+        viewBox="0 0 24 24" style="
             width: 13px;
             height: 13px;
             fill: none;
@@ -155,20 +133,16 @@
             stroke-width: 2;
             stroke-linecap: round;
             stroke-linejoin: round;
-          "
-        >
-          <rect x="3" y="3" width="7" height="7" />
-          <rect x="14" y="3" width="7" height="7" />
-          <rect x="14" y="14" width="7" height="7" />
-          <rect x="3" y="14" width="7" height="7" />
-        </svg>
-        模板 </button
-      ><!-- Export --><div class="export-wrap"
-        ><button class="toolbar-btn toolbar-action-btn" id="btn-export" title="导出文件"
-          ><svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            style="
+          ">
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+      </svg>
+      模板
+    </button><!-- Export -->
+    <div class="export-wrap"><button class="toolbar-btn toolbar-action-btn" id="btn-export" title="导出文件"><svg
+          aria-hidden="true" viewBox="0 0 24 24" style="
               width: 13px;
               height: 13px;
               fill: none;
@@ -176,17 +150,13 @@
               stroke-width: 2;
               stroke-linecap: round;
               stroke-linejoin: round;
-            "
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          导出
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            style="
+            ">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        导出
+        <svg aria-hidden="true" viewBox="0 0 24 24" style="
               width: 10px;
               height: 10px;
               fill: none;
@@ -195,386 +165,270 @@
               stroke-linecap: round;
               stroke-linejoin: round;
               opacity: 0.6;
-            "
-          >
-            <polyline points="6 9 12 15 18 9" /></svg></button
-        ><div class="export-menu" id="export-menu"
-          ><div class="export-item" data-type="md"
-            ><svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-            </svg>
-            导出 Markdown </div
-          ><div class="export-item" data-type="html"
-            ><svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <polyline points="16 18 22 12 16 6" />
-              <polyline points="8 6 2 12 8 18" />
-            </svg>
-            导出 HTML </div
-          ><div class="export-item" data-type="pdf"
-            ><svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="9" y1="15" x2="15" y2="15" />
-            </svg>
-            导出 PDF </div
-          ><div class="export-separator"></div
-          ><div class="export-item" data-type="settings"
-            ><svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.07 4.93a10 10 0 0 1 1.41 13.37" />
-            </svg>
-            导出设置...
-          </div></div
-        ></div
-      ><div class="toolbar-separator"></div
-      ><!-- View toggle --><button
-        class="toolbar-btn"
-        id="btn-view-toggle"
-        title="切换视图 (Ctrl+\)"
-        ><svg aria-hidden="true" viewBox="0 0 24 24" id="view-icon">
-          <rect x="3" y="3" width="8" height="18" rx="1" />
-          <rect x="13" y="3" width="8" height="18" rx="1" /></svg></button
-      ><!-- Swap panes --><button
-        class="toolbar-btn"
-        id="btn-swap-panes"
-        title="互换编辑/预览位置 (Ctrl+Shift+\)"
-        ><svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="3" y="3" width="8" height="18" rx="1" opacity="0.4" />
-          <rect x="13" y="3" width="8" height="18" rx="1" opacity="0.4" />
-          <path d="M7 9l-3 3 3 3" stroke-width="1.8" />
-          <path d="M17 9l3 3-3 3" stroke-width="1.8" />
-          <line x1="4" y1="12" x2="20" y2="12" stroke-width="1.5" /></svg></button
-      ><!-- Theme --><button class="toolbar-btn" id="btn-theme" title="切换主题 (Ctrl+Shift+T)"
-        ><svg aria-hidden="true" viewBox="0 0 24 24" id="theme-icon">
-          <circle cx="12" cy="12" r="5" />
-          <line x1="12" y1="1" x2="12" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="23" />
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-          <line x1="1" y1="12" x2="3" y2="12" />
-          <line x1="21" y1="12" x2="23" y2="12" />
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg></button
-      ><!-- Settings --><button class="toolbar-btn" id="btn-settings" title="设置"
-        ><svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-          /></svg></button></div
-    ><!-- ── Tab Bar ──────────────────────────────────────────── --><div class="tabbar" id="tabbar"
-      ><div class="tabs-container" id="tabs-container"></div
-      ><button class="tab-new-btn" id="btn-tab-new" title="新建标签页 (Ctrl+T)">+</button></div
-    ><!-- ── Main Area ───────────────────────────────────────── --><div
-      class="main-area"
-      id="main-area"
-      ><div class="editor-pane" id="editor-pane"
-        ><div class="pane-header"
-          ><span class="pane-label">编辑</span
-          ><span class="word-count" id="word-count">0 字</span></div
-        ><div class="editor-container" id="editor-container"></div
-        ><!-- Welcome overlay --><div class="welcome-overlay hidden" id="welcome-overlay"
-          ><div class="welcome-panel"
-            ><div class="welcome-icon">M↓</div><h1 class="welcome-title">Markdown Editor</h1
-            ><p class="welcome-subtitle">开始写作</p
-            ><div class="welcome-actions"
-              ><button class="welcome-btn" id="welcome-new"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  width="16"
-                  height="16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="12" y1="18" x2="12" y2="12" />
-                  <line x1="9" y1="15" x2="15" y2="15" />
+            ">
+          <polyline points="6 9 12 15 18 9" />
+        </svg></button>
+      <div class="export-menu" id="export-menu">
+        <div class="export-item" data-type="md"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          导出 Markdown </div>
+        <div class="export-item" data-type="html"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6" />
+            <polyline points="8 6 2 12 8 18" />
+          </svg>
+          导出 HTML </div>
+        <div class="export-item" data-type="pdf"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="9" y1="15" x2="15" y2="15" />
+          </svg>
+          导出 PDF </div>
+        <div class="export-separator"></div>
+        <div class="export-item" data-type="settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.07 4.93a10 10 0 0 1 1.41 13.37" />
+          </svg>
+          导出设置...
+        </div>
+      </div>
+    </div>
+    <div class="toolbar-separator"></div><!-- View toggle --><button class="toolbar-btn" id="btn-view-toggle"
+      title="切换视图 (Ctrl+\)"><svg aria-hidden="true" viewBox="0 0 24 24" id="view-icon">
+        <rect x="3" y="3" width="8" height="18" rx="1" />
+        <rect x="13" y="3" width="8" height="18" rx="1" />
+      </svg></button><!-- Swap panes --><button class="toolbar-btn" id="btn-swap-panes"
+      title="互换编辑/预览位置 (Ctrl+Shift+\)"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="8" height="18" rx="1" opacity="0.4" />
+        <rect x="13" y="3" width="8" height="18" rx="1" opacity="0.4" />
+        <path d="M7 9l-3 3 3 3" stroke-width="1.8" />
+        <path d="M17 9l3 3-3 3" stroke-width="1.8" />
+        <line x1="4" y1="12" x2="20" y2="12" stroke-width="1.5" />
+      </svg></button><!-- Theme --><button class="toolbar-btn" id="btn-theme" title="切换主题 (Ctrl+Shift+T)"><svg
+        aria-hidden="true" viewBox="0 0 24 24" id="theme-icon">
+        <circle cx="12" cy="12" r="5" />
+        <line x1="12" y1="1" x2="12" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="23" />
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+        <line x1="1" y1="12" x2="3" y2="12" />
+        <line x1="21" y1="12" x2="23" y2="12" />
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+      </svg></button><!-- Settings --><button class="toolbar-btn" id="btn-settings" title="设置"><svg aria-hidden="true"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round">
+        <path
+          d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+      </svg></button>
+  </div><!-- ── Tab Bar ──────────────────────────────────────────── -->
+  <div class="tabbar" id="tabbar">
+    <div class="tabs-container" id="tabs-container"></div><button class="tab-new-btn" id="btn-tab-new"
+      title="新建标签页 (Ctrl+T)">+</button>
+  </div><!-- ── Main Area ───────────────────────────────────────── -->
+  <div class="main-area" id="main-area">
+    <div class="editor-pane" id="editor-pane">
+      <div class="pane-header"><span class="pane-label">编辑</span><span class="word-count" id="word-count">0 字</span>
+      </div>
+      <div class="editor-container" id="editor-container"></div><!-- Welcome overlay -->
+      <div class="welcome-overlay hidden" id="welcome-overlay">
+        <div class="welcome-panel">
+          <div class="welcome-icon">M↓</div>
+          <h1 class="welcome-title">Markdown Editor</h1>
+          <p class="welcome-subtitle">开始写作</p>
+          <div class="welcome-actions"><button class="welcome-btn" id="welcome-new"><svg aria-hidden="true"
+                viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="12" y1="18" x2="12" y2="12" />
+                <line x1="9" y1="15" x2="15" y2="15" />
+              </svg>
+              新建文档 </button><button class="welcome-btn" id="welcome-open"><svg aria-hidden="true" viewBox="0 0 24 24"
+                width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+              打开文件 </button><button class="welcome-btn" id="welcome-template"><svg aria-hidden="true"
+                viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+              从模板创建
+            </button></div>
+          <div class="welcome-shortcuts"><span class="welcome-shortcut"><kbd>Ctrl+N</kbd> 新建</span><span
+              class="welcome-shortcut"><kbd>Ctrl+O</kbd> 打开</span><span class="welcome-shortcut"><kbd>Ctrl+S</kbd>
+              保存</span><span class="welcome-shortcut"><kbd>Ctrl+P</kbd> 命令面板</span></div>
+        </div>
+      </div><!-- Find/Replace overlay -->
+      <div class="find-panel" id="find-panel">
+        <div class="find-row">
+          <div class="find-input-wrap"><input type="text" id="find-input" placeholder="输入要查找的内容" aria-label="查找"
+              spellcheck="false" /><span class="find-count" id="find-count"></span></div>
+          <div class="find-opts"><button class="find-opt" id="find-opt-case" title="区分大小写 (Alt+C)">Aa</button><button
+              class="find-opt" id="find-opt-word" title="全词匹配 (Alt+W)">Ab</button><button class="find-opt"
+              id="find-opt-regex" title="正则表达式 (Alt+R)">.*</button></div>
+          <div class="find-actions"><button class="find-btn" id="find-prev" title="上一个 (Shift+Enter / Shift+F3)"><svg
+                aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg></button><button class="find-btn" id="find-next" title="下一个 (Enter / F3)"><svg aria-hidden="true"
+                viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg></button><button class="find-btn" id="find-toggle-replace" title="替换模式 (Ctrl+H)"><svg
+                aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="17 1 21 5 17 9" />
+                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                <polyline points="7 23 3 19 7 15" />
+                <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+              </svg></button><button class="find-btn" id="find-close" title="关闭 (Esc)">✕</button></div>
+        </div>
+        <div class="find-row find-replace-row" hidden>
+          <div class="find-input-wrap"><input type="text" id="replace-input" placeholder="替换为" aria-label="替换为"
+              spellcheck="false" /></div>
+          <div class="find-actions"><button class="find-btn find-btn-text" id="replace-one">替换</button><button
+              class="find-btn find-btn-text" id="replace-all">全部</button></div>
+        </div>
+        <div class="find-hints"><span class="find-hint"><kbd>Enter</kbd> 下一个</span><span
+            class="find-hint"><kbd>Shift</kbd>+<kbd>Enter</kbd> 上一个</span><span class="find-hint"><kbd>Esc</kbd>
+            关闭</span></div>
+      </div>
+    </div>
+    <div class="divider" id="divider"></div>
+    <div class="preview-pane" id="preview-pane">
+      <div class="pane-header"><span class="pane-label">预览</span><label class="sync-scroll-toggle"><input
+            type="checkbox" id="sync-scroll" checked /><span>同步滚动</span></label></div>
+      <div class="preview-container" id="preview-container">
+        <article class="markdown-body" id="preview-body"></article>
+      </div>
+    </div>
+  </div><!-- ── Status Bar ──────────────────────────────────────── -->
+  <div class="statusbar" id="statusbar">
+    <div class="statusbar-left"><span id="status-file">未命名</span><span class="statusbar-sep">·</span><span
+        id="status-modified"></span><span class="statusbar-sep" id="status-sep2">·</span><span id="status-cursor">行 1, 列
+        1</span><span class="statusbar-sep">·</span><span id="status-selection"></span></div>
+    <div class="statusbar-right"><span id="status-readtime"></span><span class="statusbar-sep" id="status-readtime-sep"
+        style="display: none">·</span><span id="status-chars"></span><span class="statusbar-sep" id="status-chars-sep"
+        style="display: none">·</span><span id="status-autosave"></span><span class="statusbar-sep"
+        id="status-autosave-sep" style="display: none">·</span><span id="status-encoding">UTF-8</span><span
+        class="statusbar-sep">·</span><span class="statusbar-palette-hint" id="status-palette-hint"
+        title="命令面板 (Ctrl+P)">⌘P</span></div>
+  </div><!-- ── Template Modal ─────────────────────────────────── -->
+  <div class="modal-overlay" id="tpl-overlay">
+    <div class="modal" id="tpl-modal">
+      <div class="modal-header">
+        <h2>模板库</h2><button class="modal-close" id="tpl-close">✕</button>
+      </div>
+      <div class="modal-body tpl-overlay-body">
+        <div class="tpl-sidebar">
+          <div class="tpl-sidebar-title">所有模板</div>
+          <div class="tpl-list" id="tpl-list"></div>
+          <div class="tpl-sidebar-add"><button class="tpl-add-btn" id="tpl-btn-add">＋ 新建模板</button></div>
+        </div>
+        <div class="tpl-editor" id="tpl-editor">
+          <div class="tpl-editor-form" id="tpl-form">
+            <div class="tpl-row">
+              <div class="tpl-field" style="width: 52px"><label class="tpl-label">图标</label><input type="text"
+                  id="tpl-icon" maxlength="2" placeholder="📄"
+                  style="text-align: center; font-size: 18px; padding: 3px 0" /></div>
+              <div class="tpl-field" style="flex: 1"><label class="tpl-label">名称</label><input type="text" id="tpl-name"
+                  placeholder="模板名称" maxlength="50" /></div>
+            </div>
+            <div class="tpl-field tpl-field-grow"><label class="tpl-label">内容 <span
+                  style="font-weight: 400; opacity: 0.55">（Markdown）</span></label><textarea id="tpl-content"
+                placeholder="输入模板内容..." spellcheck="false"></textarea></div>
+          </div>
+          <div class="tpl-footer">
+            <div class="tpl-footer-left"><button class="btn-danger" id="tpl-btn-delete">删除</button></div>
+            <div class="tpl-footer-right"><button class="btn-secondary" id="tpl-btn-save">保存</button><button
+                class="btn-apply" id="tpl-btn-apply"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
                 </svg>
-                新建文档 </button
-              ><button class="welcome-btn" id="welcome-open"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  width="16"
-                  height="16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path
-                    d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
-                  />
-                </svg>
-                打开文件 </button
-              ><button class="welcome-btn" id="welcome-template"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  width="16"
-                  height="16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                </svg>
-                从模板创建
-              </button></div
-            ><div class="welcome-shortcuts"
-              ><span class="welcome-shortcut"><kbd>Ctrl+N</kbd> 新建</span
-              ><span class="welcome-shortcut"><kbd>Ctrl+O</kbd> 打开</span
-              ><span class="welcome-shortcut"><kbd>Ctrl+S</kbd> 保存</span
-              ><span class="welcome-shortcut"><kbd>Ctrl+P</kbd> 命令面板</span></div
-            ></div
-          ></div
-        ><!-- Find/Replace overlay --><div class="find-panel" id="find-panel"
-          ><div class="find-row"
-            ><div class="find-input-wrap"
-              ><input
-                type="text"
-                id="find-input"
-                placeholder="输入要查找的内容"
-                aria-label="查找"
-                spellcheck="false" /><span class="find-count" id="find-count"></span></div
-            ><div class="find-opts"
-              ><button class="find-opt" id="find-opt-case" title="区分大小写 (Alt+C)">Aa</button
-              ><button class="find-opt" id="find-opt-word" title="全词匹配 (Alt+W)">Ab</button
-              ><button class="find-opt" id="find-opt-regex" title="正则表达式 (Alt+R)"
-                >.*</button
-              ></div
-            ><div class="find-actions"
-              ><button class="find-btn" id="find-prev" title="上一个 (Shift+Enter / Shift+F3)"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="18 15 12 9 6 15" /></svg></button
-              ><button class="find-btn" id="find-next" title="下一个 (Enter / F3)"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" /></svg></button
-              ><button class="find-btn" id="find-toggle-replace" title="替换模式 (Ctrl+H)"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polyline points="17 1 21 5 17 9" />
-                  <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                  <polyline points="7 23 3 19 7 15" />
-                  <path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg></button
-              ><button class="find-btn" id="find-close" title="关闭 (Esc)">✕</button></div
-            ></div
-          ><div class="find-row find-replace-row" hidden
-            ><div class="find-input-wrap"
-              ><input
-                type="text"
-                id="replace-input"
-                placeholder="替换为"
-                aria-label="替换为"
-                spellcheck="false" /></div
-            ><div class="find-actions"
-              ><button class="find-btn find-btn-text" id="replace-one">替换</button
-              ><button class="find-btn find-btn-text" id="replace-all">全部</button></div
-            ></div
-          ><div class="find-hints"
-            ><span class="find-hint"><kbd>Enter</kbd> 下一个</span
-            ><span class="find-hint"><kbd>Shift</kbd>+<kbd>Enter</kbd> 上一个</span
-            ><span class="find-hint"><kbd>Esc</kbd> 关闭</span></div
-          ></div
-        ></div
-      ><div class="divider" id="divider"></div
-      ><div class="preview-pane" id="preview-pane"
-        ><div class="pane-header"
-          ><span class="pane-label">预览</span
-          ><label class="sync-scroll-toggle"
-            ><input type="checkbox" id="sync-scroll" checked /><span>同步滚动</span></label
-          ></div
-        ><div class="preview-container" id="preview-container"
-          ><article class="markdown-body" id="preview-body"></article></div></div></div
-    ><!-- ── Status Bar ──────────────────────────────────────── --><div
-      class="statusbar"
-      id="statusbar"
-      ><div class="statusbar-left"
-        ><span id="status-file">未命名</span><span class="statusbar-sep">·</span
-        ><span id="status-modified"></span><span class="statusbar-sep" id="status-sep2">·</span
-        ><span id="status-cursor">行 1, 列 1</span><span class="statusbar-sep">·</span
-        ><span id="status-selection"></span></div
-      ><div class="statusbar-right"
-        ><span id="status-readtime"></span
-        ><span class="statusbar-sep" id="status-readtime-sep" style="display: none">·</span
-        ><span id="status-chars"></span
-        ><span class="statusbar-sep" id="status-chars-sep" style="display: none">·</span
-        ><span id="status-autosave"></span
-        ><span class="statusbar-sep" id="status-autosave-sep" style="display: none">·</span
-        ><span id="status-encoding">UTF-8</span><span class="statusbar-sep">·</span
-        ><span class="statusbar-palette-hint" id="status-palette-hint" title="命令面板 (Ctrl+P)"
-          >⌘P</span
-        ></div
-      ></div
-    ><!-- ── Template Modal ─────────────────────────────────── --><div
-      class="modal-overlay"
-      id="tpl-overlay"
-      ><div class="modal" id="tpl-modal"
-        ><div class="modal-header"
-          ><h2>模板库</h2><button class="modal-close" id="tpl-close">✕</button></div
-        ><div class="modal-body tpl-overlay-body"
-          ><div class="tpl-sidebar"
-            ><div class="tpl-sidebar-title">所有模板</div><div class="tpl-list" id="tpl-list"></div
-            ><div class="tpl-sidebar-add"
-              ><button class="tpl-add-btn" id="tpl-btn-add">＋ 新建模板</button></div
-            ></div
-          ><div class="tpl-editor" id="tpl-editor"
-            ><div class="tpl-editor-form" id="tpl-form"
-              ><div class="tpl-row"
-                ><div class="tpl-field" style="width: 52px"
-                  ><label class="tpl-label">图标</label
-                  ><input
-                    type="text"
-                    id="tpl-icon"
-                    maxlength="2"
-                    placeholder="📄"
-                    style="text-align: center; font-size: 18px; padding: 3px 0" /></div
-                ><div class="tpl-field" style="flex: 1"
-                  ><label class="tpl-label">名称</label
-                  ><input
-                    type="text"
-                    id="tpl-name"
-                    placeholder="模板名称"
-                    maxlength="50" /></div></div
-              ><div class="tpl-field tpl-field-grow"
-                ><label class="tpl-label"
-                  >内容 <span style="font-weight: 400; opacity: 0.55">（Markdown）</span></label
-                ><textarea
-                  id="tpl-content"
-                  placeholder="输入模板内容..."
-                  spellcheck="false"
-                ></textarea></div></div
-            ><div class="tpl-footer"
-              ><div class="tpl-footer-left"
-                ><button class="btn-danger" id="tpl-btn-delete">删除</button></div
-              ><div class="tpl-footer-right"
-                ><button class="btn-secondary" id="tpl-btn-save">保存</button
-                ><button class="btn-apply" id="tpl-btn-apply"
-                  ><svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  应用
-                </button></div
-              ></div
-            ></div
-          ></div
-        ></div
-      ></div
-    ><!-- ── Settings Modal ─────────────────────────────────── --><div
-      class="modal-overlay"
-      id="settings-overlay"
-      ><div class="modal" id="settings-modal" style="width: 680px; max-height: 520px"
-        ><div class="modal-header"
-          ><h2>设置</h2><button class="modal-close" id="settings-close">✕</button></div
-        ><div class="settings-modal-body"
-          ><!-- Left nav --><nav class="settings-nav" id="settings-nav"
-            ><div class="settings-nav-label">设置</div
-            ><div class="settings-nav-item active" data-panel="appearance"
-              ><span class="nav-icon"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
+                应用
+              </button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- ── Settings Modal ─────────────────────────────────── -->
+  <div class="modal-overlay" id="settings-overlay">
+    <div class="modal" id="settings-modal" style="width: 680px; max-height: 520px">
+      <div class="modal-header">
+        <h2>设置</h2><button class="modal-close" id="settings-close">✕</button>
+      </div>
+      <div class="settings-modal-body"><!-- Left nav -->
+        <nav class="settings-nav" id="settings-nav">
+          <div class="settings-nav-label">设置</div>
+          <div class="settings-nav-item active" data-panel="appearance"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg></span>
+            外观 </div>
+          <div class="settings-nav-item" data-panel="editor"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg></span>
+            编辑器 </div>
+          <div class="settings-nav-item" data-panel="autosave"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg></span>
+            自动保存 </div>
+          <div class="settings-nav-item" data-panel="export"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg></span>
+            导出 </div>
+          <div class="settings-nav-item" data-panel="system"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+              </svg></span>
+            系统
+          </div>
+          <div class="settings-nav-item" data-panel="shortcuts"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+              </svg></span>
+            快捷键
+          </div>
+        </nav><!-- Right panels -->
+        <div class="settings-panels" id="settings-panels"><!-- Appearance -->
+          <div class="settings-panel active" id="panel-appearance">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="5" />
                   <line x1="12" y1="1" x2="12" y2="3" />
                   <line x1="12" y1="21" x2="12" y2="23" />
@@ -583,378 +437,219 @@
                   <line x1="1" y1="12" x2="3" y2="12" />
                   <line x1="21" y1="12" x2="23" y2="12" />
                   <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg
-              ></span>
-              外观 </div
-            ><div class="settings-nav-item" data-panel="editor"
-              ><span class="nav-icon"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg></span>
+              外观 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">主题</div>
+                <div class="setting-item-desc">选择界面的明暗风格</div>
+              </div>
+              <div class="setting-item-control">
+                <div class="theme-toggle-group"><button class="theme-toggle-btn" data-theme="light"><svg
+                      aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
+                      stroke-width="2">
+                      <circle cx="12" cy="12" r="5" />
+                      <line x1="12" y1="1" x2="12" y2="3" />
+                      <line x1="12" y1="21" x2="12" y2="23" />
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                      <line x1="1" y1="12" x2="3" y2="12" />
+                      <line x1="21" y1="12" x2="23" y2="12" />
+                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                    </svg>
+                    浅色 </button><button class="theme-toggle-btn" data-theme="dark"><svg aria-hidden="true"
+                      viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                    深色
+                  </button></div>
+              </div>
+            </div>
+          </div><!-- Editor -->
+          <div class="settings-panel" id="panel-editor">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="16 18 22 12 16 6" />
-                  <polyline points="8 6 2 12 8 18" /></svg
-              ></span>
-              编辑器 </div
-            ><div class="settings-nav-item" data-panel="autosave"
-              ><span class="nav-icon"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
+                  <polyline points="8 6 2 12 8 18" />
+                </svg></span>
+              编辑器 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">字体大小</div>
+                <div class="setting-item-desc">编辑区代码字号</div>
+              </div>
+              <div class="setting-item-control"><input type="number" id="setting-fontsize" min="10" max="32" value="14"
+                  style="width: 64px; text-align: center" /><span
+                  style="font-size: 11px; color: var(--text-muted)">px</span></div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">编辑器字体</div>
+                <div class="setting-item-desc">等宽字体影响代码可读性</div>
+              </div>
+              <div class="setting-item-control"><select id="setting-editorfont" style="width: 160px">
+                  <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                  <option value="'Fira Code', monospace">Fira Code</option>
+                  <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                  <option value="Consolas, monospace">Consolas</option>
+                  <option value="monospace">系统等宽</option>
+                </select></div>
+            </div>
+          </div><!-- Auto Save -->
+          <div class="settings-panel" id="panel-autosave">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" /></svg
-              ></span>
-              自动保存 </div
-            ><div class="settings-nav-item" data-panel="export"
-              ><span class="nav-icon"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
+                  <polyline points="12 6 12 12 16 14" />
+                </svg></span>
+              自动保存 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">自动保存间隔</div>
+                <div class="setting-item-desc">每隔多少秒自动将内容保存到缓存，软件异常关闭后可恢复</div>
+              </div>
+              <div class="setting-item-control"><input type="number" id="setting-autosave" min="5" max="300" value="10"
+                  style="width: 64px; text-align: center" /><span
+                  style="font-size: 11px; color: var(--text-muted)">秒</span></div>
+            </div>
+          </div><!-- Export -->
+          <div class="settings-panel" id="panel-export">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" /></svg
-              ></span>
-              导出 </div
-            ><div class="settings-nav-item" data-panel="system"
-              ><span class="nav-icon"
-                ><svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="3" />
-                  <path
-                    d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-                  /></svg
-              ></span>
-              系统
-            </div></nav
-          ><!-- Right panels --><div class="settings-panels" id="settings-panels"
-            ><!-- Appearance --><div class="settings-panel active" id="panel-appearance"
-              ><div class="settings-panel-title"
-                ><span class="panel-title-icon"
-                  ><svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="5" />
-                    <line x1="12" y1="1" x2="12" y2="3" />
-                    <line x1="12" y1="21" x2="12" y2="23" />
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                    <line x1="1" y1="12" x2="3" y2="12" />
-                    <line x1="21" y1="12" x2="23" y2="12" />
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg
-                ></span>
-                外观 </div
-              ><div class="setting-item"
-                ><div class="setting-item-info"
-                  ><div class="setting-item-label">主题</div
-                  ><div class="setting-item-desc">选择界面的明暗风格</div></div
-                ><div class="setting-item-control"
-                  ><div class="theme-toggle-group"
-                    ><button class="theme-toggle-btn" data-theme="light"
-                      ><svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        width="12"
-                        height="12"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <circle cx="12" cy="12" r="5" />
-                        <line x1="12" y1="1" x2="12" y2="3" />
-                        <line x1="12" y1="21" x2="12" y2="23" />
-                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                        <line x1="1" y1="12" x2="3" y2="12" />
-                        <line x1="21" y1="12" x2="23" y2="12" />
-                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-                      </svg>
-                      浅色 </button
-                    ><button class="theme-toggle-btn" data-theme="dark"
-                      ><svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        width="12"
-                        height="12"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                      </svg>
-                      深色
-                    </button></div
-                  ></div
-                ></div
-              ></div
-            ><!-- Editor --><div class="settings-panel" id="panel-editor"
-              ><div class="settings-panel-title"
-                ><span class="panel-title-icon"
-                  ><svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polyline points="16 18 22 12 16 6" />
-                    <polyline points="8 6 2 12 8 18" /></svg
-                ></span>
-                编辑器 </div
-              ><div class="setting-item"
-                ><div class="setting-item-info"
-                  ><div class="setting-item-label">字体大小</div
-                  ><div class="setting-item-desc">编辑区代码字号</div></div
-                ><div class="setting-item-control"
-                  ><input
-                    type="number"
-                    id="setting-fontsize"
-                    min="10"
-                    max="32"
-                    value="14"
-                    style="width: 64px; text-align: center"
-                  /><span style="font-size: 11px; color: var(--text-muted)">px</span></div
-                ></div
-              ><div class="setting-item"
-                ><div class="setting-item-info"
-                  ><div class="setting-item-label">编辑器字体</div
-                  ><div class="setting-item-desc">等宽字体影响代码可读性</div></div
-                ><div class="setting-item-control"
-                  ><select id="setting-editorfont" style="width: 160px"
-                    ><option value="'JetBrains Mono', monospace">JetBrains Mono</option
-                    ><option value="'Fira Code', monospace">Fira Code</option
-                    ><option value="'Source Code Pro', monospace">Source Code Pro</option
-                    ><option value="Consolas, monospace">Consolas</option
-                    ><option value="monospace">系统等宽</option></select
-                  ></div
-                ></div
-              ></div
-            ><!-- Auto Save --><div class="settings-panel" id="panel-autosave"
-              ><div class="settings-panel-title"
-                ><span class="panel-title-icon"
-                  ><svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" /></svg
-                ></span>
-                自动保存 </div
-              ><div class="setting-item"
-                ><div class="setting-item-info"
-                  ><div class="setting-item-label">自动保存间隔</div
-                  ><div class="setting-item-desc"
-                    >每隔多少秒自动将内容保存到缓存，软件异常关闭后可恢复</div
-                  ></div
-                ><div class="setting-item-control"
-                  ><input
-                    type="number"
-                    id="setting-autosave"
-                    min="5"
-                    max="300"
-                    value="10"
-                    style="width: 64px; text-align: center"
-                  /><span style="font-size: 11px; color: var(--text-muted)">秒</span></div
-                ></div
-              ></div
-            ><!-- Export --><div class="settings-panel" id="panel-export"
-              ><div class="settings-panel-title"
-                ><span class="panel-title-icon"
-                  ><svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" /></svg
-                ></span>
-                导出 </div
-              ><div class="setting-item"
-                ><div class="setting-item-info"
-                  ><div class="setting-item-label">默认导出目录</div
-                  ><div class="setting-item-desc"
-                    >每次导出时优先使用此目录，留空则每次手动选择</div
-                  ></div
-                ><div class="setting-item-control"
-                  ><div class="setting-dir-row"
-                    ><input
-                      type="text"
-                      id="setting-exportdir"
-                      readonly
-                      placeholder="点击选择目录..."
-                    /><button class="btn-secondary" id="setting-exportdir-btn">选择</button></div
-                  ></div
-                ></div
-              ><div class="setting-item"
-                ><div class="setting-item-info"
-                  ><div class="setting-item-label">粘贴图片保存目录</div
-                  ><div class="setting-item-desc"
-                    >相对路径（如 assets /
-                    images）相对当前文档；填绝对路径则所有图片统一存到该目录</div
-                  ></div
-                ><div class="setting-item-control"
-                  ><div class="setting-dir-row"
-                    ><input
-                      type="text"
-                      id="setting-imagedir"
-                      placeholder="assets"
-                      style="width: 180px"
-                    /><button class="btn-secondary" id="setting-imagedir-btn">选择</button></div
-                  ></div
-                ></div
-              ><div
-                class="setting-item"
-                style="flex-direction: column; align-items: flex-start; gap: 10px"
-                ><div
-                  style="
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg></span>
+              导出 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">默认导出目录</div>
+                <div class="setting-item-desc">每次导出时优先使用此目录，留空则每次手动选择</div>
+              </div>
+              <div class="setting-item-control">
+                <div class="setting-dir-row"><input type="text" id="setting-exportdir" readonly
+                    placeholder="点击选择目录..." /><button class="btn-secondary" id="setting-exportdir-btn">选择</button></div>
+              </div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">粘贴图片保存目录</div>
+                <div class="setting-item-desc">相对路径（如 assets /
+                  images）相对当前文档；填绝对路径则所有图片统一存到该目录</div>
+              </div>
+              <div class="setting-item-control">
+                <div class="setting-dir-row"><input type="text" id="setting-imagedir" placeholder="assets"
+                    style="width: 180px" /><button class="btn-secondary" id="setting-imagedir-btn">选择</button></div>
+              </div>
+            </div>
+            <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 10px">
+              <div style="
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                     width: 100%;
-                  "
-                  ><div class="setting-item-info"
-                    ><div class="setting-item-label">文件命名规则</div
-                    ><div class="setting-item-desc"
-                      >导出文件的默认命名格式，点击下方变量快速插入</div
-                    ></div
-                  ><div class="setting-item-control"
-                    ><input
-                      type="text"
-                      id="setting-namingrule"
-                      placeholder="{title}_{date}"
-                      style="width: 180px" /></div></div
-                ><div class="naming-vars"
-                  ><span class="naming-var-chip" data-var="{title}">{title}</span
-                  ><span class="naming-var-chip" data-var="{date}">{date}</span
-                  ><span class="naming-var-chip" data-var="{time}">{time}</span
-                  ><span class="naming-var-chip" data-var="{datetime}">{datetime}</span
-                  ><span class="naming-var-chip" data-var="{timestamp}">{timestamp}</span
-                  ><span class="naming-var-chip" data-var="{random}">{random}</span></div
-                ></div
-              ></div
-            ><!-- System --><div class="settings-panel" id="panel-system"
-              ><div class="settings-panel-title"
-                ><span class="panel-title-icon"
-                  ><svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="3" />
-                    <path
-                      d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
-                    /></svg
-                ></span>
-                系统 </div
-              ><div class="setting-item"
-                ><div class="setting-item-info"
-                  ><div class="setting-item-label">清空缓存</div
-                  ><div class="setting-item-desc"
-                    >清理渲染器 HTTP/代码/GPU 缓存与本地存储（不影响您的设置和文档）</div
-                  ></div
-                ><div class="setting-item-control"
-                  ><button class="btn-secondary" id="setting-clear-cache-btn">清空</button></div
-                ></div
-              ></div
-            ></div
-          ><!-- /settings-panels --></div
-        ><!-- /settings-modal-body --></div
-        ><div class="settings-modal-footer"
-          ><span class="settings-modal-footer-left" id="settings-shortcut-hint"
-            >提示：Ctrl+Shift+T 快速切换主题</span
-          ><button class="btn-danger" id="settings-reset-btn" style="margin-right:auto">重置默认值</button><button class="btn-primary" id="settings-save-btn">保存设置</button></div
-        ></div
-      ></div
-    ><!-- ── Restore Modal ──────────────────────────────────── --><div
-      class="modal-overlay"
-      id="restore-overlay"
-      ><div class="modal modal-small" id="restore-modal"
-        ><div class="modal-header"><h2>恢复上次编辑</h2></div
-        ><div class="modal-body"
-          ><p class="restore-modal-desc">检测到上次未保存的编辑内容，是否要恢复？</p
-          ><div class="restore-tabs" id="restore-tabs"></div
-          ><div class="modal-actions"
-            ><button class="btn-secondary" id="restore-no">放弃</button
-            ><button class="btn-primary" id="restore-yes">恢复编辑</button></div
-          ></div
-        ></div
-      ></div
-    ><!-- Scripts --><script defer src="vendor/codemirror/codemirror.min.js"></script
-    ><script defer src="vendor/codemirror/mode/markdown/markdown.min.js"></script
-    ><script defer src="vendor/codemirror/addon/edit/continuelist.min.js"></script
-    ><script defer src="vendor/codemirror/addon/selection/active-line.min.js"></script
-    ><script defer src="vendor/codemirror/addon/display/placeholder.min.js"></script
-    ><script defer src="vendor/codemirror/addon/dialog/dialog.min.js"></script
-    ><script defer src="vendor/codemirror/addon/search/searchcursor.min.js"></script
-    ><script defer src="vendor/codemirror/addon/search/match-highlighter.min.js"></script
-    ><script defer src="vendor/codemirror/addon/scroll/annotatescrollbar.min.js"></script
-    ><script defer src="vendor/codemirror/addon/search/matchesonscrollbar.min.js"></script
-    ><script defer src="vendor/codemirror/addon/search/jump-to-line.min.js"></script
-    ><script defer src="vendor/marked/marked.min.js"></script
-    ><script defer src="vendor/dompurify/purify.min.js"></script
-    ><script defer src="vendor/katex/katex.min.js"></script
-    ><script defer src="vendor/katex/contrib/auto-render.min.js"></script
-    ><script defer src="vendor/mermaid/mermaid.min.js"></script
-    ><script defer src="vendor/hljs/highlight.min.js"></script
-    ><script defer src="vendor/morphdom/morphdom.min.js"></script
-    ><script defer src="js/eventbus.js"></script
-    ><script defer src="js/utils.js"></script
-    ><script defer src="js/tabs.js"></script
-    ><script defer src="js/editor.js"></script
-    ><script defer src="js/preview.js"></script
-    ><script defer src="js/find.js"></script
-    ><script defer src="js/recent.js"></script
-    ><script defer src="js/palette.js"></script
-    ><script defer src="js/templates.js"></script
-    ><script defer src="js/export.js"></script
-    ><script defer src="js/cache.js"></script
-    ><script defer src="js/settings.js"></script
-    ><script defer src="js/app.js"></script></body
-></html>
+                  ">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">文件命名规则</div>
+                  <div class="setting-item-desc">导出文件的默认命名格式，点击下方变量快速插入</div>
+                </div>
+                <div class="setting-item-control"><input type="text" id="setting-namingrule"
+                    placeholder="{title}_{date}" style="width: 180px" /></div>
+              </div>
+              <div class="naming-vars"><span class="naming-var-chip" data-var="{title}">{title}</span><span
+                  class="naming-var-chip" data-var="{date}">{date}</span><span class="naming-var-chip"
+                  data-var="{time}">{time}</span><span class="naming-var-chip"
+                  data-var="{datetime}">{datetime}</span><span class="naming-var-chip"
+                  data-var="{timestamp}">{timestamp}</span><span class="naming-var-chip"
+                  data-var="{random}">{random}</span></div>
+            </div>
+          </div><!-- System -->
+          <div class="settings-panel" id="panel-system">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg></span>
+              系统 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">清空缓存</div>
+                <div class="setting-item-desc">清理渲染器 HTTP/代码/GPU 缓存与本地存储（不影响您的设置和文档）</div>
+              </div>
+              <div class="setting-item-control"><button class="btn-secondary" id="setting-clear-cache-btn">清空</button>
+              </div>
+            </div>
+          </div>
+          <!-- Shortcuts -->
+          <div class="settings-panel" id="panel-shortcuts">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="6" width="20" height="12" rx="2" />
+                  <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+                </svg></span>
+              快捷键 </div>
+            <div id="panel-shortcuts-content"></div>
+          </div>
+        </div><!-- /settings-panels -->
+      </div><!-- /settings-modal-body -->
+      <div class="settings-modal-footer">
+        <span class="settings-modal-footer-left" id="settings-shortcut-hint">提示：Ctrl+Shift+T 快速切换主题</span>
+        <div class="settings-modal-footer-right">
+          <button class="btn-danger" id="settings-reset-btn">重置默认值</button>
+          <button class="btn-primary" id="settings-save-btn">保存设置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- ── Restore Modal ──────────────────────────────────── -->
+  <div class="modal-overlay" id="restore-overlay">
+    <div class="modal modal-small" id="restore-modal">
+      <div class="modal-header">
+        <h2>恢复上次编辑</h2>
+      </div>
+      <div class="modal-body">
+        <p class="restore-modal-desc">检测到上次未保存的编辑内容，是否要恢复？</p>
+        <div class="restore-tabs" id="restore-tabs"></div>
+        <div class="modal-actions"><button class="btn-secondary" id="restore-no">放弃</button><button class="btn-primary"
+            id="restore-yes">恢复编辑</button></div>
+      </div>
+    </div>
+  </div><!-- Scripts -->
+  <script defer src="vendor/codemirror/codemirror.min.js"></script>
+  <script defer src="vendor/codemirror/mode/markdown/markdown.min.js"></script>
+  <script defer src="vendor/codemirror/addon/edit/continuelist.min.js"></script>
+  <script defer src="vendor/codemirror/addon/selection/active-line.min.js"></script>
+  <script defer src="vendor/codemirror/addon/display/placeholder.min.js"></script>
+  <script defer src="vendor/codemirror/addon/dialog/dialog.min.js"></script>
+  <script defer src="vendor/codemirror/addon/search/searchcursor.min.js"></script>
+  <script defer src="vendor/codemirror/addon/search/match-highlighter.min.js"></script>
+  <script defer src="vendor/codemirror/addon/scroll/annotatescrollbar.min.js"></script>
+  <script defer src="vendor/codemirror/addon/search/matchesonscrollbar.min.js"></script>
+  <script defer src="vendor/codemirror/addon/search/jump-to-line.min.js"></script>
+  <script defer src="vendor/marked/marked.min.js"></script>
+  <script defer src="vendor/dompurify/purify.min.js"></script>
+  <script defer src="vendor/katex/katex.min.js"></script>
+  <script defer src="vendor/katex/contrib/auto-render.min.js"></script>
+  <script defer src="vendor/mermaid/mermaid.min.js"></script>
+  <script defer src="vendor/hljs/highlight.min.js"></script>
+  <script defer src="vendor/morphdom/morphdom.min.js"></script>
+  <script defer src="js/eventbus.js"></script>
+  <script defer src="js/utils.js"></script>
+  <script defer src="js/tabs.js"></script>
+  <script defer src="js/editor.js"></script>
+  <script defer src="js/preview.js"></script>
+  <script defer src="js/find.js"></script>
+  <script defer src="js/recent.js"></script>
+  <script defer src="js/palette.js"></script>
+  <script defer src="js/templates.js"></script>
+  <script defer src="js/export.js"></script>
+  <script defer src="js/cache.js"></script>
+  <script defer src="js/shortcuts.js"></script>
+  <script defer src="js/settings.js"></script>
+  <script defer src="js/app.js"></script>
+</body>
+
+</html>

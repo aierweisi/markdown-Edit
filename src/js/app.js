@@ -20,6 +20,9 @@
   // 从 store 读取 OS 文件关联打开的路径（ main 进程在 loadFile 前已写入）
   let pendingOSFileData = null
   let appReady = false  // 初始化完成后设为 true，second-instance 时直接创建标签
+  // welcomeDismissed 在第一个 await 之前声明，避免 openOSFileTab / openFile 等
+  // 异步回调访问时落入 TDZ（pendingOSFileData 分支会在 init 期间同步调用）
+  let welcomeDismissed = false
 
   // Handle file open from OS — 必须在第一个 await 之前注册，否则 did-finish-load
   // 发送的 IPC 事件会因监听器未注册而丢失
@@ -172,7 +175,14 @@
   let changeTimer = null
   let autoSaveTimer = null
   let pendingAutoSaveTabId = null
-  let welcomeDismissed = false  // 用户主动操作后不再显示欢迎页
+  // welcomeDismissed 已在文件顶部声明（避免 TDZ）
+
+  // 文件自动保存间隔（毫秒）。来自 settings.autoSaveInterval（秒），默认 10s。
+  // 暴露 setter 供 SettingsManager 在保存设置时同步更新，避免重启后才生效。
+  let autoSaveDelayMs = Math.max(1, settings.autoSaveInterval || 10) * 1000
+  window.__setFileAutoSaveInterval = sec => {
+    autoSaveDelayMs = Math.max(1, Number(sec) || 10) * 1000
+  }
 
   function updateStatusStats(value, wordCount) {
     const text = value || ''
@@ -285,7 +295,7 @@
     if (tab && tab.filePath) {
       pendingAutoSaveTabId = tab.id
       clearTimeout(autoSaveTimer)
-      autoSaveTimer = setTimeout(autoSaveToFile, 1500)
+      autoSaveTimer = setTimeout(autoSaveToFile, autoSaveDelayMs)
     }
     updateWelcomeVisibility()
   })
@@ -716,17 +726,24 @@
   }
 
   // Keyboard shortcuts
-  // 使用计数器而非布尔值，防止菜单 IPC 在连续快捷键操作时漏标记
+  // 使用计数器而非布尔值，防止菜单 IPC 在连续快捷键操作时漏标记。
+  // 额外加 300ms 超时归零，防止 keydown ++ 但 IPC 未到达累积漂移。
   window.__menuEventPending = 0
+  let __menuPendingResetTimer = null
+  const bumpMenuPending = () => {
+    window.__menuEventPending++
+    clearTimeout(__menuPendingResetTimer)
+    __menuPendingResetTimer = setTimeout(() => { window.__menuEventPending = 0 }, 300)
+  }
   document.addEventListener('keydown', evt => {
     const ctrl = evt.ctrlKey || evt.metaKey
-    if (ctrl && evt.key === 's') { evt.preventDefault(); window.__menuEventPending++; saveFile(evt.shiftKey) }
-    if (ctrl && evt.key === 'n') { evt.preventDefault(); window.__menuEventPending++; newFile() }
-    if (ctrl && evt.key === 'o') { evt.preventDefault(); window.__menuEventPending++; openFile() }
-    if (ctrl && evt.shiftKey && (evt.key === 'R' || evt.key === 'r')) { evt.preventDefault(); window.__menuEventPending++; if (window.RecentFiles) RecentFiles.open() }
+    if (ctrl && evt.key === 's') { evt.preventDefault(); bumpMenuPending(); saveFile(evt.shiftKey) }
+    if (ctrl && evt.key === 'n') { evt.preventDefault(); bumpMenuPending(); newFile() }
+    if (ctrl && evt.key === 'o') { evt.preventDefault(); bumpMenuPending(); openFile() }
+    if (ctrl && evt.shiftKey && (evt.key === 'R' || evt.key === 'r')) { evt.preventDefault(); bumpMenuPending(); if (window.RecentFiles) RecentFiles.open() }
     if (ctrl && evt.shiftKey && (evt.key === 'P' || evt.key === 'p')) { evt.preventDefault(); if (window.CommandPalette) CommandPalette.open() }
     if (ctrl && evt.key === '\\') {
-      evt.preventDefault(); window.__menuEventPending++
+      evt.preventDefault(); bumpMenuPending()
       if (evt.shiftKey) { togglePaneSwap() }
       else { const idx = viewModes.indexOf(viewMode); setViewMode(viewModes[(idx + 1) % viewModes.length]) }
     }

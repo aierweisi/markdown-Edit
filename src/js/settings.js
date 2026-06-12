@@ -59,6 +59,13 @@ window.SettingsManager = (() => {
     document.querySelectorAll('.settings-panel').forEach(el => {
       el.classList.toggle('active', el.id === `panel-${panelId}`)
     })
+    // 切到快捷键面板时按需渲染（侧栏点击和 open('shortcuts') 都走这里）
+    if (panelId === 'shortcuts') {
+      const container = document.getElementById('panel-shortcuts-content')
+      if (container && window.ShortcutManager) {
+        ShortcutManager.renderPanel(container)
+      }
+    }
   }
 
   function syncThemeBtns(theme) {
@@ -98,6 +105,10 @@ window.SettingsManager = (() => {
     applyFontSize(fontSize)
     applyEditorFont(editorFont)
     CacheManager.setAutoSaveInterval(autoSave)
+    // 同步更新文件级自动保存间隔（autoSave 单位为秒）
+    if (typeof window.__setFileAutoSaveInterval === 'function') {
+      window.__setFileAutoSaveInterval(autoSave)
+    }
     closeModal()
     ExportManager.showToast('设置已保存')
   }
@@ -143,6 +154,9 @@ window.SettingsManager = (() => {
         applyFontSize(DEFAULTS.fontSize)
         applyEditorFont(DEFAULTS.editorFont)
         CacheManager.setAutoSaveInterval(DEFAULTS.autoSaveInterval)
+        if (typeof window.__setFileAutoSaveInterval === 'function') {
+          window.__setFileAutoSaveInterval(DEFAULTS.autoSaveInterval)
+        }
         closeModal()
         ExportManager.showToast('设置已重置为默认值')
       })
@@ -220,13 +234,6 @@ window.SettingsManager = (() => {
       document.getElementById('setting-imagedir').value = settings.imageSaveDir
       syncThemeBtns(settings.theme)
       switchPanel(panelId)
-      // 如果切换到快捷键面板，渲染快捷键列表
-      if (panelId === 'shortcuts') {
-        const container = document.getElementById('panel-shortcuts-content')
-        if (container && window.ShortcutManager) {
-          ShortcutManager.renderPanel(container)
-        }
-      }
       document.getElementById('settings-overlay').classList.add('open')
       escapeHandler = (evt) => {
         if ('Escape' === evt.key) closeModal()
