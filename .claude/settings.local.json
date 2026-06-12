@@ -77,7 +77,23 @@
       "Bash(du -sh assets)",
       "Bash(tasklist /FI \"IMAGENAME eq Markdown Editor.exe\")",
       "Bash(tasklist /FI \"IMAGENAME eq electron.exe\")",
-      "Bash(cmd *)"
+      "Bash(cmd *)",
+      "Bash(awk '/^\\\\.[a-zA-Z]/' C:/Users/86176/Desktop/markdown/src/css/main.css)",
+      "Bash(sed 's/[[:space:]].*//')",
+      "Bash(awk 'BEGIN{section=\"prelude\"; count=0; sections[section]=0} /^\\\\.markdown-body|markdown-body/ {if\\($0 ~ /^\\\\.markdown-body/\\) {if\\(section!=\"markdown-body\"\\){if\\(count>0\\)sections[section]+=count; section=\"markdown-body\"; count=0}}} /^\\\\.CodeMirror/ {if\\(section!=\"codemirror\"\\){if\\(count>0\\)sections[section]+=count; section=\"codemirror\"; count=0}} /^\\\\.theme-dark/ {if\\(section!=\"theme-dark\"\\){if\\(count>0\\)sections[section]+=count; section=\"theme-dark\"; count=0}} /^\\\\.modal|^\\\\.settings-/ {if\\(section!=\"modals\"\\){if\\(count>0\\)sections[section]+=count; section=\"modals\"; count=0}} {count++} END{for\\(s in sections\\) print sections[s], s}' C:/Users/86176/Desktop/markdown/src/css/main.css)",
+      "Bash(sed 's/:.*//')",
+      "Bash(sed 's/^\\\\.//')",
+      "Bash(grep -v '^$')",
+      "Bash(awk -F'[.[]' '{print $1}')",
+      "Bash(awk -F: '{print $1}')",
+      "Bash(awk '{r=int\\($1/200\\)*200; print r}')",
+      "Bash(sed 's/^\\\\s*//')",
+      "Bash(grep -oE 'd=\"[^\"]{0,80}\"' C:/Users/86176/Desktop/markdown/src/index.html)",
+      "Bash(git checkout *)",
+      "Bash(git reset *)",
+      "Bash(echo \"exit $?\")",
+      "Bash(git mv *)",
+      "Bash(git rm *)"
     ]
   }
 }
