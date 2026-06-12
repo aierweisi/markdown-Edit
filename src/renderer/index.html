@@ -318,6 +318,299 @@
         id="status-autosave-sep" style="display: none">·</span><span id="status-encoding">UTF-8</span><span
         class="statusbar-sep">·</span><span class="statusbar-palette-hint" id="status-palette-hint"
         title="命令面板 (Ctrl+P)">⌘P</span></div>
+  </div>
+  <div class="modal-overlay" id="tpl-overlay">
+    <div class="modal" id="tpl-modal">
+      <div class="modal-header">
+        <h2>模板库</h2><button class="modal-close" id="tpl-close">✕</button>
+      </div>
+      <div class="modal-body tpl-overlay-body">
+        <div class="tpl-sidebar">
+          <div class="tpl-sidebar-title">所有模板</div>
+          <div class="tpl-list" id="tpl-list"></div>
+          <div class="tpl-sidebar-add"><button class="tpl-add-btn" id="tpl-btn-add">＋ 新建模板</button></div>
+        </div>
+        <div class="tpl-editor" id="tpl-editor">
+          <div class="tpl-editor-form" id="tpl-form">
+            <div class="tpl-row">
+              <div class="tpl-field" style="width: 52px"><label class="tpl-label">图标</label><input type="text"
+                  id="tpl-icon" maxlength="2" placeholder="📄"
+                  style="text-align: center; font-size: 18px; padding: 3px 0" /></div>
+              <div class="tpl-field" style="flex: 1"><label class="tpl-label">名称</label><input type="text" id="tpl-name"
+                  placeholder="模板名称" maxlength="50" /></div>
+            </div>
+            <div class="tpl-field tpl-field-grow"><label class="tpl-label">内容 <span
+                  style="font-weight: 400; opacity: 0.55">（Markdown）</span></label><textarea id="tpl-content"
+                placeholder="输入模板内容..." spellcheck="false"></textarea></div>
+          </div>
+          <div class="tpl-footer">
+            <div class="tpl-footer-left"><button class="btn-danger" id="tpl-btn-delete">删除</button></div>
+            <div class="tpl-footer-right"><button class="btn-secondary" id="tpl-btn-save">保存</button><button
+                class="btn-apply" id="tpl-btn-apply"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                应用
+              </button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- ── Settings Modal ─────────────────────────────────── -->
+  <div class="modal-overlay" id="settings-overlay">
+    <div class="modal" id="settings-modal" style="width: 680px; max-height: 520px">
+      <div class="modal-header">
+        <h2>设置</h2><button class="modal-close" id="settings-close">✕</button>
+      </div>
+      <div class="settings-modal-body"><!-- Left nav -->
+        <nav class="settings-nav" id="settings-nav">
+          <div class="settings-nav-label">设置</div>
+          <div class="settings-nav-item active" data-panel="appearance"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg></span>
+            外观 </div>
+          <div class="settings-nav-item" data-panel="editor"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg></span>
+            编辑器 </div>
+          <div class="settings-nav-item" data-panel="autosave"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg></span>
+            自动保存 </div>
+          <div class="settings-nav-item" data-panel="export"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg></span>
+            导出 </div>
+          <div class="settings-nav-item" data-panel="system"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+              </svg></span>
+            系统
+          </div>
+          <div class="settings-nav-item" data-panel="shortcuts"><span class="nav-icon"><svg aria-hidden="true"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+              </svg></span>
+            快捷键
+          </div>
+        </nav><!-- Right panels -->
+        <div class="settings-panels" id="settings-panels"><!-- Appearance -->
+          <div class="settings-panel active" id="panel-appearance">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg></span>
+              外观 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">主题</div>
+                <div class="setting-item-desc">选择界面的明暗风格</div>
+              </div>
+              <div class="setting-item-control">
+                <div class="theme-toggle-group"><button class="theme-toggle-btn" data-theme="light"><svg
+                      aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
+                      stroke-width="2">
+                      <circle cx="12" cy="12" r="5" />
+                      <line x1="12" y1="1" x2="12" y2="3" />
+                      <line x1="12" y1="21" x2="12" y2="23" />
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                      <line x1="1" y1="12" x2="3" y2="12" />
+                      <line x1="21" y1="12" x2="23" y2="12" />
+                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                    </svg>
+                    浅色 </button><button class="theme-toggle-btn" data-theme="dark"><svg aria-hidden="true"
+                      viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                    </svg>
+                    深色
+                  </button></div>
+              </div>
+            </div>
+          </div><!-- Editor -->
+          <div class="settings-panel" id="panel-editor">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 18 22 12 16 6" />
+                  <polyline points="8 6 2 12 8 18" />
+                </svg></span>
+              编辑器 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">字体大小</div>
+                <div class="setting-item-desc">编辑区代码字号</div>
+              </div>
+              <div class="setting-item-control"><input type="number" id="setting-fontsize" min="10" max="32" value="14"
+                  style="width: 64px; text-align: center" /><span
+                  style="font-size: 11px; color: var(--text-muted)">px</span></div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">编辑器字体</div>
+                <div class="setting-item-desc">等宽字体影响代码可读性</div>
+              </div>
+              <div class="setting-item-control"><select id="setting-editorfont" style="width: 160px">
+                  <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                  <option value="'Fira Code', monospace">Fira Code</option>
+                  <option value="'Source Code Pro', monospace">Source Code Pro</option>
+                  <option value="Consolas, monospace">Consolas</option>
+                  <option value="monospace">系统等宽</option>
+                </select></div>
+            </div>
+          </div><!-- Auto Save -->
+          <div class="settings-panel" id="panel-autosave">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg></span>
+              自动保存 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">自动保存间隔</div>
+                <div class="setting-item-desc">每隔多少秒自动将内容保存到缓存，软件异常关闭后可恢复</div>
+              </div>
+              <div class="setting-item-control"><input type="number" id="setting-autosave" min="5" max="300" value="10"
+                  style="width: 64px; text-align: center" /><span
+                  style="font-size: 11px; color: var(--text-muted)">秒</span></div>
+            </div>
+          </div><!-- Export -->
+          <div class="settings-panel" id="panel-export">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg></span>
+              导出 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">默认导出目录</div>
+                <div class="setting-item-desc">每次导出时优先使用此目录，留空则每次手动选择</div>
+              </div>
+              <div class="setting-item-control">
+                <div class="setting-dir-row"><input type="text" id="setting-exportdir" readonly
+                    placeholder="点击选择目录..." /><button class="btn-secondary" id="setting-exportdir-btn">选择</button></div>
+              </div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">粘贴图片保存目录</div>
+                <div class="setting-item-desc">相对路径（如 assets /
+                  images）相对当前文档；填绝对路径则所有图片统一存到该目录</div>
+              </div>
+              <div class="setting-item-control">
+                <div class="setting-dir-row"><input type="text" id="setting-imagedir" placeholder="assets"
+                    style="width: 180px" /><button class="btn-secondary" id="setting-imagedir-btn">选择</button></div>
+              </div>
+            </div>
+            <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 10px">
+              <div style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    width: 100%;
+                  ">
+                <div class="setting-item-info">
+                  <div class="setting-item-label">文件命名规则</div>
+                  <div class="setting-item-desc">导出文件的默认命名格式，点击下方变量快速插入</div>
+                </div>
+                <div class="setting-item-control"><input type="text" id="setting-namingrule"
+                    placeholder="{title}_{date}" style="width: 180px" /></div>
+              </div>
+              <div class="naming-vars"><span class="naming-var-chip" data-var="{title}">{title}</span><span
+                  class="naming-var-chip" data-var="{date}">{date}</span><span class="naming-var-chip"
+                  data-var="{time}">{time}</span><span class="naming-var-chip"
+                  data-var="{datetime}">{datetime}</span><span class="naming-var-chip"
+                  data-var="{timestamp}">{timestamp}</span><span class="naming-var-chip"
+                  data-var="{random}">{random}</span></div>
+            </div>
+          </div><!-- System -->
+          <div class="settings-panel" id="panel-system">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg></span>
+              系统 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">清空缓存</div>
+                <div class="setting-item-desc">清理渲染器 HTTP/代码/GPU 缓存与本地存储（不影响您的设置和文档）</div>
+              </div>
+              <div class="setting-item-control"><button class="btn-secondary" id="setting-clear-cache-btn">清空</button>
+              </div>
+            </div>
+          </div>
+          <!-- Shortcuts -->
+          <div class="settings-panel" id="panel-shortcuts">
+            <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="6" width="20" height="12" rx="2" />
+                  <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
+                </svg></span>
+              快捷键 </div>
+            <div id="panel-shortcuts-content"></div>
+          </div>
+        </div><!-- /settings-panels -->
+      </div><!-- /settings-modal-body -->
+      <div class="settings-modal-footer">
+        <span class="settings-modal-footer-left" id="settings-shortcut-hint">提示：Ctrl+Shift+T 快速切换主题</span>
+        <div class="settings-modal-footer-right">
+          <button class="btn-danger" id="settings-reset-btn">重置默认值</button>
+          <button class="btn-primary" id="settings-save-btn">保存设置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- ── Restore Modal ──────────────────────────────────── -->
+  <div class="modal-overlay" id="restore-overlay">
+    <div class="modal modal-small" id="restore-modal">
+      <div class="modal-header">
+        <h2>恢复上次编辑</h2>
+      </div>
+      <div class="modal-body">
+        <p class="restore-modal-desc">检测到上次未保存的编辑内容，是否要恢复？</p>
+        <div class="restore-tabs" id="restore-tabs"></div>
+        <div class="modal-actions"><button class="btn-secondary" id="restore-no">放弃</button><button class="btn-primary"
+            id="restore-yes">恢复编辑</button></div>
+      </div>
+    </div>
   </div><!-- Scripts -->
   <script type="module" src="./main.ts"></script>
 </body>
