@@ -17,6 +17,7 @@ win-unpacked/
 
 # IDE
 .vscode/
+.claude/settings.local.json
 
 # misc
 .DS_Store
