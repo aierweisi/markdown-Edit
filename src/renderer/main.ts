@@ -6,7 +6,31 @@ import { createEditor } from './editor/editor-api'
 import { createPreview } from './preview/render'
 import { createTabManager } from './tabs/tab-manager'
 import { mountTabBar } from './tabs/tab-bar'
-import type { Settings } from '@shared/types'
+import { createCacheManager, exposeForMainProcess } from './cache/cache-manager'
+import { createRecentManager } from './recent/recent-files'
+import { openFileByPath, openFileViaDialog } from './files/open'
+import { saveActiveTab } from './files/save'
+import { attachDragDrop } from './files/drag-drop'
+import { attachImagePaste } from './files/paste-image'
+import { exportMarkdown } from './export/export-md'
+import { exportHtml } from './export/export-html'
+import { exportPdf } from './export/export-pdf'
+import { createPalette } from './ui/palette'
+import { createSettingsPanel } from './ui/settings-panel'
+import { createRecentPanel } from './ui/recent-panel'
+import { createTemplatesPanel } from './ui/templates-panel'
+import { createStatusBar } from './ui/status-bar'
+import { attachWelcome } from './ui/welcome'
+import { attachWindowControls } from './ui/window-controls'
+import { applyThemeSideEffects } from './ui/theme'
+import { showToast } from './ui/toast'
+import { attachSyncScroll } from './preview/sync-scroll'
+import { attachImageLightbox } from './preview/image-lightbox'
+import { attachFind } from './find/find-panel'
+import { debounce } from './lib/debounce'
+import { titleFromPath } from './lib/fs-paths'
+import { refreshMermaidTheme } from './preview/lazy-mermaid'
+import type { Settings, ViewMode } from '@shared/types'
 import './styles/index.css'
 
 const DEFAULT_SETTINGS: Settings = {
@@ -19,6 +43,8 @@ const DEFAULT_SETTINGS: Settings = {
   imageSaveDir: 'assets',
   paneOrder: 'preview-first',
 }
+
+const VIEW_MODES: ViewMode[] = ['split', 'editor', 'preview']
 
 async function loadSettings(): Promise<Settings> {
   const [theme, fontSize, editorFont, autoSave, exportDir, naming, imageDir, paneOrder] =
@@ -50,101 +76,540 @@ async function bootstrap(): Promise<void> {
   const store = createAppStore(settings)
   const ctx = createAppContext(store, dom)
 
-  document.body.classList.toggle('theme-dark', settings.theme === 'dark')
-  document.body.classList.toggle('theme-light', settings.theme !== 'dark')
+  applyThemeSideEffects(ctx, settings.theme)
+  document.documentElement.style.setProperty('--editor-font-size', `${settings.fontSize}px`)
+  document.documentElement.style.setProperty('--font-mono', settings.editorFont)
 
   bindPersistence(store)
 
   const tabs = createTabManager(ctx)
 
-  if (!dom.editorContainer) {
-    document.body.innerHTML = '<p>missing editor container</p>'
+  if (!dom.editorContainer || !dom.previewBody) {
+    document.body.innerHTML = '<p>missing editor/preview container</p>'
     return
   }
-
-  const initialTab = tabs.create({ title: '未命名', content: '# 开始写作\n\n输入 Markdown，右侧实时预览。' })
-  tabs.setActive(initialTab.id)
 
   const editor = createEditor({
     parent: dom.editorContainer,
     theme: settings.theme,
-    initialValue: tabs.getContent(initialTab.id),
+    initialValue: '',
   })
 
-  const preview =
-    dom.previewBody &&
-    createPreview({
-      body: dom.previewBody,
-    })
+  const preview = createPreview({ body: dom.previewBody })
+  if (dom.previewContainer) attachSyncScroll({ editor, previewContainer: dom.previewContainer })
+  attachImageLightbox(dom.previewBody)
 
-  editor.onChange((value) => {
-    const active = ctx.store.activeTabId()
-    if (active) {
-      tabs.setContent(active, value)
-      const tab = tabs.getById(active)
-      if (tab && !tab.modified) tabs.markModified(active, true)
+  const recent = createRecentManager(ctx)
+  const cache = createCacheManager({ ctx, tabs, editor })
+  exposeForMainProcess(cache)
+
+  const statusBar = createStatusBar({ ctx })
+  const palette = createPalette()
+  const settingsPanel = createSettingsPanel(ctx)
+  const recentPanel = createRecentPanel({
+    recent,
+    onSelect: (path) =>
+      void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
+  })
+  const templatesPanel = createTemplatesPanel(ctx)
+
+  templatesPanel.onApply((content, name) => {
+    const active = tabs.getActive()
+    if (active && tabs.getContent(active.id).trim().length === 0) {
+      // Apply into current empty tab
+      editor.setValue(content)
+      tabs.setContent(active.id, content)
+      tabs.setTitle(active.id, name)
+      tabs.markModified(active.id, content.length > 0)
+    } else {
+      const tab = tabs.create({ title: name, content })
+      tabs.setActive(tab.id)
+      editor.setValue(content)
+      tabs.markModified(tab.id, content.length > 0)
     }
-    preview?.render(value)
+    preview.render(content)
   })
 
-  // initial render
-  preview?.render(editor.getValue())
+  // ── Editor change → tab content + preview + cache markDirty ─────────
+  const onChange = (value: string): void => {
+    const id = ctx.store.activeTabId()
+    if (id) {
+      tabs.setContent(id, value)
+      const tab = tabs.getById(id)
+      if (tab && !tab.modified) tabs.markModified(id, true)
+    }
+    preview.render(value)
+    statusBar.setText(value)
+    cache.markDirty()
+    // schedule autosave to file for tabs with a real path
+    scheduleAutosave()
+  }
+  editor.onChange(onChange)
 
-  // theme effect: sync editor + body class whenever theme signal changes
+  editor.onCursorChange(({ line, col, selection }) => statusBar.setCursor(line, col, selection))
+
+  // ── Autosave: debounced per current autoSaveInterval setting ────────
+  let autosaveTimer: ReturnType<typeof setTimeout> | null = null
+  function scheduleAutosave(): void {
+    if (autosaveTimer) clearTimeout(autosaveTimer)
+    const ms = ctx.store.autosaveMs()
+    autosaveTimer = setTimeout(() => {
+      void autosaveActive()
+    }, ms)
+  }
+  async function autosaveActive(): Promise<void> {
+    const tab = tabs.getActive()
+    if (!tab || !tab.filePath || !tab.modified) return
+    if (ctx.store.saving()) return
+    ctx.store.saving.set(true)
+    try {
+      const result = await ctx.api.fileSave(tab.filePath, editor.getValue())
+      if (result.success) {
+        tabs.markModified(tab.id, false)
+        statusBar.setSaving(false)
+      }
+    } finally {
+      ctx.store.saving.set(false)
+    }
+  }
+
+  // ── Theme signal → editor + body class + mermaid theme refresh ──────
   ctx.store.theme.subscribe((next) => {
     editor.setTheme(next)
-    document.body.classList.toggle('theme-dark', next === 'dark')
-    document.body.classList.toggle('theme-light', next !== 'dark')
+    applyThemeSideEffects(ctx, next)
+    refreshMermaidTheme(next)
   })
 
-  // mount tab bar (event-delegated)
+  // ── Settings signal → CSS vars ──────────────────────────────────────
+  ctx.store.settings.subscribe((next) => {
+    document.documentElement.style.setProperty('--editor-font-size', `${next.fontSize}px`)
+    document.documentElement.style.setProperty('--font-mono', next.editorFont)
+  })
+
+  // ── Tab bar (event delegated) ───────────────────────────────────────
   mountTabBar({
     ctx,
     tabs,
     onActivate(id) {
       const cur = ctx.store.activeTabId()
       if (cur === id) return
+      // Flush current content before switch
+      if (cur) tabs.setContent(cur, editor.getValue())
       ctx.store.activeTabId.set(id)
       editor.setValue(tabs.getContent(id))
-      preview?.render(tabs.getContent(id))
+      preview.render(tabs.getContent(id))
+      statusBar.setText(tabs.getContent(id))
     },
     onClose(id) {
       tabs.close(id)
-      const newActive = ctx.store.activeTabId()
-      if (newActive) {
-        editor.setValue(tabs.getContent(newActive))
-        preview?.render(tabs.getContent(newActive))
+      const next = ctx.store.activeTabId()
+      if (next) {
+        editor.setValue(tabs.getContent(next))
+        preview.render(tabs.getContent(next))
+        statusBar.setText(tabs.getContent(next))
       } else {
         editor.setValue('')
-        preview?.render('')
+        preview.render('')
+        statusBar.setText('')
       }
     },
   })
 
-  // wire toolbar buttons (only the few that exist in this minimal HTML)
-  document.querySelectorAll<HTMLElement>('[data-action]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const action = btn.dataset.action
-      if (!action) return
-      if (action === 'toggle-theme') {
+  // ── Drag-drop + paste image ─────────────────────────────────────────
+  attachDragDrop({
+    ctx,
+    tabs,
+    editor,
+    onAfterOpen(content) {
+      preview.render(content)
+      statusBar.setText(content)
+    },
+  })
+  attachImagePaste({ ctx, editor, tabs })
+
+  // ── Window controls ─────────────────────────────────────────────────
+  attachWindowControls(ctx)
+
+  // ── Restore from cache or create blank tab ──────────────────────────
+  const snapshot = await cache.loadSnapshot()
+  if (snapshot && snapshot.tabs.length > 0) {
+    cache.applySnapshot(snapshot)
+    const active = tabs.getActive()
+    if (active) {
+      editor.setValue(tabs.getContent(active.id))
+      preview.render(tabs.getContent(active.id))
+      statusBar.setText(tabs.getContent(active.id))
+    }
+  } else {
+    const tab = tabs.create({
+      title: '未命名',
+      content: '# 开始写作\n\n输入 Markdown，右侧实时预览。',
+    })
+    tabs.setActive(tab.id)
+    editor.setValue(tabs.getContent(tab.id))
+    preview.render(tabs.getContent(tab.id))
+    statusBar.setText(tabs.getContent(tab.id))
+  }
+  cache.start()
+
+  // ── Welcome overlay ─────────────────────────────────────────────────
+  attachWelcome({
+    ctx,
+    tabs,
+    onNew: () => newFile(),
+    onOpen: () => void openFile(),
+    onTemplate: () => templatesPanel.open(),
+  })
+
+  // ── File ops shortcuts ──────────────────────────────────────────────
+  function newFile(): void {
+    const tab = tabs.create({ title: '未命名' })
+    tabs.setActive(tab.id)
+    editor.setValue('')
+    preview.render('')
+    statusBar.setText('')
+    editor.focus()
+  }
+  async function openFile(): Promise<void> {
+    await openFileViaDialog({
+      ctx,
+      tabs,
+      editor,
+      onContentLoaded(content) {
+        preview.render(content)
+        statusBar.setText(content)
+        const active = tabs.getActive()
+        if (active?.filePath) void recent.add(active.filePath)
+      },
+    })
+  }
+  async function save(saveAs = false): Promise<void> {
+    const ok = await saveActiveTab({
+      ctx,
+      tabs,
+      getCurrentContent: () => editor.getValue(),
+    }, saveAs)
+    if (ok) {
+      const tab = tabs.getActive()
+      if (tab?.filePath) {
+        await recent.add(tab.filePath)
+        showToast(`已保存: ${titleFromPath(tab.filePath)}`, 'success')
+      }
+    }
+  }
+
+  // ── Toolbar buttons (event delegation via data-action) ──────────────
+  document.addEventListener('click', (evt) => {
+    const t = (evt.target as HTMLElement).closest<HTMLElement>('[data-action]')
+    if (!t) return
+    const action = t.dataset.action
+    switch (action) {
+      case 'new':
+        newFile()
+        break
+      case 'open':
+        void openFile()
+        break
+      case 'save':
+        void save()
+        break
+      case 'toggle-theme': {
         const next = ctx.store.theme() === 'dark' ? 'light' : 'dark'
         ctx.store.theme.set(next)
-      } else if (action === 'tab-new') {
+        break
+      }
+      case 'tab-new': {
         const tab = tabs.create({ title: '未命名' })
         tabs.setActive(tab.id)
         editor.setValue('')
-        preview?.render('')
+        preview.render('')
+        statusBar.setText('')
         editor.focus()
-      } else if (action) {
-        // delegated to editor.insertFormat
-        try {
-          editor.insertFormat(action as Parameters<typeof editor.insertFormat>[0])
-        } catch {
-          /* unknown action */
-        }
+        break
       }
-    })
+      case 'settings':
+        settingsPanel.open()
+        break
+      case 'templates':
+        templatesPanel.open()
+        break
+      case 'recent':
+        void recentPanel.open()
+        break
+      case 'palette':
+        palette.open()
+        break
+      case 'view-toggle': {
+        const idx = VIEW_MODES.indexOf(ctx.store.viewMode())
+        ctx.store.viewMode.set(VIEW_MODES[(idx + 1) % VIEW_MODES.length])
+        break
+      }
+      case 'export-md':
+        void exportMarkdown({
+          ctx,
+          content: editor.getValue(),
+          title: tabs.getActive()?.title ?? '未命名',
+        })
+        break
+      case 'export-html':
+        void exportHtml({
+          ctx,
+          content: editor.getValue(),
+          title: tabs.getActive()?.title ?? '未命名',
+          theme: ctx.store.theme(),
+        })
+        break
+      case 'export-pdf':
+        void exportPdf({
+          ctx,
+          content: editor.getValue(),
+          title: tabs.getActive()?.title ?? '未命名',
+        })
+        break
+      default:
+        // editor format actions
+        if (action) {
+          try {
+            editor.insertFormat(action as Parameters<typeof editor.insertFormat>[0])
+          } catch {
+            /* unknown action */
+          }
+        }
+    }
   })
+
+  // ── ViewMode signal → main-area class ───────────────────────────────
+  if (dom.mainArea) {
+    ctx.store.viewMode.subscribe((mode) => {
+      dom.mainArea!.classList.remove('main-area--editor-only', 'main-area--preview-only')
+      if (mode === 'editor') dom.mainArea!.classList.add('main-area--editor-only')
+      if (mode === 'preview') dom.mainArea!.classList.add('main-area--preview-only')
+    })
+  }
+
+  // ── Find ────────────────────────────────────────────────────────────
+  const find = attachFind(editor.view)
+
+  // ── Palette commands ────────────────────────────────────────────────
+  palette.register({ id: 'file.new', group: '文件', title: '新建', hint: 'Ctrl+N', run: newFile })
+  palette.register({ id: 'file.open', group: '文件', title: '打开文件…', hint: 'Ctrl+O', run: openFile })
+  palette.register({ id: 'file.save', group: '文件', title: '保存', hint: 'Ctrl+S', run: () => save() })
+  palette.register({
+    id: 'file.saveAs',
+    group: '文件',
+    title: '另存为…',
+    hint: 'Ctrl+Shift+S',
+    run: () => save(true),
+  })
+  palette.register({ id: 'file.recent', group: '文件', title: '最近文件…', hint: 'Ctrl+Shift+R', run: () => recentPanel.open() })
+  palette.register({
+    id: 'view.toggleTheme',
+    group: '视图',
+    title: '切换主题',
+    hint: 'Ctrl+Shift+T',
+    run: () => ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark'),
+  })
+  palette.register({
+    id: 'view.toggleMode',
+    group: '视图',
+    title: '循环视图模式',
+    hint: 'Ctrl+\\',
+    run: () => {
+      const idx = VIEW_MODES.indexOf(ctx.store.viewMode())
+      ctx.store.viewMode.set(VIEW_MODES[(idx + 1) % VIEW_MODES.length])
+    },
+  })
+  palette.register({ id: 'edit.find', group: '编辑', title: '查找', hint: 'Ctrl+F', run: () => find.open() })
+  palette.register({ id: 'app.settings', group: '工具', title: '设置', hint: 'Ctrl+,', run: () => settingsPanel.open() })
+  palette.register({ id: 'app.templates', group: '工具', title: '模板库', run: () => templatesPanel.open() })
+  palette.register({
+    id: 'app.shortcuts',
+    group: '工具',
+    title: '快捷键',
+    hint: 'Ctrl+Shift+/',
+    run: () => settingsPanel.open('shortcuts'),
+  })
+  palette.register({
+    id: 'export.md',
+    group: '导出',
+    title: '导出 Markdown',
+    run: async () => {
+      await exportMarkdown({
+        ctx,
+        content: editor.getValue(),
+        title: tabs.getActive()?.title ?? '未命名',
+      })
+    },
+  })
+  palette.register({
+    id: 'export.html',
+    group: '导出',
+    title: '导出 HTML',
+    run: async () => {
+      await exportHtml({
+        ctx,
+        content: editor.getValue(),
+        title: tabs.getActive()?.title ?? '未命名',
+        theme: ctx.store.theme(),
+      })
+    },
+  })
+  palette.register({
+    id: 'export.pdf',
+    group: '导出',
+    title: '导出 PDF',
+    run: async () => {
+      await exportPdf({
+        ctx,
+        content: editor.getValue(),
+        title: tabs.getActive()?.title ?? '未命名',
+      })
+    },
+  })
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────
+  document.addEventListener('keydown', (evt) => {
+    const ctrl = evt.ctrlKey || evt.metaKey
+    if (!ctrl) return
+    const key = evt.key.toLowerCase()
+
+    if (key === 's') {
+      evt.preventDefault()
+      void save(evt.shiftKey)
+    } else if (key === 'n' && !evt.shiftKey) {
+      evt.preventDefault()
+      newFile()
+    } else if (key === 'o') {
+      evt.preventDefault()
+      void openFile()
+    } else if (key === 'r' && evt.shiftKey) {
+      evt.preventDefault()
+      void recentPanel.open()
+    } else if ((key === 'p' && evt.shiftKey) || (key === 'k' && !evt.shiftKey)) {
+      // Ctrl+Shift+P or Ctrl+K
+      evt.preventDefault()
+      palette.open()
+    } else if (key === ',') {
+      evt.preventDefault()
+      settingsPanel.open()
+    } else if (key === '\\') {
+      evt.preventDefault()
+      const idx = VIEW_MODES.indexOf(ctx.store.viewMode())
+      ctx.store.viewMode.set(VIEW_MODES[(idx + 1) % VIEW_MODES.length])
+    } else if (key === 'w') {
+      evt.preventDefault()
+      const tab = tabs.getActive()
+      if (tab) tabs.close(tab.id)
+    } else if (key === 't' && !evt.shiftKey) {
+      evt.preventDefault()
+      const tab = tabs.create({ title: '未命名' })
+      tabs.setActive(tab.id)
+      editor.setValue('')
+      preview.render('')
+    } else if (key === 'tab') {
+      evt.preventDefault()
+      const all = tabs.getAll()
+      if (all.length === 0) return
+      const cur = ctx.store.activeTabId()
+      const curIdx = cur ? all.findIndex((t) => t.id === cur) : 0
+      const dir = evt.shiftKey ? -1 : 1
+      const next = all[(curIdx + dir + all.length) % all.length]
+      ctx.store.activeTabId.set(next.id)
+      editor.setValue(tabs.getContent(next.id))
+      preview.render(tabs.getContent(next.id))
+    } else if (key >= '1' && key <= '9') {
+      evt.preventDefault()
+      const idx = parseInt(key, 10) - 1
+      const all = tabs.getAll()
+      if (all[idx]) ctx.store.activeTabId.set(all[idx].id)
+    } else if (evt.shiftKey && key === 't') {
+      evt.preventDefault()
+      ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark')
+    } else if (evt.shiftKey && (key === '/' || key === '?')) {
+      evt.preventDefault()
+      settingsPanel.open('shortcuts')
+    }
+  })
+
+  // ── Menu IPC dispatch ───────────────────────────────────────────────
+  ctx.api.onMenuEvent((event) => {
+    switch (event) {
+      case 'menu:new':
+        newFile()
+        break
+      case 'menu:open':
+      case 'menu:import':
+        void openFile()
+        break
+      case 'menu:save':
+        void save()
+        break
+      case 'menu:save-as':
+        void save(true)
+        break
+      case 'menu:export-md':
+        void exportMarkdown({ ctx, content: editor.getValue(), title: tabs.getActive()?.title ?? '未命名' })
+        break
+      case 'menu:export-html':
+        void exportHtml({
+          ctx,
+          content: editor.getValue(),
+          title: tabs.getActive()?.title ?? '未命名',
+          theme: ctx.store.theme(),
+        })
+        break
+      case 'menu:export-pdf':
+        void exportPdf({ ctx, content: editor.getValue(), title: tabs.getActive()?.title ?? '未命名' })
+        break
+      case 'menu:toggle-theme':
+        ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark')
+        break
+      case 'menu:toggle-view': {
+        const idx = VIEW_MODES.indexOf(ctx.store.viewMode())
+        ctx.store.viewMode.set(VIEW_MODES[(idx + 1) % VIEW_MODES.length])
+        break
+      }
+      case 'menu:settings':
+        settingsPanel.open()
+        break
+      case 'menu:templates':
+        templatesPanel.open()
+        break
+      case 'menu:recent':
+        void recentPanel.open()
+        break
+    }
+  })
+
+  // ── OS file-association open ────────────────────────────────────────
+  const lastOpenedAt = new Map<string, number>()
+  ctx.api.onOpenFileFromOS(({ filePath, content, name }) => {
+    const now = Date.now()
+    if ((lastOpenedAt.get(filePath) ?? 0) > now - 2000) return
+    lastOpenedAt.set(filePath, now)
+
+    const existing = tabs.getAll().find((t) => t.filePath === filePath)
+    if (existing) {
+      ctx.store.activeTabId.set(existing.id)
+      editor.setValue(content)
+      preview.render(content)
+      return
+    }
+    const tab = tabs.create({ title: titleFromPath(name) || '未命名', filePath, content })
+    tabs.setActive(tab.id)
+    tabs.markModified(tab.id, false)
+    editor.setValue(content)
+    preview.render(content)
+    void recent.add(filePath)
+  })
+
+  ctx.api.onOpenFileError(({ error }) => {
+    showToast(`打开文件失败: ${error}`, 'error')
+  })
+
+  // ── Debounced status-bar update for typing ──────────────────────────
+  const updateStatus = debounce((value: string) => statusBar.setText(value), 300)
+  editor.onChange((value) => updateStatus(value))
 
   editor.focus()
 }

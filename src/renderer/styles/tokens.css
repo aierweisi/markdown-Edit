@@ -4,9 +4,12 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
   --editor-font-size: 15px;
 
-  --toolbar-height: 42px;
-  --tabbar-height: 36px;
+  --toolbar-height: 36px;
+  --format-toolbar-height: 38px;
+  --tabbar-height: 32px;
+  --statusbar-height: 26px;
 
   --radius-sm: 4px;
   --radius-md: 6px;
+  --radius-lg: 10px;
 }

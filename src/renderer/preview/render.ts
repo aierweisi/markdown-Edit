@@ -1,6 +1,8 @@
 import DOMPurify from 'dompurify'
 import morphdom from 'morphdom'
 import { createMarkdownWorkerClient, type MarkdownWorkerClient } from './worker-client'
+import { renderMermaidIn } from './lazy-mermaid'
+import { renderMathIn } from './lazy-katex'
 
 export interface PreviewApi {
   render(text: string): void
@@ -30,8 +32,11 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
       void worker
         .render(text)
         .then((html) => {
-          if (renderingFor !== text) return // a newer render is queued
+          if (renderingFor !== text) return
           applyHtml(html)
+          // post-processing: mermaid + katex
+          void renderMermaidIn(opts.body)
+          void renderMathIn(opts.body)
         })
         .catch((err) => {
           console.error('[preview] render failed:', err)
@@ -49,11 +54,22 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
     const clean = DOMPurify.sanitize(rawHtml, {
       ADD_ATTR: ['target', 'rel'],
     })
-    // Wrap in a temp container; morphdom diffs children of opts.body.
     const tmp = document.createElement('article')
     tmp.className = opts.body.className
     tmp.innerHTML = clean
-    morphdom(opts.body, tmp, { childrenOnly: true })
+    morphdom(opts.body, tmp, {
+      childrenOnly: true,
+      onBeforeElUpdated(fromEl, toEl) {
+        // Preserve already-rendered mermaid blocks
+        if (
+          (fromEl as HTMLElement).classList?.contains('mermaid-block') &&
+          fromEl.isEqualNode(toEl as Node) === false
+        ) {
+          return false
+        }
+        return true
+      },
+    })
   }
 
   return {

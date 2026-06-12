@@ -1,9 +1,16 @@
-/* Phase 5/6/7 minimal styles. Full theming arrives in Phase 9. */
 @import './tokens.css';
 @import './reset.css';
 @import './layout.css';
 @import './components/toolbar.css';
 @import './components/tab-bar.css';
+@import './components/status-bar.css';
+@import './components/welcome.css';
+@import './components/modal.css';
+@import './components/settings.css';
+@import './components/palette.css';
+@import './components/templates.css';
 @import './components/preview.css';
+@import './components/lightbox.css';
+@import './components/toast.css';
 @import './themes/light.css';
 @import './themes/dark.css';

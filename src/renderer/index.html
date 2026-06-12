@@ -11,33 +11,108 @@
   </head>
   <body class="theme-light">
     <header id="toolbar" class="toolbar">
-      <div class="toolbar__logo">M↓ Markdown Editor</div>
-      <div class="toolbar__actions">
-        <button type="button" data-action="bold" title="粗体">B</button>
-        <button type="button" data-action="italic" title="斜体"><em>I</em></button>
-        <button type="button" data-action="heading" title="标题">H</button>
-        <button type="button" data-action="quote" title="引用">"</button>
-        <button type="button" data-action="ul" title="无序列表">·</button>
-        <button type="button" data-action="ol" title="有序列表">1.</button>
-        <button type="button" data-action="codeblock" title="代码块">{ }</button>
-        <button type="button" data-action="toggle-theme" title="切换主题">☾</button>
+      <div class="toolbar__left">
+        <div class="app-logo"><span class="app-logo__mark">M↓</span> Markdown Editor</div>
+      </div>
+      <div class="toolbar__right">
+        <div id="window-controls" class="window-controls">
+          <button class="win-ctrl" id="win-min" title="最小化" aria-label="Minimize">
+            <svg aria-hidden="true" viewBox="0 0 10 10" width="10" height="10">
+              <path d="M0 5h10" stroke="currentColor" stroke-width="1" fill="none" />
+            </svg>
+          </button>
+          <button class="win-ctrl" id="win-max" title="最大化" aria-label="Maximize">
+            <svg aria-hidden="true" viewBox="0 0 10 10" width="10" height="10" id="win-max-icon">
+              <rect
+                x="0.5"
+                y="0.5"
+                width="9"
+                height="9"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1"
+              />
+            </svg>
+          </button>
+          <button class="win-ctrl win-ctrl--close" id="win-close" title="关闭" aria-label="Close">
+            <svg aria-hidden="true" viewBox="0 0 10 10" width="10" height="10">
+              <path d="M0 0l10 10M10 0l-10 10" stroke="currentColor" stroke-width="1" fill="none" />
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 
+    <div id="format-toolbar" class="format-toolbar">
+      <div class="format-toolbar__group">
+        <button type="button" data-action="new" title="新建 (Ctrl+N)">新建</button>
+        <button type="button" data-action="open" title="打开 (Ctrl+O)">打开</button>
+        <button type="button" data-action="save" title="保存 (Ctrl+S)">保存</button>
+      </div>
+      <span class="format-toolbar__sep"></span>
+      <div class="format-toolbar__group">
+        <button type="button" data-action="heading" title="标题 (循环)">H</button>
+        <button type="button" data-action="bold" title="粗体 (Ctrl+B)"><strong>B</strong></button>
+        <button type="button" data-action="italic" title="斜体 (Ctrl+I)"><em>I</em></button>
+        <button type="button" data-action="strikethrough" title="删除线">S</button>
+        <button type="button" data-action="link" title="链接">🔗</button>
+        <button type="button" data-action="image" title="图片">🖼</button>
+        <button type="button" data-action="code" title="行内代码">&lt;/&gt;</button>
+        <button type="button" data-action="codeblock" title="代码块">{ }</button>
+        <button type="button" data-action="quote" title="引用">"</button>
+        <button type="button" data-action="ul" title="无序列表">•</button>
+        <button type="button" data-action="ol" title="有序列表">1.</button>
+        <button type="button" data-action="table" title="表格">⊞</button>
+        <button type="button" data-action="hr" title="分割线">─</button>
+      </div>
+      <span class="format-toolbar__spacer"></span>
+      <div class="format-toolbar__group">
+        <button type="button" data-action="templates" title="模板库">模板</button>
+        <button type="button" data-action="export-md" title="导出 Markdown">导出 MD</button>
+        <button type="button" data-action="export-html" title="导出 HTML">导出 HTML</button>
+        <button type="button" data-action="export-pdf" title="导出 PDF">导出 PDF</button>
+      </div>
+      <span class="format-toolbar__sep"></span>
+      <div class="format-toolbar__group">
+        <button type="button" data-action="view-toggle" title="切换视图 (Ctrl+\)">⊟</button>
+        <button type="button" data-action="toggle-theme" title="切换主题 (Ctrl+Shift+T)">☾</button>
+        <button type="button" data-action="settings" title="设置 (Ctrl+,)">⚙</button>
+      </div>
+    </div>
+
     <nav id="tabbar" class="tab-bar">
       <div id="tabs-container" class="tab-bar__list"></div>
-      <button id="btn-tab-new" type="button" data-action="tab-new" class="tab-bar__new">+</button>
+      <button id="btn-tab-new" type="button" data-action="tab-new" title="新建标签页 (Ctrl+T)" class="tab-bar__new">+</button>
     </nav>
 
     <main id="main-area" class="main-area">
-      <section id="editor-pane" class="pane">
+      <section id="editor-pane" class="pane editor-pane">
         <div id="editor-container" class="pane__body"></div>
+        <div id="welcome-overlay" class="welcome-overlay welcome-overlay--hidden">
+          <div class="welcome">
+            <div class="welcome__icon">M↓</div>
+            <h1 class="welcome__title">Markdown Editor</h1>
+            <p class="welcome__subtitle">开始写作</p>
+            <div class="welcome__actions">
+              <button type="button" data-welcome-action="new" class="welcome__btn">新建文档</button>
+              <button type="button" data-welcome-action="open" class="welcome__btn">打开文件</button>
+              <button type="button" data-welcome-action="template" class="welcome__btn">从模板创建</button>
+            </div>
+            <div class="welcome__shortcuts">
+              <kbd>Ctrl+N</kbd> 新建 &nbsp; <kbd>Ctrl+O</kbd> 打开 &nbsp; <kbd>Ctrl+S</kbd> 保存 &nbsp; <kbd>Ctrl+Shift+P</kbd> 命令面板
+            </div>
+          </div>
+        </div>
       </section>
       <div id="divider" class="divider"></div>
       <section id="preview-pane" class="pane">
-        <article id="preview-body" class="markdown-body"></article>
+        <div id="preview-container" class="pane__body preview-container">
+          <article id="preview-body" class="markdown-body"></article>
+        </div>
       </section>
     </main>
+
+    <footer id="statusbar" class="statusbar"></footer>
 
     <script type="module" src="./main.ts"></script>
   </body>
