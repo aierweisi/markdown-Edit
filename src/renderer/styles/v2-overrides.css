@@ -150,17 +150,21 @@
 }
 
 .shortcuts-section {
-  border: 1px solid var(--border-muted, rgba(0, 0, 0, 0.08));
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   padding: 12px 14px 10px;
-  background: var(--bg-card, rgba(0, 0, 0, 0.018));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  background: linear-gradient(180deg, #f7f9fc 0%, #eef1f7 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .theme-dark .shortcuts-section {
   border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.025);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, #1c1c24 0%, #16161d 100%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .shortcuts-group-title {
