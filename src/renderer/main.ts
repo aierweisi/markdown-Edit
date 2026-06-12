@@ -442,10 +442,31 @@ async function bootstrap(): Promise<void> {
   // ── ViewMode signal → main-area class ───────────────────────────────
   if (dom.mainArea) {
     ctx.store.viewMode.subscribe((mode) => {
-      dom.mainArea!.classList.remove('main-area--editor-only', 'main-area--preview-only')
-      if (mode === 'editor') dom.mainArea!.classList.add('main-area--editor-only')
-      if (mode === 'preview') dom.mainArea!.classList.add('main-area--preview-only')
+      dom.mainArea!.classList.remove('view-editor-only', 'view-preview-only')
+      if (mode === 'editor') dom.mainArea!.classList.add('view-editor-only')
+      if (mode === 'preview') dom.mainArea!.classList.add('view-preview-only')
     })
+
+    // paneOrder signal → physically reorder editor/preview/divider in main-area
+    const applyPaneOrder = (order: 'preview-first' | 'editor-first'): void => {
+      const editorPane = document.getElementById('editor-pane')
+      const previewPane = document.getElementById('preview-pane')
+      const divider = document.getElementById('divider')
+      if (!editorPane || !previewPane || !divider) return
+      if (order === 'editor-first') {
+        dom.mainArea!.appendChild(editorPane)
+        dom.mainArea!.appendChild(divider)
+        dom.mainArea!.appendChild(previewPane)
+      } else {
+        dom.mainArea!.appendChild(previewPane)
+        dom.mainArea!.appendChild(divider)
+        dom.mainArea!.appendChild(editorPane)
+      }
+      const btn = document.getElementById('btn-swap-panes')
+      if (btn) btn.classList.toggle('active', order === 'preview-first')
+    }
+    applyPaneOrder(ctx.store.paneOrder())
+    ctx.store.paneOrder.subscribe(applyPaneOrder)
   }
 
   // ── Find ────────────────────────────────────────────────────────────
