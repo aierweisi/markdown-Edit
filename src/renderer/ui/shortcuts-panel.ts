@@ -46,6 +46,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
     items: [
       { key: 'Ctrl+\\', label: '切换视图模式' },
       { key: 'Ctrl+Shift+T', label: '切换主题' },
+      { key: 'Ctrl+Shift+O', label: '文章大纲' },
       { key: 'Ctrl+Shift+/', label: '快捷键展示' },
     ],
   },

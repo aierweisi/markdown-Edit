@@ -25,6 +25,8 @@ import { attachWindowControls } from './ui/window-controls'
 import { applyThemeSideEffects } from './ui/theme'
 import { showToast } from './ui/toast'
 import { showCloseConfirm } from './ui/confirm-modal'
+import { createOutlinePanel } from './ui/outline-panel'
+import { debounce as outlineDebounce } from './lib/debounce'
 import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
 import { attachFind } from './find/find-panel'
@@ -121,6 +123,16 @@ async function bootstrap(): Promise<void> {
       void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
   })
   const templatesPanel = createTemplatesPanel(ctx)
+  const outline = createOutlinePanel({
+    ctx,
+    onJump(line) {
+      editor.jumpToLine(line)
+    },
+  })
+  const refreshOutlineDebounced = outlineDebounce(
+    (text: string) => outline.refresh(text),
+    150,
+  )
 
   templatesPanel.onApply((content, name) => {
     const active = tabs.getActive()
@@ -154,6 +166,7 @@ async function bootstrap(): Promise<void> {
     scheduleAutosave()
   }
   editor.onChange(onChange)
+  editor.onChange((value) => refreshOutlineDebounced(value))
 
   editor.onCursorChange(({ line, col, selection }) => statusBar.setCursor(line, col, selection))
 
@@ -204,6 +217,7 @@ async function bootstrap(): Promise<void> {
     editor.setValue(tabs.getContent(id))
     preview.render(tabs.getContent(id))
     statusBar.setText(tabs.getContent(id))
+    if (outline.isVisible()) outline.refresh(tabs.getContent(id))
   }
   /**
    * Close one tab. If it has unsaved changes, prompt save / discard / cancel.
@@ -378,6 +392,10 @@ async function bootstrap(): Promise<void> {
   onBtnId('btn-template', () => templatesPanel.open())
   onBtnId('btn-theme', () => ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark'))
   onBtnId('btn-settings', () => settingsPanel.open())
+  onBtnId('btn-outline', () => {
+    outline.toggle()
+    if (outline.isVisible()) outline.refresh(editor.getValue())
+  })
   onBtnId('btn-tab-new', () => {
     const tab = tabs.create({ title: '未命名' })
     tabs.setActive(tab.id)
@@ -585,6 +603,16 @@ async function bootstrap(): Promise<void> {
   palette.register({ id: 'app.settings', group: '工具', title: '设置', hint: 'Ctrl+,', run: () => settingsPanel.open() })
   palette.register({ id: 'app.templates', group: '工具', title: '模板库', run: () => templatesPanel.open() })
   palette.register({
+    id: 'view.outline',
+    group: '视图',
+    title: '文章大纲',
+    hint: 'Ctrl+Shift+O',
+    run: () => {
+      outline.toggle()
+      if (outline.isVisible()) outline.refresh(editor.getValue())
+    },
+  })
+  palette.register({
     id: 'app.shortcuts',
     group: '工具',
     title: '快捷键',
@@ -690,6 +718,10 @@ async function bootstrap(): Promise<void> {
     } else if (evt.shiftKey && (key === '/' || key === '?')) {
       evt.preventDefault()
       settingsPanel.open('shortcuts')
+    } else if (evt.shiftKey && key === 'o') {
+      evt.preventDefault()
+      outline.toggle()
+      if (outline.isVisible()) outline.refresh(editor.getValue())
     }
   })
 

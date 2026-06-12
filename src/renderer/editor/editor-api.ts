@@ -18,6 +18,8 @@ export interface EditorApi {
   insertText(text: string): void
   getScrollTop(): number
   setScrollTop(n: number): void
+  /** Scroll editor to the given 1-based line and put the cursor at its start. */
+  jumpToLine(line: number): void
   onChange(cb: (value: string) => void): () => void
   onCursorChange(cb: (info: { line: number; col: number; selection: number }) => void): () => void
   destroy(): void
@@ -105,6 +107,16 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
     getScrollTop: () => view.scrollDOM.scrollTop,
     setScrollTop(n) {
       view.scrollDOM.scrollTop = n
+    },
+    jumpToLine(line) {
+      const { state } = view
+      const clamped = Math.min(Math.max(1, line), state.doc.lines)
+      const target = state.doc.line(clamped)
+      view.dispatch({
+        selection: { anchor: target.from },
+        effects: EditorView.scrollIntoView(target.from, { y: 'start', yMargin: 32 }),
+      })
+      view.focus()
     },
     onChange(cb) {
       changeListeners.add(cb)
