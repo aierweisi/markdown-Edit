@@ -24,10 +24,12 @@ export const darkTheme: Extension = [
     {
       '&': {
         color: '#e8e8ec',
-        backgroundColor: '#0d0d10',
+        backgroundColor: 'transparent',
         height: '100%',
         fontSize: 'var(--editor-font-size, 15px)',
       },
+      '.cm-scroller': { backgroundColor: 'transparent' },
+      '.cm-gutters': { backgroundColor: 'transparent !important' },
       '.cm-content': {
         caretColor: '#e8e8ec',
         fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
@@ -39,10 +41,8 @@ export const darkTheme: Extension = [
       },
       '.cm-activeLine': { backgroundColor: 'rgba(255, 255, 255, 0.04)' },
       '.cm-activeLineGutter': { backgroundColor: 'rgba(255, 255, 255, 0.04)' },
-      '.cm-gutters': {
-        backgroundColor: '#0d0d10',
+      '.cm-gutterElement': {
         color: '#6e7681',
-        border: 'none',
       },
       '.cm-searchMatch': { backgroundColor: 'rgba(255, 211, 84, 0.3)' },
       '.cm-searchMatch.cm-searchMatch-selected': {

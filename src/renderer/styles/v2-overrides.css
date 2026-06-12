@@ -1,6 +1,26 @@
 /* v2-specific UI: 命令面板 / 模板抽屉 / 快捷键面板 / toast / lightbox / confirm。
    这些类名是 v2 新增的，v1 CSS 不会涉及。 */
 
+/* ── Editor pane gradient: match preview-pane warm tone ───────
+   v1.css gave editor-pane a cool blue gradient; we want the editor
+   to share the preview's warm cream gradient for visual unity.
+   CodeMirror itself is transparent (see editor/theme-*.ts) so the
+   pane gradient shows through. */
+.theme-light .editor-pane {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 251, 245, 0.3) 0,
+    rgba(253, 245, 238, 0.2) 100%
+  ) !important;
+}
+.theme-dark .editor-pane {
+  background: linear-gradient(
+    180deg,
+    rgba(20, 14, 26, 0.5) 0,
+    rgba(16, 12, 22, 0.45) 100%
+  ) !important;
+}
+
 /* ── Command palette ───────────────────────────────────────── */
 .palette-overlay {
   position: fixed;
