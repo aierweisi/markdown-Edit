@@ -133,6 +133,12 @@ async function bootstrap(): Promise<void> {
     (text: string) => outline.refresh(text),
     150,
   )
+  function syncOutlineTitle(): void {
+    const tab = tabs.getActive()
+    outline.setTitle(tab?.title ?? '大纲')
+  }
+  ctx.store.activeTabId.subscribe(syncOutlineTitle)
+  ctx.store.tabs.subscribe(syncOutlineTitle)
 
   templatesPanel.onApply((content, name) => {
     const active = tabs.getActive()

@@ -3,6 +3,7 @@ import { parseHeadings, type Heading } from '../lib/parse-headings'
 
 export interface OutlineApi {
   refresh(text: string): void
+  setTitle(title: string): void
   toggle(): void
   setVisible(visible: boolean): void
   isVisible(): boolean
@@ -24,7 +25,7 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
   panel.className = 'outline-pane'
   panel.innerHTML = `
     <div class="outline-pane__header">
-      <span class="outline-pane__title">大纲</span>
+      <span class="outline-pane__title" data-slot="title">大纲</span>
       <span class="outline-pane__count" data-slot="count"></span>
       <button type="button" class="outline-pane__close" title="关闭">✕</button>
     </div>
@@ -32,10 +33,26 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
   `
   document.body.appendChild(panel)
 
+  const titleEl = panel.querySelector<HTMLElement>('[data-slot="title"]')!
   const listEl = panel.querySelector<HTMLElement>('[data-slot="list"]')!
   const countEl = panel.querySelector<HTMLElement>('[data-slot="count"]')!
   let visible = false
   let lastHeadings: Heading[] = []
+
+  /** Anchor outline below the tab bar by measuring real DOM offsets. */
+  function alignTop(): void {
+    const tabbar = document.getElementById('tabbar')
+    const rect = tabbar?.getBoundingClientRect()
+    if (rect && rect.bottom > 0) {
+      panel.style.top = `${rect.bottom}px`
+    } else {
+      panel.style.top = '108px' // sensible fallback
+    }
+  }
+
+  // re-align on resize and on initial show
+  window.addEventListener('resize', alignTop, { passive: true })
+  alignTop()
 
   panel.addEventListener('click', (evt) => {
     const t = evt.target as HTMLElement
@@ -52,9 +69,9 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
 
   function render(headings: Heading[]): void {
     lastHeadings = headings
-    countEl.textContent = headings.length === 0 ? '' : `${headings.length}`
+    countEl.textContent = headings.length === 0 ? '' : String(headings.length)
     if (headings.length === 0) {
-      listEl.innerHTML = '<p class="outline-pane__empty">暂无标题</p>'
+      listEl.innerHTML = '<p class="outline-pane__empty">暂无标题<br>在文档中插入 # 标题</p>'
       return
     }
     listEl.innerHTML = headings
@@ -72,6 +89,7 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
 
   function setVisible(v: boolean): void {
     visible = v
+    if (v) alignTop()
     panel.classList.toggle('outline-pane--open', v)
     document.body.classList.toggle('has-outline-open', v)
     const btn = document.getElementById('btn-outline')
@@ -82,12 +100,13 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
     refresh(text) {
       render(parseHeadings(text))
     },
+    setTitle(title) {
+      titleEl.textContent = title || '大纲'
+      titleEl.title = title || ''
+    },
     toggle() {
       setVisible(!visible)
-      if (visible && lastHeadings.length === 0) {
-        // give the layout a moment, then re-render placeholder
-        render(lastHeadings)
-      }
+      if (visible && lastHeadings.length === 0) render(lastHeadings)
     },
     setVisible,
     isVisible: () => visible,
