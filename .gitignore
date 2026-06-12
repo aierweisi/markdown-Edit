@@ -3,16 +3,17 @@
 # dependencies
 node_modules
 
-# production
+# production / build artifacts
 dist
 release
+out
+win-unpacked/
 *.exe
 *.dmg
 *.zip
 
-# build artifacts
-release/
-win-unpacked/
+# legacy v1 build outputs (kept until phase 11 cleanup)
+/renderer/
 
 # IDE
 .vscode/
@@ -33,13 +34,6 @@ build
 
 # cache
 .atomcode/graph.bin
-
-# generated from src/ by dev-build.js / minify.js
-renderer/js/
-renderer/css/main.css
-renderer/index.html
-renderer/vendor/*
-!renderer/vendor/morphdom/
 
 # temp files from build/commit scripts
 .msg

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.shared.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "out/renderer",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "jsx": "preserve"
+  },
+  "include": ["src/renderer/**/*.ts", "src/shared/**/*.ts"]
+}

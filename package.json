@@ -1,44 +1,56 @@
 {
   "name": "markdown-editor",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A desktop Markdown editor built with Electron",
-  "main": "main/main.js",
+  "main": "out/main/main.js",
+  "type": "module",
   "scripts": {
-    "postinstall": "node scripts/copy-vendor.js",
-    "copy-vendor": "node scripts/copy-vendor.js",
-    "dev": "node scripts/dev-build.js",
-    "start": "node scripts/dev-build.js && electron .",
-    "minify": "node scripts/minify.js",
-    "build": "npm run copy-vendor && npm run minify && electron-builder",
-    "build:win": "npm run copy-vendor && npm run minify && electron-builder --win",
-    "lint": "eslint main/ src/js/ scripts/ tests/",
-    "lint:fix": "eslint --fix main/ src/js/ scripts/ tests/",
-    "format": "prettier --check main/ src/js/ scripts/ tests/",
-    "format:fix": "prettier --write main/ src/js/ scripts/ tests/",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "lint": "eslint src/",
+    "lint:fix": "eslint --fix src/",
+    "format": "prettier --check src/ tests/",
+    "format:fix": "prettier --write src/ tests/",
+    "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json",
     "test": "vitest run",
-    "check": "npm run lint && npm run test",
-    "format:css": "prettier --write \"src/css/*.css\""
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "Markdown Editor Team",
   "license": "MIT",
   "dependencies": {
-    "codemirror": "5.65.16",
-    "dompurify": "3.2.4",
+    "@codemirror/autocomplete": "^6.18.4",
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/search": "^6.5.8",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.36.1",
+    "dompurify": "^3.2.4",
     "electron-store": "^11.0.2",
-    "katex": "0.16.21",
-    "marked": "15.0.7",
-    "mermaid": "10.9.3"
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.21",
+    "marked": "^15.0.7",
+    "mermaid": "^11.4.1",
+    "morphdom": "^2.7.4",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@highlightjs/cdn-assets": "11.9.0",
-    "csso": "^5.0.5",
+    "@types/dompurify": "^3.2.0",
+    "@types/katex": "^0.16.7",
+    "@types/node": "^22.10.5",
+    "@typescript-eslint/eslint-plugin": "^8.20.0",
+    "@typescript-eslint/parser": "^8.20.0",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
+    "electron-vite": "^2.3.0",
     "eslint": "^8.57.1",
-    "prettier": "^3.8.3",
-    "terser": "^5.48.0",
-    "vitest": "^0.34.0"
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.11",
+    "vitest": "^3.0.0"
   },
   "build": {
     "appId": "com.markdown.editor",
@@ -46,25 +58,19 @@
     "copyright": "Copyright © 2026",
     "compression": "maximum",
     "asar": true,
-    "afterPack": "scripts/afterPack.js",
+    "afterPack": "scripts/afterPack.cjs",
     "directories": {
       "output": "release"
     },
     "files": [
-      "dist/**/*",
+      "out/**/*",
       "package.json",
       "!**/*.map",
       "!**/*.md"
     ],
-    "extraMetadata": {
-      "main": "dist/main/main.js"
-    },
     "fileAssociations": [
       {
-        "ext": [
-          "md",
-          "markdown"
-        ],
+        "ext": ["md", "markdown"],
         "name": "Markdown Document",
         "description": "Markdown Document",
         "role": "Editor",
@@ -74,18 +80,8 @@
     "win": {
       "icon": "assets/icons/icon.ico",
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
@@ -94,13 +90,7 @@
     },
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        { "target": "dmg", "arch": ["x64", "arm64"] }
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "category": "public.app-category.productivity",
@@ -109,16 +99,8 @@
     "dmg": {
       "title": "${productName} ${version}",
       "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
       ]
     },
     "nsis": {
@@ -131,8 +113,6 @@
       "uninstallerIcon": "assets/icons/icon.ico",
       "language": "2052",
       "include": "scripts/installer.nsh"
-    },
-    "electronVersion": "33.0.0",
-    "electronDist": "node_modules/electron/dist"
+    }
   }
 }
