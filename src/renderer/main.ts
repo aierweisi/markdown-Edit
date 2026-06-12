@@ -24,6 +24,7 @@ import { attachWelcome } from './ui/welcome'
 import { attachWindowControls } from './ui/window-controls'
 import { applyThemeSideEffects } from './ui/theme'
 import { showToast } from './ui/toast'
+import { showCloseConfirm } from './ui/confirm-modal'
 import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
 import { attachFind } from './find/find-panel'
@@ -204,7 +205,24 @@ async function bootstrap(): Promise<void> {
     preview.render(tabs.getContent(id))
     statusBar.setText(tabs.getContent(id))
   }
-  const closeTabAndUpdate = (id: string): void => {
+  /**
+   * Close one tab. If it has unsaved changes, prompt save / discard / cancel.
+   * Returns true if the tab was actually closed.
+   */
+  const closeTabAndUpdate = async (id: string): Promise<boolean> => {
+    const tab = tabs.getById(id)
+    if (tab && tab.modified) {
+      // Make sure user sees what they're about to lose.
+      if (ctx.store.activeTabId() !== id) switchActive(id)
+      const choice = await showCloseConfirm({
+        message: `"${tab.title}" 有未保存的更改,要保存吗?`,
+      })
+      if (choice === 'cancel') return false
+      if (choice === 'save') {
+        const ok = await save(false)
+        if (!ok) return false
+      }
+    }
     tabs.close(id)
     const next = ctx.store.activeTabId()
     if (next) {
@@ -216,6 +234,7 @@ async function bootstrap(): Promise<void> {
       preview.render('')
       statusBar.setText('')
     }
+    return true
   }
   mountTabBar({
     ctx,
@@ -333,7 +352,7 @@ async function bootstrap(): Promise<void> {
       },
     })
   }
-  async function save(saveAs = false): Promise<void> {
+  async function save(saveAs = false): Promise<boolean> {
     const ok = await saveActiveTab({
       ctx,
       tabs,
@@ -346,6 +365,7 @@ async function bootstrap(): Promise<void> {
         showToast(`已保存: ${titleFromPath(tab.filePath)}`, 'success')
       }
     }
+    return ok
   }
 
   // ── Toolbar buttons: v1 element IDs + v2 data-action delegation ─────
@@ -525,13 +545,23 @@ async function bootstrap(): Promise<void> {
   // ── Palette commands ────────────────────────────────────────────────
   palette.register({ id: 'file.new', group: '文件', title: '新建', hint: 'Ctrl+N', run: newFile })
   palette.register({ id: 'file.open', group: '文件', title: '打开文件…', hint: 'Ctrl+O', run: openFile })
-  palette.register({ id: 'file.save', group: '文件', title: '保存', hint: 'Ctrl+S', run: () => save() })
+  palette.register({
+    id: 'file.save',
+    group: '文件',
+    title: '保存',
+    hint: 'Ctrl+S',
+    run: async () => {
+      await save()
+    },
+  })
   palette.register({
     id: 'file.saveAs',
     group: '文件',
     title: '另存为…',
     hint: 'Ctrl+Shift+S',
-    run: () => save(true),
+    run: async () => {
+      await save(true)
+    },
   })
   palette.register({ id: 'file.recent', group: '文件', title: '最近文件…', hint: 'Ctrl+Shift+R', run: () => recentPanel.open() })
   palette.register({
