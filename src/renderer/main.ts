@@ -261,6 +261,7 @@ async function bootstrap(): Promise<void> {
     tabs,
     onActivate: switchActive,
     onClose: closeTabAndUpdate,
+    onNewTab: () => newFile(),
     onCloseOthers(id) {
       tabs
         .getAll()

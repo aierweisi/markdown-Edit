@@ -10,6 +10,7 @@ interface TabBarOpts {
   onCloseOthers?(id: string): void
   onCloseRight?(id: string): void
   onRename?(id: string): void
+  onNewTab?(): void
 }
 
 const DATA_MIME = 'text/tab-id'
@@ -73,6 +74,11 @@ export function mountTabBar(opts: TabBarOpts): () => void {
     evt.preventDefault()
     const id = tabEl.dataset.tabId
     if (id) opts.onClose(id)
+  }
+
+  function onDblClick(evt: MouseEvent): void {
+    if (findTabEl(evt.target)) return
+    opts.onNewTab?.()
   }
 
   function onContext(evt: MouseEvent): void {
@@ -139,6 +145,7 @@ export function mountTabBar(opts: TabBarOpts): () => void {
   }
 
   container.addEventListener('click', onClick)
+  container.addEventListener('dblclick', onDblClick)
   container.addEventListener('auxclick', onMiddleClick)
   container.addEventListener('mousedown', (evt) => {
     if (evt.button === 1) evt.preventDefault()
@@ -158,6 +165,7 @@ export function mountTabBar(opts: TabBarOpts): () => void {
 
   return () => {
     container!.removeEventListener('click', onClick)
+    container!.removeEventListener('dblclick', onDblClick)
     container!.removeEventListener('auxclick', onMiddleClick)
     container!.removeEventListener('contextmenu', onContext)
     container!.removeEventListener('dragstart', onDragStart)

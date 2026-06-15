@@ -1,4 +1,4 @@
-import { EditorState, type Extension } from '@codemirror/state'
+import { Annotation, EditorState, type Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { buildBaseExtensions, themeCompartment } from './extensions'
 import { lightTheme } from './theme-light'
@@ -36,6 +36,8 @@ function themeExt(theme: Theme): Extension {
   return theme === 'dark' ? darkTheme : lightTheme
 }
 
+const programmaticChange = Annotation.define<boolean>()
+
 export function createEditor(opts: CreateEditorOpts): EditorApi {
   const changeListeners = new Set<(value: string) => void>()
   const cursorListeners = new Set<
@@ -43,7 +45,8 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
   >()
 
   const updateListener = EditorView.updateListener.of((update) => {
-    if (update.docChanged) {
+    const isProgrammatic = update.transactions.some((tr) => tr.annotation(programmaticChange))
+    if (update.docChanged && !isProgrammatic) {
       const value = update.state.doc.toString()
       changeListeners.forEach((fn) => fn(value))
     }
@@ -78,6 +81,7 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
     setValue(text) {
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
+        annotations: programmaticChange.of(true),
       })
     },
     focus: () => view.focus(),
@@ -88,6 +92,7 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
         selection: { anchor: 0 },
+        annotations: programmaticChange.of(true),
       })
     },
     setTheme(theme) {
