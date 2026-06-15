@@ -31,7 +31,7 @@ import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
 import { attachFind } from './find/find-panel'
 import { debounce } from './lib/debounce'
-import { titleFromPath } from './lib/fs-paths'
+import { titleFromPath, getDirAndSep, getExtension, sanitizeFileName } from './lib/fs-paths'
 import { refreshMermaidTheme } from './preview/lazy-mermaid'
 import type { Settings, ViewMode } from '@shared/types'
 import './styles/index.css'
@@ -292,18 +292,44 @@ async function bootstrap(): Promise<void> {
       titleEl.replaceWith(input)
       input.focus()
       input.select()
-      const commit = (apply: boolean): void => {
-        if (apply) {
-          const value = input.value.trim() || tab.title
-          tabs.setTitle(id, value)
+
+      let done = false
+      const commit = async (apply: boolean): Promise<void> => {
+        if (done) return
+        done = true
+        if (input.parentElement) input.replaceWith(titleEl)
+        if (!apply) return
+        const raw = input.value.trim()
+        if (!raw || raw === tab.title) return
+        const safeName = sanitizeFileName(raw)
+        if (!safeName) return
+        if (!tab.filePath) {
+          tabs.setTitle(id, safeName)
+          return
         }
-        input.replaceWith(titleEl)
+        const { dir, sep } = getDirAndSep(tab.filePath)
+        const ext = getExtension(tab.filePath)
+        const finalName = /\.[a-z0-9]+$/i.test(safeName) ? safeName : safeName + ext
+        const newPath = (dir ? dir + sep : '') + finalName
+        if (newPath === tab.filePath) {
+          tabs.setTitle(id, safeName)
+          return
+        }
+        const res = await ctx.api.fileRename(tab.filePath, newPath)
+        if (!res.success) {
+          showToast(`重命名失败: ${res.error}`, 'error')
+          return
+        }
+        const oldPath = tab.filePath
+        tabs.setTitle(id, titleFromPath(res.newPath), res.newPath)
+        await recent.remove(oldPath)
+        await recent.add(res.newPath)
       }
       input.addEventListener('keydown', (evt) => {
-        if (evt.key === 'Enter') commit(true)
-        if (evt.key === 'Escape') commit(false)
+        if (evt.key === 'Enter') void commit(true)
+        if (evt.key === 'Escape') void commit(false)
       })
-      input.addEventListener('blur', () => commit(true))
+      input.addEventListener('blur', () => void commit(true))
     },
   })
 

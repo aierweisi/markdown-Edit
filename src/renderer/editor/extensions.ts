@@ -19,6 +19,27 @@ export const themeCompartment = new Compartment()
 /** Holds the language compartment (kept stable in case future formats are added). */
 export const langCompartment = new Compartment()
 
+/** Chinese localization for the built-in CodeMirror search/replace panel. */
+const cmZhPhrases = EditorState.phrases.of({
+  Find: '查找',
+  Replace: '替换',
+  next: '下一个',
+  previous: '上一个',
+  all: '全选',
+  'match case': '区分大小写',
+  regexp: '正则',
+  'by word': '全字匹配',
+  replace: '替换',
+  'replace all': '全部替换',
+  close: '关闭',
+  'current match': '当前匹配',
+  'on line': '于行',
+  'replaced match on line $': '已替换第 $ 行的匹配',
+  'replaced $ matches': '已替换 $ 处匹配',
+  'Go to line': '跳转到行',
+  go: '跳转',
+})
+
 const continueListKeymap = keymap.of([
   {
     key: 'Enter',
@@ -61,6 +82,7 @@ export function buildBaseExtensions(opts: BaseExtensionsOpts): Extension[] {
     placeholderExt(opts.placeholder ?? '开始写作…'),
     langCompartment.of(markdown({ base: markdownLanguage, codeLanguages: languages })),
     themeCompartment.of(opts.theme),
+    cmZhPhrases,
     continueListKeymap,
     formatKeymap,
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),

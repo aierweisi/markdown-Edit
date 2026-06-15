@@ -77,8 +77,18 @@ export function mountTabBar(opts: TabBarOpts): () => void {
   }
 
   function onDblClick(evt: MouseEvent): void {
-    if (findTabEl(evt.target)) return
-    opts.onNewTab?.()
+    const tabEl = findTabEl(evt.target)
+    if (!tabEl) {
+      opts.onNewTab?.()
+      return
+    }
+    const target = evt.target as HTMLElement
+    if (target.closest('.tab-close')) return
+    const id = tabEl.dataset.tabId
+    if (id && opts.onRename) {
+      evt.preventDefault()
+      opts.onRename(id)
+    }
   }
 
   function onContext(evt: MouseEvent): void {

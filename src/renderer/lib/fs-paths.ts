@@ -21,6 +21,20 @@ export function titleFromPath(filePath: string): string {
   return stripMdExtension(getFileName(filePath))
 }
 
+export function getDirAndSep(filePath: string): { dir: string; sep: '/' | '\\' } {
+  const lastSlash = filePath.lastIndexOf('/')
+  const lastBack = filePath.lastIndexOf('\\')
+  const idx = Math.max(lastSlash, lastBack)
+  const sep: '/' | '\\' = lastBack > lastSlash ? '\\' : '/'
+  return { dir: idx >= 0 ? filePath.slice(0, idx) : '', sep }
+}
+
+export function getExtension(filePath: string): string {
+  const name = getFileName(filePath)
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot) : ''
+}
+
 const ILLEGAL_FILENAME = /[\\/:*?"<>|]/g
 
 export function sanitizeFileName(name: string): string {

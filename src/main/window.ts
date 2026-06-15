@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -43,6 +43,8 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
     void win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  attachExternalLinkHandler(win, rendererUrl)
+
   win.once('ready-to-show', () => {
     win.show()
     if (!app.isPackaged) win.webContents.openDevTools({ mode: 'detach' })
@@ -57,4 +59,34 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
   win.on('unmaximize', () => win.webContents.send(EV.WIN_MAXIMIZED, false))
 
   return win
+}
+
+/**
+ * Intercept link navigation inside the renderer so http(s)/mailto URLs open in
+ * the user's default browser instead of replacing the app's UI. Local files
+ * (file://) are opened in the OS's default handler too — the app itself only
+ * ever stays on its own renderer URL.
+ */
+function attachExternalLinkHandler(win: BrowserWindow, rendererUrl: string | undefined): void {
+  const isAppUrl = (target: string): boolean => {
+    if (rendererUrl && target.startsWith(rendererUrl)) return true
+    if (target.startsWith('file://') && target.endsWith('/index.html')) return true
+    return target === 'about:blank'
+  }
+
+  const openExternal = (target: string): void => {
+    if (!/^(?:https?|mailto|tel|file):/i.test(target)) return
+    void shell.openExternal(target)
+  }
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    openExternal(url)
+    return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, url) => {
+    if (isAppUrl(url)) return
+    event.preventDefault()
+    openExternal(url)
+  })
 }
