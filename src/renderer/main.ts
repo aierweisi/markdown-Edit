@@ -253,6 +253,8 @@ async function bootstrap(): Promise<void> {
       editor.setValue('')
       preview.render('')
       statusBar.setText('')
+      // No tabs left → welcome page shows; blur editor so keystrokes don't land in it.
+      editor.blur()
     }
     return true
   }

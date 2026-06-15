@@ -16,11 +16,13 @@ export function attachWelcome(deps: WelcomeDeps): () => void {
   let dismissed = false
 
   function update(): void {
+    const all = deps.tabs.getAll()
+    // When no tabs remain, surface the welcome page again — user is back at a blank state.
+    if (all.length === 0) dismissed = false
     if (dismissed) {
       overlay!.classList.add('hidden')
       return
     }
-    const all = deps.tabs.getAll()
     const active = deps.tabs.getActive()
     const showWelcome =
       all.length === 0 ||

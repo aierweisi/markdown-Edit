@@ -11,6 +11,7 @@ export interface EditorApi {
   getValue(): string
   setValue(text: string): void
   focus(): void
+  blur(): void
   isFocused(): boolean
   swapDoc(text: string): void
   setTheme(theme: Theme): void
@@ -85,6 +86,7 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
       })
     },
     focus: () => view.focus(),
+    blur: () => view.contentDOM.blur(),
     isFocused: () => view.hasFocus,
     swapDoc(text) {
       // Replace the entire doc — note: history is preserved on the same view.

@@ -409,6 +409,7 @@ input {
   justify-content: center;
   z-index: 10;
   pointer-events: auto;
+  background: var(--bg-editor);
   animation: welcome-fade-in 0.3s ease;
 }
 .welcome-overlay.hidden {
