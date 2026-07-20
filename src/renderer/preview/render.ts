@@ -3,6 +3,7 @@ import morphdom from 'morphdom'
 import { createMarkdownWorkerClient, type MarkdownWorkerClient } from './worker-client'
 import { renderMermaidIn } from './lazy-mermaid'
 import { renderMathIn } from './lazy-katex'
+import { initCodeCopy, updateCodeCopyButtons } from './code-copy'
 
 export interface PreviewApi {
   render(text: string): void
@@ -32,6 +33,9 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
   let idleHandle: number | null = null
   let baseFilePath: string | null = null
 
+  // One-time init: set up delegated copy button handler
+  initCodeCopy(opts.body)
+
   function scheduleRender(text: string): void {
     pendingText = text
     if (idleHandle != null) return
@@ -50,6 +54,7 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
           rewriteRelativeAssets(opts.body, baseFilePath)
           void renderMermaidIn(opts.body)
           void renderMathIn(opts.body)
+          updateCodeCopyButtons(opts.body)
         })
         .catch((err) => {
           console.error('[preview] render failed:', err)

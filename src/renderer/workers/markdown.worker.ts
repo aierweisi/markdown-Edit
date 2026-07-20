@@ -26,17 +26,17 @@ marked.use({
       const lang = (token.lang ?? '').trim()
       const text = token.text
       if (lang === 'mermaid') {
-        return `<pre><code class="language-mermaid">${escape(text)}</code></pre>`
+        return `<pre class="code-pre"><code class="language-mermaid">${escape(text)}</code></pre>`
       }
       if (lang && hljs.getLanguage(lang)) {
         try {
           const highlighted = hljs.highlight(text, { language: lang, ignoreIllegals: true }).value
-          return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`
+          return `<pre class="code-pre"><code class="hljs language-${lang}">${highlighted}</code></pre>`
         } catch {
           /* fall through */
         }
       }
-      return `<pre><code class="hljs">${escape(text)}</code></pre>`
+      return `<pre class="code-pre"><code class="hljs">${escape(text)}</code></pre>`
     },
   },
 })
