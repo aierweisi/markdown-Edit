@@ -20,6 +20,7 @@ export interface CacheManager {
 
 export function createCacheManager(deps: CacheDeps): CacheManager {
   let timer: ReturnType<typeof setInterval> | null = null
+  let unsubSettings: (() => void) | null = null
   let dirty = false
   let persistLock = false
 
@@ -58,15 +59,28 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
   return {
     start() {
       if (timer) return
-      const intervalSec = deps.ctx.store.settings().autoSaveInterval
-      timer = setInterval(() => {
-        if (dirty) void saveAll()
-      }, intervalSec * 1000)
+      const schedule = (): ReturnType<typeof setInterval> => {
+        const intervalSec = deps.ctx.store.settings().autoSaveInterval
+        return setInterval(() => {
+          if (dirty) void saveAll()
+        }, intervalSec * 1000)
+      }
+      timer = schedule()
+      // Re-create the interval if the user changes the autosave interval in
+      // settings; otherwise the cache timer would keep the old cadence.
+      unsubSettings = deps.ctx.store.settings.subscribe(() => {
+        if (timer) clearInterval(timer)
+        timer = schedule()
+      })
     },
     stop() {
       if (timer) {
         clearInterval(timer)
         timer = null
+      }
+      if (unsubSettings) {
+        unsubSettings()
+        unsubSettings = null
       }
     },
     saveAll,
@@ -79,22 +93,19 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
       return entry
     },
     applySnapshot(entry) {
-      // Tab manager creates each tab, then we restore content and active id.
+      // Recreate each tab with its persisted id so active-tab matching (and
+      // tab order) stays stable across restarts, instead of matching by title.
       for (const snap of entry.tabs) {
         const tab = deps.tabs.create({
+          id: snap.id,
           title: snap.title,
           filePath: snap.filePath,
           content: snap.content,
         })
         deps.tabs.markModified(tab.id, snap.modified)
-        // Match the persisted id back into the new tab so tabOrder stays stable.
-        // Rather than mutating private ids, we accept the new id; the user-visible
-        // tabOrder persistence will reset on next change.
       }
-      const first = deps.tabs.getAll()[0]
-      const activeMatch = entry.activeTabId
-        ? deps.tabs.getAll().find((t) => t.title === entry.tabs.find((s) => s.id === entry.activeTabId)?.title)
-        : first
+      const all = deps.tabs.getAll()
+      const activeMatch = entry.activeTabId ? all.find((t) => t.id === entry.activeTabId) : all[0]
       if (activeMatch) deps.tabs.setActive(activeMatch.id)
     },
   }

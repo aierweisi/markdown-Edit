@@ -2,6 +2,8 @@ import type { AppContext } from '../context'
 import type { TabState } from '../state/app-store'
 
 export interface TabContent {
+  /** Persisted id to reuse (used by cache restore); omitted → new id generated. */
+  id?: string
   title?: string
   filePath?: string | null
   content?: string
@@ -43,7 +45,7 @@ export function createTabManager(ctx: AppContext): TabManager {
 
   const manager: TabManager = {
     create(input = {}) {
-      const id = makeId()
+      const id = input.id ?? makeId()
       const tab: TabState = {
         id,
         title: input.title ?? '未命名',
