@@ -195,7 +195,11 @@ async function bootstrap(): Promise<void> {
       if (result.success) {
         tabs.markModified(tab.id, false)
         statusBar.setSaving(false)
+      } else {
+        showToast(`自动保存失败: ${result.error}`, 'error')
       }
+    } catch (err) {
+      showToast(`自动保存失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
     } finally {
       ctx.store.saving.set(false)
     }
@@ -258,6 +262,45 @@ async function bootstrap(): Promise<void> {
     }
     return true
   }
+
+  /**
+   * Close several tabs at once ("close others" / "close right"). Each tab with
+   * unsaved changes prompts save / discard / cancel; cancel aborts the rest of
+   * the batch so nothing after it is touched. Replaces the old behaviour that
+   * called tabs.close() directly and silently discarded unsaved edits.
+   */
+  async function closeMultiple(ids: string[], anchorId: string): Promise<void> {
+    const originalActive = ctx.store.activeTabId()
+    const confirmed: string[] = []
+    for (const id of ids) {
+      const tab = tabs.getById(id)
+      if (!tab) continue
+      if (tab.modified) {
+        // Show the tab so the user sees what they would lose.
+        if (ctx.store.activeTabId() !== id) switchActive(id)
+        const choice = await showCloseConfirm({
+          message: `"${tab.title}" 有未保存的更改,要保存吗?`,
+        })
+        if (choice === 'cancel') break
+        if (choice === 'save') {
+          const ok = await save(false)
+          if (!ok) break
+        }
+      }
+      confirmed.push(id)
+    }
+    if (confirmed.length > 0) {
+      confirmed.forEach((id) => tabs.close(id))
+      // Land on the anchor tab (the one the user acted on); it is never in the
+      // closed set, so it always survives and gives a predictable result.
+      if (tabs.getById(anchorId)) switchActive(anchorId)
+    } else if (originalActive && tabs.getById(originalActive)) {
+      // Nothing was closed (user cancelled) → restore the tab we may have
+      // switched away from while showing what would have been lost.
+      switchActive(originalActive)
+    }
+  }
+
   mountTabBar({
     ctx,
     tabs,
@@ -265,17 +308,22 @@ async function bootstrap(): Promise<void> {
     onClose: closeTabAndUpdate,
     onNewTab: () => newFile(),
     onCloseOthers(id) {
-      tabs
-        .getAll()
-        .filter((t) => t.id !== id)
-        .forEach((t) => tabs.close(t.id))
-      switchActive(id)
+      void closeMultiple(
+        tabs
+          .getAll()
+          .filter((t) => t.id !== id)
+          .map((t) => t.id),
+        id,
+      )
     },
     onCloseRight(id) {
       const all = tabs.getAll()
       const idx = all.findIndex((t) => t.id === id)
       if (idx < 0) return
-      all.slice(idx + 1).forEach((t) => tabs.close(t.id))
+      void closeMultiple(
+        all.slice(idx + 1).map((t) => t.id),
+        id,
+      )
     },
     onRename(id) {
       const tab = tabs.getById(id)
@@ -704,7 +752,7 @@ async function bootstrap(): Promise<void> {
     } else if (key === 'n' && !evt.shiftKey) {
       evt.preventDefault()
       newFile()
-    } else if (key === 'o') {
+    } else if (key === 'o' && !evt.shiftKey) {
       evt.preventDefault()
       void openFile()
     } else if (key === 'r' && evt.shiftKey) {
