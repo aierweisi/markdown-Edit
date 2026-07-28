@@ -30,7 +30,12 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
       preload: join(__dirname, '../preload/preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      // sandbox stays off: the preload (externalized via externalizeDepsPlugin)
+      // transitively requires `zod` (through @shared/ipc), and the sandbox's
+      // restricted require can only load electron built-ins — so in packaged
+      // builds the preload throws and window.api is never exposed. Re-enable
+      // only after the preload bundle no longer requires any third-party dep.
+      sandbox: false,
     },
     backgroundColor: '#0a0a0c',
     show: false,
