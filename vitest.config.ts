@@ -8,7 +8,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      include: ['src/renderer/lib/**', 'src/main/security/**', 'src/main/store-schema.ts'],
+      include: [
+        'src/renderer/lib/**',
+        'src/main/security/**',
+        'src/main/store-schema.ts',
+        'src/main/ipc/**',
+      ],
     },
   },
   resolve: {
