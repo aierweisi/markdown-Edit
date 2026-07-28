@@ -31,6 +31,7 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
   let pendingText: string | null = null
   let renderingFor: string | null = null
   let idleHandle: number | null = null
+  let scheduledWithRaf = false
   let baseFilePath: string | null = null
 
   // One-time init: set up delegated copy button handler
@@ -63,8 +64,10 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
 
     if (typeof requestIdleCallback === 'function') {
       idleHandle = requestIdleCallback(flush, { timeout: 100 }) as unknown as number
+      scheduledWithRaf = false
     } else {
       idleHandle = window.requestAnimationFrame(flush)
+      scheduledWithRaf = true
     }
   }
 
@@ -75,7 +78,7 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
       // Electron renderer can safely load local files; users routinely paste
       // images at file:///… paths and embed local relative assets.
       ALLOWED_URI_REGEXP:
-        /^(?:(?:(?:f|ht)tps?|file|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+        /^(?:(?:(?:f|ht)tps?|file|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
     })
     const tmp = document.createElement('article')
     tmp.className = opts.body.className
@@ -104,8 +107,9 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
     },
     destroy() {
       worker.destroy()
-      if (idleHandle != null && typeof cancelIdleCallback === 'function') {
-        cancelIdleCallback(idleHandle)
+      if (idleHandle != null) {
+        if (scheduledWithRaf) cancelAnimationFrame(idleHandle)
+        else if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleHandle)
       }
     },
   }

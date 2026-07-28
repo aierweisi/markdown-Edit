@@ -25,14 +25,20 @@ export function attachWindowControls(ctx: AppContext): () => void {
     }
   }
 
-  min?.addEventListener('click', () => void ctx.api.winMinimize())
-  max?.addEventListener('click', () => void ctx.api.winToggleMaximize())
-  close?.addEventListener('click', () => void ctx.api.winClose())
+  const onMin = (): void => void ctx.api.winMinimize()
+  const onMax = (): void => void ctx.api.winToggleMaximize()
+  const onClose = (): void => void ctx.api.winClose()
+  min?.addEventListener('click', onMin)
+  max?.addEventListener('click', onMax)
+  close?.addEventListener('click', onClose)
 
   const unsubWin = ctx.api.onWinMaximized(updateMaxIcon)
   void ctx.api.winIsMaximized().then(updateMaxIcon)
 
   return () => {
+    min?.removeEventListener('click', onMin)
+    max?.removeEventListener('click', onMax)
+    close?.removeEventListener('click', onClose)
     unsubWin()
   }
 }

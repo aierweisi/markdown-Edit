@@ -157,9 +157,11 @@ export function mountTabBar(opts: TabBarOpts): () => void {
   container.addEventListener('click', onClick)
   container.addEventListener('dblclick', onDblClick)
   container.addEventListener('auxclick', onMiddleClick)
-  container.addEventListener('mousedown', (evt) => {
+  function onMiddleMouseDown(evt: MouseEvent): void {
     if (evt.button === 1) evt.preventDefault()
-  })
+  }
+
+  container.addEventListener('mousedown', onMiddleMouseDown)
   container.addEventListener('contextmenu', onContext)
   container.addEventListener('dragstart', onDragStart)
   container.addEventListener('dragend', onDragEnd)
@@ -177,6 +179,7 @@ export function mountTabBar(opts: TabBarOpts): () => void {
     container!.removeEventListener('click', onClick)
     container!.removeEventListener('dblclick', onDblClick)
     container!.removeEventListener('auxclick', onMiddleClick)
+    container!.removeEventListener('mousedown', onMiddleMouseDown)
     container!.removeEventListener('contextmenu', onContext)
     container!.removeEventListener('dragstart', onDragStart)
     container!.removeEventListener('dragend', onDragEnd)
