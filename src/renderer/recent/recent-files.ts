@@ -23,7 +23,12 @@ export function createRecentManager(ctx: AppContext): RecentManager {
   // files at once, or a rename doing remove+add) can't clobber each other.
   let chain: Promise<unknown> = Promise.resolve()
   function serialize<T>(fn: () => Promise<T>): Promise<T> {
-    const run = chain.then(fn, fn)
+    const run = chain.then(fn, fn).catch((err: unknown) => {
+      // Keep the chain going + surface the failure visibly (callers use `void`),
+      // instead of letting it become an unhandled rejection.
+      console.warn('[recent] operation failed:', err)
+      return undefined as unknown as T
+    })
     chain = run.then(
       () => undefined,
       () => undefined,

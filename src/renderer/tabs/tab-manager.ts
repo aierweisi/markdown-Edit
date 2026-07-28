@@ -45,7 +45,13 @@ export function createTabManager(ctx: AppContext): TabManager {
 
   const manager: TabManager = {
     create(input = {}) {
-      const id = input.id ?? makeId()
+      // Reuse a caller-supplied id (cache restore) only when it doesn't collide;
+      // a duplicate would otherwise shadow the existing tab in the contents Map.
+      const requestedId = input.id
+      const id = requestedId && !contents.has(requestedId) ? requestedId : makeId()
+      if (requestedId && contents.has(requestedId)) {
+        console.warn(`[tabs] duplicate id "${requestedId}", generated a fresh one`)
+      }
       const tab: TabState = {
         id,
         title: input.title ?? '未命名',

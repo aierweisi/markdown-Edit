@@ -21,6 +21,7 @@ export function registerSystemIpc(hasPendingFile: () => boolean): void {
           'cookies',
           'filesystem',
           'indexdb',
+          'localstorage',
           'shadercache',
           'serviceworkers',
           'cachestorage',
