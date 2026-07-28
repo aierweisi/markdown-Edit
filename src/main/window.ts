@@ -30,7 +30,7 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
       preload: join(__dirname, '../preload/preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
     backgroundColor: '#0a0a0c',
     show: false,
