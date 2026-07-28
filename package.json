@@ -9,8 +9,8 @@
     "build": "electron-vite build",
     "build:win": "electron-vite build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/",
+    "lint": "eslint src/ --ext .ts",
+    "lint:fix": "eslint --fix src/ --ext .ts",
     "format": "prettier --check src/ tests/",
     "format:fix": "prettier --write src/ tests/",
     "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.renderer.json",
@@ -39,7 +39,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.2.0",
     "@types/katex": "^0.16.7",
     "@types/node": "^22.10.5",
     "@typescript-eslint/eslint-plugin": "^8.20.0",

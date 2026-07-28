@@ -106,7 +106,7 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
  * close-to-tray flow that pre-flushes the cache).
  */
 export function exposeForMainProcess(manager: CacheManager): void {
-  ;(window as unknown as { CacheManager?: { saveAll(): Promise<void> } }).CacheManager = {
+  (window as unknown as { CacheManager?: { saveAll(): Promise<void> } }).CacheManager = {
     saveAll: () => manager.saveAll(),
   }
 }

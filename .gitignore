@@ -12,17 +12,19 @@ win-unpacked/
 *.dmg
 *.zip
 
-# legacy v1 build outputs (kept until phase 11 cleanup)
-/renderer/
-
 # IDE
 .vscode/
 .claude/settings.local.json
+.atomcode/
+.atomcode.md
 
 # misc
 .DS_Store
 npm-debug.log*
 yarn-error.log
+
+# stray artifact from a Windows `> $null` redirect typo
+$null
 
 # coverage
 coverage
@@ -32,9 +34,6 @@ coverage
 
 # build output
 build
-
-# cache
-.atomcode/graph.bin
 
 # temp files from build/commit scripts
 .msg
