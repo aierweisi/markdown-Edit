@@ -3,6 +3,9 @@ import type { TabManager } from '../tabs/tab-manager'
 import type { EditorApi } from '../editor/editor-api'
 import type { CacheEntry, TabSnapshot } from '@shared/types'
 
+/** Bump when CacheEntry/TabSnapshot shape changes; old caches are discarded. */
+const CACHE_VERSION = 1
+
 interface CacheDeps {
   ctx: AppContext
   tabs: TabManager
@@ -40,7 +43,7 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
       scrollTop: t.id === activeId ? deps.editor.getScrollTop() : 0,
     }))
 
-    return { tabs: snapshots, activeTabId: activeId, savedAt: Date.now() }
+    return { version: CACHE_VERSION, tabs: snapshots, activeTabId: activeId, savedAt: Date.now() }
   }
 
   async function saveAll(): Promise<void> {
@@ -89,7 +92,13 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
     },
     async loadSnapshot() {
       const entry = await deps.ctx.api.storeGet('cache')
-      if (!entry || !Array.isArray(entry.tabs) || entry.tabs.length === 0) return null
+      if (
+        !entry ||
+        entry.version !== CACHE_VERSION ||
+        !Array.isArray(entry.tabs) ||
+        entry.tabs.length === 0
+      )
+        return null
       return entry
     },
     applySnapshot(entry) {

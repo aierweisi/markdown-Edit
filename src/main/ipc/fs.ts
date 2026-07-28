@@ -19,7 +19,9 @@ export function registerFsIpc(): void {
     const resolved = pathResolve(parsed.data)
     if (!isPathSafe(resolved)) return { success: false, error: 'invalid path' }
     try {
-      const content = readFileSync(resolved, 'utf-8')
+      const raw = readFileSync(resolved, 'utf-8')
+      // Strip a leading UTF-8 BOM if present, otherwise it becomes the first char.
+      const content = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
       return { success: true, content }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }

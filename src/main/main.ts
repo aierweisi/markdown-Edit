@@ -18,7 +18,16 @@ import {
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 
-const store = new ElectronStore<StoreSchema>({ defaults }) as ElectronStore<StoreSchema>
+// clearInvalidConfig makes electron-store reset a corrupted config.json to
+// defaults instead of throwing; the try/catch guards any remaining failure
+// so a broken store never bricks app startup.
+let store: ElectronStore<StoreSchema>
+try {
+  store = new ElectronStore<StoreSchema>({ defaults, clearInvalidConfig: true }) as ElectronStore<StoreSchema>
+} catch (err) {
+  console.error('[main] store load failed, falling back to defaults:', err)
+  store = new ElectronStore<StoreSchema>({ defaults }) as ElectronStore<StoreSchema>
+}
 migrateStore(store)
 
 function getWindow(): BrowserWindow | null {

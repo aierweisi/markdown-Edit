@@ -1,6 +1,7 @@
 import type { AppContext } from '../context'
 import type { TabManager } from '../tabs/tab-manager'
 import { resolveNamingRule, sanitizeFileName, titleFromPath } from '../lib/fs-paths'
+import { showToast } from '../ui/toast'
 
 interface SaveDeps {
   ctx: AppContext
@@ -43,6 +44,7 @@ export async function saveActiveTab(deps: SaveDeps, saveAs = false): Promise<boo
     const result = await deps.ctx.api.fileSave(filePath, content)
     if (!result.success) {
       console.error('[save] fileSave failed:', result.error)
+      showToast(`保存失败: ${result.error}`, 'error')
       return false
     }
     deps.tabs.setTitle(tab.id, titleFromPath(filePath), filePath)

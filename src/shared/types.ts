@@ -48,6 +48,8 @@ export interface TabSnapshot {
 }
 
 export interface CacheEntry {
+  /** Schema version; old caches without it are treated as incompatible. */
+  version?: number
   tabs: TabSnapshot[]
   activeTabId: string | null
   savedAt: number
