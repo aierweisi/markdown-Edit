@@ -1,7 +1,8 @@
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { AppContext } from '../context'
-import { escHtml, resolveNamingRule, sanitizeFileName } from '../lib/fs-paths'
+import { escHtml } from '../lib/fs-paths'
+import { resolveExportDialog } from './export-dialog'
 
 interface ExportDeps {
   ctx: AppContext
@@ -35,19 +36,8 @@ a { color: #58a6ff; }
 `
 
 export async function exportHtml(deps: ExportDeps): Promise<boolean> {
-  const exportDir = (await deps.ctx.api.storeGet('exportDir')) ?? ''
-  const namingRule = (await deps.ctx.api.storeGet('exportNamingRule')) ?? '{title}_{date}'
-  const baseName =
-    deps.title && deps.title !== '未命名'
-      ? sanitizeFileName(deps.title)
-      : resolveNamingRule(namingRule, { content: deps.content })
-  const defaultPath = exportDir ? `${exportDir}/${baseName}.html` : `${baseName}.html`
-
-  const dialog = await deps.ctx.api.dialogSaveFile({
-    defaultPath,
-    filters: [{ name: 'HTML', extensions: ['html'] }],
-  })
-  if (dialog.canceled || !dialog.filePath) return false
+  const filePath = await resolveExportDialog(deps, 'html', 'HTML')
+  if (!filePath) return false
 
   const rendered = String(await marked.parse(deps.content))
   const safe = DOMPurify.sanitize(rendered, { ADD_ATTR: ['target', 'rel'] })
@@ -58,6 +48,6 @@ export async function exportHtml(deps: ExportDeps): Promise<boolean> {
     `<title>${escHtml(deps.title || 'Markdown')}</title><style>${style}</style></head>` +
     `<body>\n${safe}\n</body></html>\n`
 
-  const result = await deps.ctx.api.fileSave(dialog.filePath, html)
+  const result = await deps.ctx.api.fileSave(filePath, html)
   return result.success
 }

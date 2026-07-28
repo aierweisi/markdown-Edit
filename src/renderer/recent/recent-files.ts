@@ -19,20 +19,36 @@ export function createRecentManager(ctx: AppContext): RecentManager {
     await ctx.api.storeSet('recentFiles', list)
   }
 
+  // Serialize read-modify-write ops so concurrent calls (e.g. opening several
+  // files at once, or a rename doing remove+add) can't clobber each other.
+  let chain: Promise<unknown> = Promise.resolve()
+  function serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const run = chain.then(fn, fn)
+    chain = run.then(
+      () => undefined,
+      () => undefined,
+    )
+    return run
+  }
+
   return {
-    async add(filePath) {
-      const list = await readAll()
-      const filtered = list.filter((r) => r.path !== filePath)
-      filtered.unshift({
-        path: filePath,
-        name: getFileName(filePath),
-        lastOpenedAt: Date.now(),
+    add(filePath) {
+      return serialize(async () => {
+        const list = await readAll()
+        const filtered = list.filter((r) => r.path !== filePath)
+        filtered.unshift({
+          path: filePath,
+          name: getFileName(filePath),
+          lastOpenedAt: Date.now(),
+        })
+        await writeAll(filtered.slice(0, MAX_RECENT))
       })
-      await writeAll(filtered.slice(0, MAX_RECENT))
     },
-    async remove(filePath) {
-      const list = await readAll()
-      await writeAll(list.filter((r) => r.path !== filePath))
+    remove(filePath) {
+      return serialize(async () => {
+        const list = await readAll()
+        await writeAll(list.filter((r) => r.path !== filePath))
+      })
     },
     list: readAll,
   }
