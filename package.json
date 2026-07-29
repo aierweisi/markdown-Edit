@@ -54,6 +54,7 @@
     "vitest": "^4.1.10"
   },
   "build": {
+    "publish": null,
     "appId": "com.markdown.editor",
     "productName": "Markdown Editor",
     "copyright": "Copyright © 2026",
