@@ -20,6 +20,11 @@ const DEFAULTS: Settings = {
   exportNamingRule: '{title}_{date}',
   imageSaveDir: 'assets',
   paneOrder: 'preview-first',
+  lineNumbers: true,
+  codeFolding: true,
+  imageCompressEnabled: true,
+  imageCompressMaxSize: 1920,
+  imageCompressQuality: 0.85,
 }
 
 const CLEAR_BTN_RESET_DELAY = 2200
@@ -67,6 +72,11 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
     setVal('setting-exportdir', s.exportDir)
     setVal('setting-namingrule', s.exportNamingRule)
     setVal('setting-imagedir', s.imageSaveDir)
+    setChecked('setting-linenumbers', s.lineNumbers)
+    setChecked('setting-codefolding', s.codeFolding)
+    setChecked('setting-imgcompress-enabled', s.imageCompressEnabled)
+    setVal('setting-imgcompress-size', String(s.imageCompressMaxSize))
+    setVal('setting-imgcompress-quality', String(s.imageCompressQuality))
   }
 
   function readForm(): Settings {
@@ -80,6 +90,11 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
       exportNamingRule: getVal('setting-namingrule').trim() || '{title}_{date}',
       imageSaveDir: getVal('setting-imagedir').trim() || 'assets',
       paneOrder: ctx.store.settings().paneOrder,
+      lineNumbers: getChecked('setting-linenumbers'),
+      codeFolding: getChecked('setting-codefolding'),
+      imageCompressEnabled: getChecked('setting-imgcompress-enabled'),
+      imageCompressMaxSize: parseInt(getVal('setting-imgcompress-size') || '1920', 10),
+      imageCompressQuality: parseFloat(getVal('setting-imgcompress-quality') || '0.85'),
     }
   }
 
@@ -244,4 +259,13 @@ function getVal(id: string): string {
 function setVal(id: string, value: string): void {
   const el = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null
   if (el) el.value = value
+}
+
+function getChecked(id: string): boolean {
+  return (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false
+}
+
+function setChecked(id: string, value: boolean): void {
+  const el = document.getElementById(id) as HTMLInputElement | null
+  if (el) el.checked = value
 }

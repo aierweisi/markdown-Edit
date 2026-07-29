@@ -39,12 +39,15 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { key: 'Ctrl+Alt+T', label: '插入表格' },
       { key: 'Ctrl+Alt+H', label: '循环标题级别' },
       { key: 'Ctrl+Alt+R', label: '分割线' },
+      { key: 'Ctrl+Alt+O', label: '插入目录' },
     ],
   },
   {
     group: '视图',
     items: [
       { key: 'Ctrl+\\', label: '切换视图模式' },
+      { key: 'Ctrl+Shift+F', label: '专注模式' },
+      { key: 'Ctrl+Shift+E', label: '打开工作区' },
       { key: 'Ctrl+Shift+T', label: '切换主题' },
       { key: 'Ctrl+Shift+O', label: '文章大纲' },
       { key: 'Ctrl+Shift+/', label: '快捷键展示' },

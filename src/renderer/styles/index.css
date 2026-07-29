@@ -1,4 +1,7 @@
-/* v1 视觉栈：variables → animations → 主体 → print。
-   保留 v2 自有的 palette / settings / templates / shortcuts / toast 样式覆盖。 */
 @import './v1.css';
 @import './v2-overrides.css';
+@import './focus-mode.css';
+@import './table-popover.css';
+@import './workspace.css';
+/* v1 视觉栈：variables → animations → 主体 → print。
+   保留 v2 自有的 palette / settings / templates / shortcuts / toast 样式覆盖。 */

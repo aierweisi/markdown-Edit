@@ -1,0 +1,26 @@
+/* Focus mode: fade the top bar (keep window controls reachable), hide the rest
+   of the chrome, and center the editor for distraction-free writing.
+   Toggled by adding the `focus-mode` class to <body> (see main.ts focusMode). */
+
+body.focus-mode .format-toolbar,
+body.focus-mode .tabbar,
+body.focus-mode .statusbar,
+body.focus-mode .outline-pane {
+  display: none;
+}
+
+/* Top toolbar holds the window controls (min/max/close) on Windows, so keep it
+   interactive — just fade it and reveal fully on hover. */
+body.focus-mode .toolbar {
+  opacity: 0.2;
+  transition: opacity 0.2s ease;
+}
+body.focus-mode .toolbar:hover {
+  opacity: 1;
+}
+
+/* Narrow + center the editing column. */
+body.focus-mode .editor-container {
+  max-width: 820px;
+  margin: 0 auto;
+}

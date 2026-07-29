@@ -4,6 +4,8 @@ import { createMarkdownWorkerClient, type MarkdownWorkerClient } from './worker-
 import { renderMermaidIn } from './lazy-mermaid'
 import { renderMathIn } from './lazy-katex'
 import { initCodeCopy, updateCodeCopyButtons } from './code-copy'
+import { initTaskCheckbox, updateTaskCheckboxes } from './task-checkbox'
+import { initWikiLinks } from './wiki-link'
 
 export interface PreviewApi {
   render(text: string): void
@@ -14,6 +16,12 @@ export interface PreviewApi {
 
 interface PreviewOpts {
   body: HTMLElement
+  /** Accessor for the current editor document (task checkbox sync/toggle). */
+  getDoc(): string
+  /** Replace a 1-based source line (flows through the editor's normal change). */
+  onReplaceLine(line: number, newLine: string): void
+  /** A `[[wiki]]` link was clicked — resolve & open in workspace. */
+  onWikiClick(name: string): void
 }
 
 const HAS_PROTOCOL = /^[a-z][a-z0-9+\-.]*:/i
@@ -34,8 +42,10 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
   let scheduledWithRaf = false
   let baseFilePath: string | null = null
 
-  // One-time init: set up delegated copy button handler
+  // One-time init: set up delegated copy button + task checkbox handlers
   initCodeCopy(opts.body)
+  initTaskCheckbox(opts.body, { getDoc: opts.getDoc, onReplaceLine: opts.onReplaceLine })
+  initWikiLinks(opts.body, opts.onWikiClick)
 
   function scheduleRender(text: string): void {
     pendingText = text
@@ -56,6 +66,7 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
           void renderMermaidIn(opts.body)
           void renderMathIn(opts.body)
           updateCodeCopyButtons(opts.body)
+          updateTaskCheckboxes(opts.body, opts.getDoc)
         })
         .catch((err) => {
           console.error('[preview] render failed:', err)
@@ -73,7 +84,7 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
 
   function applyHtml(rawHtml: string): void {
     const clean = DOMPurify.sanitize(rawHtml, {
-      ADD_ATTR: ['target', 'rel'],
+      ADD_ATTR: ['target', 'rel', 'data-wiki'],
       // Allow file:// URIs (default whitelist only allows http/https/mailto/...).
       // Electron renderer can safely load local files; users routinely paste
       // images at file:///… paths and embed local relative assets.

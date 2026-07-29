@@ -40,6 +40,9 @@
         </svg></button><button class="toolbar-btn" id="btn-open" title="打开 (Ctrl+O)"><svg aria-hidden="true"
           viewBox="0 0 24 24">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg></button><button class="toolbar-btn" id="btn-workspace" title="打开工作区 (Ctrl+Shift+E)"><svg
+          aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
         </svg></button><button class="toolbar-btn" id="btn-save" title="保存 (Ctrl+S)"><svg aria-hidden="true"
           viewBox="0 0 24 24">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -234,7 +237,19 @@
   <div class="tabbar" id="tabbar">
     <div class="tabs-container" id="tabs-container"></div><button class="tab-new-btn" id="btn-tab-new"
       title="新建标签页 (Ctrl+T)">+</button>
-  </div><!-- ── Main Area ───────────────────────────────────────── -->
+  </div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">工作区</span>
+      <div class="sidebar-actions">
+        <button class="sidebar-btn" id="ws-newfile" title="新建文件">📄</button>
+        <button class="sidebar-btn" id="ws-newdir" title="新建文件夹">📁</button>
+        <button class="sidebar-btn" id="ws-refresh" title="刷新">↻</button>
+        <button class="sidebar-btn" id="ws-close" title="收起">✕</button>
+      </div>
+    </div>
+    <div class="sidebar-tree" id="file-tree"></div>
+  </aside><!-- ── Main Area ───────────────────────────────────────── -->
   <div class="main-area" id="main-area">
     <div class="editor-pane" id="editor-pane">
       <div class="pane-header"><span class="pane-label">编辑</span><span class="word-count" id="word-count">0 字</span>
@@ -500,6 +515,20 @@
                   <option value="monospace">系统等宽</option>
                 </select></div>
             </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">显示行号</div>
+                <div class="setting-item-desc">在编辑器左侧显示行号</div>
+              </div>
+              <div class="setting-item-control"><input type="checkbox" id="setting-linenumbers" checked /></div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">代码折叠</div>
+                <div class="setting-item-desc">允许折叠标题与代码块</div>
+              </div>
+              <div class="setting-item-control"><input type="checkbox" id="setting-codefolding" checked /></div>
+            </div>
           </div><!-- Auto Save -->
           <div class="settings-panel" id="panel-autosave">
             <div class="settings-panel-title"><span class="panel-title-icon"><svg aria-hidden="true" viewBox="0 0 24 24"
@@ -546,6 +575,29 @@
                 <div class="setting-dir-row"><input type="text" id="setting-imagedir" placeholder="assets"
                     style="width: 180px" /><button class="btn-secondary" id="setting-imagedir-btn">选择</button></div>
               </div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">粘贴图片压缩</div>
+                <div class="setting-item-desc">自动缩小大图:超阈值等比缩放,无透明时转 JPEG 降质量</div>
+              </div>
+              <div class="setting-item-control"><input type="checkbox" id="setting-imgcompress-enabled" checked /></div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">压缩阈值(长边像素)</div>
+                <div class="setting-item-desc">图片长边超过此值时缩放</div>
+              </div>
+              <div class="setting-item-control"><input type="number" id="setting-imgcompress-size" min="320" max="8000"
+                  style="width: 80px; text-align: center" /><span style="font-size: 11px; color: var(--text-muted)">px</span></div>
+            </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">JPEG 质量</div>
+                <div class="setting-item-desc">0.3–1,默认 0.85(仅无透明图生效)</div>
+              </div>
+              <div class="setting-item-control"><input type="number" id="setting-imgcompress-quality" min="0.3" max="1"
+                  step="0.05" style="width: 70px; text-align: center" /></div>
             </div>
             <div class="setting-item" style="flex-direction: column; align-items: flex-start; gap: 10px">
               <div style="

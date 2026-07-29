@@ -9,6 +9,7 @@ import { registerExportIpc } from './export'
 import { registerShellIpc } from './shell'
 import { registerWindowIpc } from './window'
 import { registerSystemIpc } from './system'
+import { registerWorkspaceIpc } from './workspace'
 
 export interface IpcContext {
   store: Store<StoreSchema>
@@ -25,4 +26,5 @@ export function registerAllIpc(ctx: IpcContext): void {
   registerShellIpc()
   registerWindowIpc(ctx.getWindow)
   registerSystemIpc(ctx.hasPendingFile)
+  registerWorkspaceIpc(ctx.store)
 }

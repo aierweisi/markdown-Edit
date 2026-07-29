@@ -18,7 +18,9 @@ import { exportPdf } from './export/export-pdf'
 import { createPalette } from './ui/palette'
 import { createSettingsPanel } from './ui/settings-panel'
 import { createRecentPanel } from './ui/recent-panel'
+import { createWorkspacePanel } from './ui/workspace-panel'
 import { createTemplatesPanel } from './ui/templates-panel'
+import { openTableGrid } from './ui/table-grid-popover'
 import { createStatusBar } from './ui/status-bar'
 import { attachWelcome } from './ui/welcome'
 import { attachWindowControls } from './ui/window-controls'
@@ -45,12 +47,17 @@ const DEFAULT_SETTINGS: Settings = {
   exportNamingRule: '{title}_{date}',
   imageSaveDir: 'assets',
   paneOrder: 'preview-first',
+  lineNumbers: true,
+  codeFolding: true,
+  imageCompressEnabled: true,
+  imageCompressMaxSize: 1920,
+  imageCompressQuality: 0.85,
 }
 
 const VIEW_MODES: ViewMode[] = ['split', 'editor', 'preview']
 
 async function loadSettings(): Promise<Settings> {
-  const [theme, fontSize, editorFont, autoSave, exportDir, naming, imageDir, paneOrder] =
+  const [theme, fontSize, editorFont, autoSave, exportDir, naming, imageDir, paneOrder, lineNum, folding, imgCompOn, imgCompSize, imgCompQ] =
     await Promise.all([
       window.api.storeGet('theme'),
       window.api.storeGet('fontSize'),
@@ -60,6 +67,11 @@ async function loadSettings(): Promise<Settings> {
       window.api.storeGet('exportNamingRule'),
       window.api.storeGet('imageSaveDir'),
       window.api.storeGet('paneOrder'),
+      window.api.storeGet('lineNumbers'),
+      window.api.storeGet('codeFolding'),
+      window.api.storeGet('imageCompressEnabled'),
+      window.api.storeGet('imageCompressMaxSize'),
+      window.api.storeGet('imageCompressQuality'),
     ])
   return {
     theme: theme ?? DEFAULT_SETTINGS.theme,
@@ -70,6 +82,11 @@ async function loadSettings(): Promise<Settings> {
     exportNamingRule: naming ?? DEFAULT_SETTINGS.exportNamingRule,
     imageSaveDir: imageDir ?? DEFAULT_SETTINGS.imageSaveDir,
     paneOrder: paneOrder ?? DEFAULT_SETTINGS.paneOrder,
+    lineNumbers: lineNum ?? DEFAULT_SETTINGS.lineNumbers,
+    codeFolding: folding ?? DEFAULT_SETTINGS.codeFolding,
+    imageCompressEnabled: imgCompOn ?? DEFAULT_SETTINGS.imageCompressEnabled,
+    imageCompressMaxSize: imgCompSize ?? DEFAULT_SETTINGS.imageCompressMaxSize,
+    imageCompressQuality: imgCompQ ?? DEFAULT_SETTINGS.imageCompressQuality,
   }
 }
 
@@ -96,9 +113,31 @@ async function bootstrap(): Promise<void> {
     parent: dom.editorContainer,
     theme: settings.theme,
     initialValue: '',
+    lineNumbers: settings.lineNumbers,
+    folding: settings.codeFolding,
   })
 
-  const preview = createPreview({ body: dom.previewBody })
+  const preview = createPreview({
+    body: dom.previewBody,
+    getDoc: () => editor.getValue(),
+    onReplaceLine: (line, text) => editor.replaceLine(line, text),
+    onWikiClick: (name) => {
+      void (async () => {
+        const res = await ctx.api.workspaceResolveWiki(name)
+        if (res.success) {
+          void openFileByPath(
+            { ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) },
+            res.path,
+          )
+        } else {
+          showToast(
+            res.error === 'no workspace' ? '请先打开工作区 (Ctrl+Shift+E)' : `未在工作区找到「${name}」`,
+            'info',
+          )
+        }
+      })()
+    },
+  })
   // Sync preview's base-URL with the active tab so relative <img>/<a> resolve
   // against the document's directory, not against `out/renderer/`.
   const syncPreviewBase = (): void => {
@@ -122,6 +161,12 @@ async function bootstrap(): Promise<void> {
     onSelect: (path) =>
       void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
   })
+  const workspacePanel = createWorkspacePanel({
+    ctx,
+    onOpenFile: (path) =>
+      void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
+  })
+  void workspacePanel.restore()
   const templatesPanel = createTemplatesPanel(ctx)
   const outline = createOutlinePanel({
     ctx,
@@ -139,6 +184,10 @@ async function bootstrap(): Promise<void> {
   }
   ctx.store.activeTabId.subscribe(syncOutlineTitle)
   ctx.store.tabs.subscribe(syncOutlineTitle)
+  ctx.store.activeTabId.subscribe(() => {
+    const t = tabs.getActive()
+    workspacePanel.markActive(t?.filePath ?? null)
+  })
 
   templatesPanel.onApply((content, name) => {
     const active = tabs.getActive()
@@ -216,6 +265,13 @@ async function bootstrap(): Promise<void> {
   ctx.store.settings.subscribe((next) => {
     document.documentElement.style.setProperty('--editor-font-size', `${next.fontSize}px`)
     document.documentElement.style.setProperty('--font-mono', next.editorFont)
+    editor.setGutter(next.lineNumbers, next.codeFolding)
+  })
+
+  // ── Focus mode → hide chrome + typewriter scrolling ─────────────────
+  ctx.store.focusMode.subscribe((on) => {
+    document.body.classList.toggle('focus-mode', on)
+    editor.setTypewriter(on)
   })
 
   // ── Tab bar (event delegated) ───────────────────────────────────────
@@ -471,6 +527,7 @@ async function bootstrap(): Promise<void> {
   }
   onBtnId('btn-new', newFile)
   onBtnId('btn-open', () => void openFile())
+  onBtnId('btn-workspace', () => void workspacePanel.open())
   onBtnId('btn-save', () => void save())
   onBtnId('btn-template', () => templatesPanel.open())
   onBtnId('btn-theme', () => ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark'))
@@ -520,9 +577,15 @@ async function bootstrap(): Promise<void> {
 
   // v1 format buttons (.fmt-btn[data-action])
   document.querySelectorAll<HTMLElement>('.fmt-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const action = btn.dataset.action
-      if (action) editor.insertFormat(action as Parameters<typeof editor.insertFormat>[0])
+      if (!action) return
+      if (action === 'table') {
+        const grid = await openTableGrid(btn)
+        if (grid) editor.insertTable(grid.rows, grid.cols)
+        return
+      }
+      editor.insertFormat(action as Parameters<typeof editor.insertFormat>[0])
     })
   })
 
@@ -739,9 +802,27 @@ async function bootstrap(): Promise<void> {
       })
     },
   })
+  palette.register({
+    id: 'view.focus',
+    group: '视图',
+    title: '专注模式',
+    hint: 'Ctrl+Shift+F',
+    run: () => ctx.store.focusMode.set(!ctx.store.focusMode()),
+  })
+  palette.register({
+    id: 'workspace.open',
+    group: '文件',
+    title: '打开工作区文件夹',
+    hint: 'Ctrl+Shift+E',
+    run: () => void workspacePanel.open(),
+  })
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────
   document.addEventListener('keydown', (evt) => {
+    if (evt.key === 'Escape' && ctx.store.focusMode()) {
+      ctx.store.focusMode.set(false)
+      return
+    }
     const ctrl = evt.ctrlKey || evt.metaKey
     if (!ctrl) return
     const key = evt.key.toLowerCase()
@@ -795,6 +876,12 @@ async function bootstrap(): Promise<void> {
       const idx = parseInt(key, 10) - 1
       const all = tabs.getAll()
       if (all[idx]) ctx.store.activeTabId.set(all[idx].id)
+    } else if (evt.shiftKey && key === 'f') {
+      evt.preventDefault()
+      ctx.store.focusMode.set(!ctx.store.focusMode())
+    } else if (evt.shiftKey && key === 'e') {
+      evt.preventDefault()
+      void workspacePanel.open()
     } else if (evt.shiftKey && key === 't') {
       evt.preventDefault()
       ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark')
@@ -846,6 +933,12 @@ async function bootstrap(): Promise<void> {
         ctx.store.viewMode.set(VIEW_MODES[(idx + 1) % VIEW_MODES.length])
         break
       }
+      case 'menu:toggle-focus':
+        ctx.store.focusMode.set(!ctx.store.focusMode())
+        break
+      case 'menu:open-workspace':
+        void workspacePanel.open()
+        break
       case 'menu:settings':
         settingsPanel.open()
         break

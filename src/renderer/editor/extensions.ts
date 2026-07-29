@@ -4,20 +4,50 @@ import {
   highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
+  lineNumbers,
   placeholder as placeholderExt,
 } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { codeFolding, foldGutter } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
 import { continueList } from '../lib/markdown-inline'
 import { formatKeymap } from './format-keymap'
+import { tableKeymap } from './table/table-keymap'
 
 /** Holds the theme compartment so callers can swap light↔dark at runtime. */
 export const themeCompartment = new Compartment()
 
 /** Holds the language compartment (kept stable in case future formats are added). */
 export const langCompartment = new Compartment()
+
+/** Gutter (line numbers + folding) — reconfigured by settings at runtime. */
+export const gutterCompartment = new Compartment()
+
+/** Typewriter scrolling — toggled by focus mode. */
+export const typewriterCompartment = new Compartment()
+
+export function buildGutter(lineNumbersOn: boolean, folding: boolean): Extension {
+  const exts: Extension[] = []
+  if (lineNumbersOn) exts.push(lineNumbers(), highlightActiveLineGutter())
+  if (folding) exts.push(foldGutter(), codeFolding())
+  return gutterCompartment.of(exts)
+}
+
+/**
+ * When on, keep the edited line vertically centered (typewriter scrolling).
+ * Triggers only on document change so click-positioning doesn't fight the user.
+ */
+export function typewriterExt(on: boolean): Extension {
+  if (!on) return []
+  return EditorView.updateListener.of((update) => {
+    if (!update.docChanged) return
+    const head = update.state.selection.main.head
+    const line = update.state.doc.lineAt(head)
+    update.view.dispatch({ effects: EditorView.scrollIntoView(line.from, { y: 'center' }) })
+  })
+}
 
 /** Chinese localization for the built-in CodeMirror search/replace panel. */
 const cmZhPhrases = EditorState.phrases.of({
@@ -70,6 +100,8 @@ const continueListKeymap = keymap.of([
 export interface BaseExtensionsOpts {
   placeholder?: string
   theme: Extension
+  lineNumbers?: boolean
+  folding?: boolean
 }
 
 export function buildBaseExtensions(opts: BaseExtensionsOpts): Extension[] {
@@ -77,12 +109,14 @@ export function buildBaseExtensions(opts: BaseExtensionsOpts): Extension[] {
     history(),
     EditorState.allowMultipleSelections.of(true),
     highlightActiveLine(),
-    highlightActiveLineGutter(),
+    buildGutter(opts.lineNumbers ?? true, opts.folding ?? true),
     EditorView.lineWrapping,
     placeholderExt(opts.placeholder ?? '开始写作…'),
     langCompartment.of(markdown({ base: markdownLanguage, codeLanguages: languages })),
     themeCompartment.of(opts.theme),
+    typewriterCompartment.of(typewriterExt(false)),
     cmZhPhrases,
+    tableKeymap,
     continueListKeymap,
     formatKeymap,
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),

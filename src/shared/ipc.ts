@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type {
   CacheEntry,
   ExportPdfRequest,
+  PdfExportOptions,
+  DirEntry,
   FileReadResult,
   FileRenameResult,
   ImageSaveRequest,
@@ -32,10 +34,17 @@ export const STORE_KEYS = [
   'exportNamingRule',
   'imageSaveDir',
   'paneOrder',
+  'lineNumbers',
+  'codeFolding',
+  'imageCompressEnabled',
+  'imageCompressMaxSize',
+  'imageCompressQuality',
   'dividerPos',
   'templates',
   'recentFiles',
   'tabOrder',
+  'pdfOptions',
+  'workspacePath',
   'cache',
 ] as const
 
@@ -52,10 +61,17 @@ export interface StoreSchema {
   exportNamingRule: string
   imageSaveDir: string
   paneOrder: PaneOrder
+  lineNumbers: boolean
+  codeFolding: boolean
+  imageCompressEnabled: boolean
+  imageCompressMaxSize: number
+  imageCompressQuality: number
   dividerPos: number
   templates: Template[]
   recentFiles: RecentFile[]
   tabOrder: string[]
+  pdfOptions: PdfExportOptions
+  workspacePath: string | null
   cache: CacheEntry
 }
 
@@ -80,6 +96,10 @@ export const CH = {
   WIN_CLOSE: 'window:close',
   WIN_IS_MAXIMIZED: 'window:is-maximized',
   HAS_PENDING_FILE: 'system:has-pending-file',
+  WORKSPACE_LIST: 'workspace:list',
+  FILE_CREATE: 'file:create',
+  FILE_DELETE: 'file:delete',
+  WORKSPACE_RESOLVE_WIKI: 'workspace:resolve-wiki',
 } as const
 
 // Main → Renderer one-way events
@@ -97,6 +117,8 @@ export const EV = {
   MENU_EXPORT_PDF: 'menu:export-pdf',
   MENU_TOGGLE_THEME: 'menu:toggle-theme',
   MENU_TOGGLE_VIEW: 'menu:toggle-view',
+  MENU_TOGGLE_FOCUS: 'menu:toggle-focus',
+  MENU_OPEN_WORKSPACE: 'menu:open-workspace',
   MENU_TEMPLATES: 'menu:templates',
   MENU_SETTINGS: 'menu:settings',
   MENU_RECENT: 'menu:recent',
@@ -113,6 +135,8 @@ export type MenuEventName =
   | typeof EV.MENU_EXPORT_PDF
   | typeof EV.MENU_TOGGLE_THEME
   | typeof EV.MENU_TOGGLE_VIEW
+  | typeof EV.MENU_TOGGLE_FOCUS
+  | typeof EV.MENU_OPEN_WORKSPACE
   | typeof EV.MENU_TEMPLATES
   | typeof EV.MENU_SETTINGS
   | typeof EV.MENU_RECENT
@@ -138,9 +162,30 @@ export const SaveDialogOptsSchema = z.object({
     .optional(),
 })
 
-export const ExportPdfReqSchema = z.object({ savePath: z.string().min(1) })
+export const PdfExportOptionsSchema = z.object({
+  pageSize: z.enum(['A4', 'Letter', 'Legal']),
+  landscape: z.boolean(),
+  marginsType: z.number().int().min(0).max(2),
+  pageNumbers: z.boolean(),
+})
+export const ExportPdfReqSchema = PdfExportOptionsSchema.extend({ savePath: z.string().min(1) })
+
+export const DEFAULT_PDF_OPTIONS: PdfExportOptions = {
+  pageSize: 'A4',
+  landscape: false,
+  marginsType: 0,
+  pageNumbers: true,
+}
 
 export const ShellShowItemReqSchema = z.string().min(1)
+
+export const DirListReqSchema = z.string().min(1)
+export const FileCreateReqSchema = z.object({ path: z.string().min(1), isDir: z.boolean() })
+export const FileDeleteReqSchema = z.object({ path: z.string().min(1), isDir: z.boolean() })
+export const ResolveWikiReqSchema = z.string().min(1)
+
+export type WorkspaceListResp = Result<{ entries: DirEntry[] }>
+export type WorkspaceResolveResp = Result<{ path: string }>
 
 export const UpdateTitlebarReqSchema = z.object({
   color: z.string().min(1),
@@ -191,6 +236,10 @@ export interface Api {
 
   // Shell / system
   shellShowItem(itemPath: string): Promise<Result>
+  workspaceList(dirPath: string): Promise<WorkspaceListResp>
+  fileCreate(path: string, isDir: boolean): Promise<Result>
+  fileDelete(path: string, isDir: boolean): Promise<Result>
+  workspaceResolveWiki(name: string): Promise<WorkspaceResolveResp>
   clearCache(): Promise<ClearCacheResp>
   focusWindow(): Promise<void>
   hasPendingFile(): Promise<boolean>

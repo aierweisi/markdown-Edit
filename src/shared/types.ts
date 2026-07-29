@@ -22,6 +22,11 @@ export interface Settings {
   exportNamingRule: string
   imageSaveDir: string
   paneOrder: PaneOrder
+  lineNumbers: boolean
+  codeFolding: boolean
+  imageCompressEnabled: boolean
+  imageCompressMaxSize: number
+  imageCompressQuality: number
 }
 
 export interface Template {
@@ -83,7 +88,21 @@ export interface FileRenameResult {
   newPath: string
 }
 
-export interface ExportPdfRequest {
+export interface DirEntry {
+  name: string
+  path: string
+  isDir: boolean
+}
+
+export interface PdfExportOptions {
+  pageSize: 'A4' | 'Letter' | 'Legal'
+  landscape: boolean
+  /** 0 = default, 1 = none, 2 = minimum (Electron printToPDF marginsType). */
+  marginsType: 0 | 1 | 2
+  pageNumbers: boolean
+}
+
+export interface ExportPdfRequest extends PdfExportOptions {
   savePath: string
 }
 

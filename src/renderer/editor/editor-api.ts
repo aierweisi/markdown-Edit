@@ -1,9 +1,9 @@
 import { Annotation, EditorState, type Extension } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { buildBaseExtensions, themeCompartment } from './extensions'
+import { buildBaseExtensions, buildGutter, gutterCompartment, themeCompartment, typewriterCompartment, typewriterExt } from './extensions'
 import { lightTheme } from './theme-light'
 import { darkTheme } from './theme-dark'
-import { applyFormat, type FormatAction } from './format-insert'
+import { applyFormat, insertTableBlock, type FormatAction } from './format-insert'
 import type { Theme } from '@shared/types'
 
 export interface EditorApi {
@@ -15,12 +15,16 @@ export interface EditorApi {
   isFocused(): boolean
   swapDoc(text: string): void
   setTheme(theme: Theme): void
+  setGutter(lineNumbers: boolean, folding: boolean): void
+  setTypewriter(on: boolean): void
   insertFormat(action: FormatAction): void
+  insertTable(rows: number, cols: number): void
   insertText(text: string): void
   getScrollTop(): number
   setScrollTop(n: number): void
   /** Scroll editor to the given 1-based line and put the cursor at its start. */
   jumpToLine(line: number): void
+  replaceLine(line: number, text: string): void
   onChange(cb: (value: string) => void): () => void
   onCursorChange(cb: (info: { line: number; col: number; selection: number }) => void): () => void
   destroy(): void
@@ -31,6 +35,8 @@ interface CreateEditorOpts {
   theme: Theme
   initialValue?: string
   extraExtensions?: Extension[]
+  lineNumbers?: boolean
+  folding?: boolean
 }
 
 function themeExt(theme: Theme): Extension {
@@ -69,7 +75,11 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
     state: EditorState.create({
       doc: opts.initialValue ?? '',
       extensions: [
-        ...buildBaseExtensions({ theme: themeExt(opts.theme) }),
+        ...buildBaseExtensions({
+          theme: themeExt(opts.theme),
+          lineNumbers: opts.lineNumbers,
+          folding: opts.folding,
+        }),
         updateListener,
         ...(opts.extraExtensions ?? []),
       ],
@@ -100,8 +110,18 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
     setTheme(theme) {
       view.dispatch({ effects: themeCompartment.reconfigure(themeExt(theme)) })
     },
+    setGutter(lineNumbers, folding) {
+      view.dispatch({ effects: gutterCompartment.reconfigure(buildGutter(lineNumbers, folding)) })
+    },
+    setTypewriter(on) {
+      view.dispatch({ effects: typewriterCompartment.reconfigure(typewriterExt(on)) })
+    },
     insertFormat(action) {
       applyFormat(view, action)
+      view.focus()
+    },
+    insertTable(rows, cols) {
+      insertTableBlock(view, rows, cols)
       view.focus()
     },
     insertText(text) {
@@ -124,6 +144,11 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
         effects: EditorView.scrollIntoView(target.from, { y: 'start', yMargin: 32 }),
       })
       view.focus()
+    },
+    replaceLine(line, text) {
+      const doc = view.state.doc
+      const ln = doc.line(Math.min(Math.max(1, line), doc.lines))
+      view.dispatch({ changes: { from: ln.from, to: ln.to, insert: text } })
     },
     onChange(cb) {
       changeListeners.add(cb)

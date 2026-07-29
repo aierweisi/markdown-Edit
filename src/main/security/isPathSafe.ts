@@ -12,7 +12,7 @@ const WIN_DEVICE_PREFIXES = ['\\\\?\\', '\\\\.\\']
  *  - Must not be a direct symbolic link (or, when the file does not yet exist,
  *    its parent directory must not be a symbolic link).
  */
-export function isPathSafe(rawPath: unknown): rawPath is string {
+export function isPathSafe(rawPath: unknown, workspaceRoot?: string): rawPath is string {
   if (typeof rawPath !== 'string' || rawPath.length === 0) return false
   if (!isAbsolute(rawPath)) return false
 
@@ -42,5 +42,18 @@ export function isPathSafe(rawPath: unknown): rawPath is string {
     }
   }
 
+  // When a workspace root is given, confine the path to it (case-insensitive
+  // on Windows). This is what scopes file-tree operations to the open folder.
+  if (workspaceRoot && !isWithin(resolved, pathResolve(workspaceRoot))) return false
+
   return true
+}
+
+function isWithin(target: string, root: string): boolean {
+  if (process.platform === 'win32') {
+    const t = target.toLowerCase()
+    const r = root.toLowerCase()
+    return t === r || t.startsWith(r + sep)
+  }
+  return target === root || target.startsWith(root + sep)
 }

@@ -1,6 +1,6 @@
-/* main.css — 入口文件，@import 引入各模块 */
 @import url('variables.css');
 @import url('animations.css');
+/* main.css — 入口文件，@import 引入各模块 */
 .theme-dark,
 *,
 ::after,

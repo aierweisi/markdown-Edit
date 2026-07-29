@@ -25,6 +25,7 @@ const BINDINGS: FormatBinding[] = [
   { key: 'Mod-Alt-t', action: 'table' },
   { key: 'Mod-Alt-h', action: 'heading' },
   { key: 'Mod-Alt-r', action: 'hr' },
+  { key: 'Mod-Alt-o', action: 'toc' },
 ]
 
 export const formatKeymap = keymap.of(

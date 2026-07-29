@@ -1,5 +1,7 @@
 import type { EditorView } from '@codemirror/view'
 import { EditorSelection } from '@codemirror/state'
+import { parseHeadings } from '../lib/parse-headings'
+import { slugify } from '../lib/slugify'
 
 export type FormatAction =
   | 'bold'
@@ -15,6 +17,7 @@ export type FormatAction =
   | 'ol'
   | 'hr'
   | 'heading'
+  | 'toc'
 
 const WRAP: Partial<Record<FormatAction, { left: string; right: string; placeholder: string }>> = {
   bold: { left: '**', right: '**', placeholder: '粗体文字' },
@@ -155,5 +158,39 @@ export function applyFormat(view: EditorView, action: FormatAction): void {
     case 'table':
       insertBlock(view, TABLE_SNIPPET + '\n')
       return
+    case 'toc': {
+      const headings = parseHeadings(view.state.doc.toString())
+      if (headings.length === 0) {
+        insertBlock(view, '## 目录\n\n*暂无标题*\n')
+        return
+      }
+      const lines = headings.map((h) => {
+        const indent = '  '.repeat(Math.max(0, h.level - 1))
+        return `${indent}- [${h.text}](#${slugify(h.text)})`
+      })
+      insertBlock(view, '## 目录\n\n' + lines.join('\n') + '\n')
+      return
+    }
   }
+}
+
+/** Insert an N×M table (header + separator + body rows); cursor → first body cell. */
+export function insertTableBlock(view: EditorView, rows: number, cols: number): void {
+  const colCount = Math.max(1, cols)
+  const header = '| ' + Array.from({ length: colCount }, (_, i) => `列${i + 1}`).join(' | ') + ' |'
+  const sep = '| ' + Array.from({ length: colCount }, () => '---').join(' | ') + ' |'
+  const empty = '| ' + Array.from({ length: colCount }, () => '   ').join(' | ') + ' |'
+  const bodyCount = Math.max(1, rows - 1)
+  const table = [header, sep, ...Array.from({ length: bodyCount }, () => empty)].join('\n')
+  const { state } = view
+  const range = state.selection.main
+  const needsLeadingNl = range.from > 0 && state.sliceDoc(range.from - 1, range.from) !== '\n'
+  const prefix = needsLeadingNl ? 1 : 0
+  const insert = (needsLeadingNl ? '\n' : '') + table + '\n'
+  // cursor at the first body cell (3rd line), just past the leading '| '
+  const bodyLineStart = prefix + header.length + 1 + sep.length + 1
+  view.dispatch({
+    changes: { from: range.from, to: range.to, insert },
+    selection: EditorSelection.cursor(range.from + bodyLineStart + 2),
+  })
 }

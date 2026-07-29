@@ -16,10 +16,20 @@ export function registerExportIpc(getWindow: () => BrowserWindow | null): void {
     if (!win) return { success: false, error: 'no window' }
 
     try {
+      const marginsMap = ['default', 'none', 'printableArea'] as const
       const buf = await win.webContents.printToPDF({
-        margins: { top: 0, right: 0, bottom: 0, left: 0 },
+        pageSize: parsed.data.pageSize,
+        landscape: parsed.data.landscape,
+        margins: { marginType: marginsMap[parsed.data.marginsType] },
         printBackground: true,
-        pageSize: 'A4',
+        ...(parsed.data.pageNumbers
+          ? {
+              displayHeaderFooter: true,
+              headerTemplate: '<span></span>',
+              footerTemplate:
+                '<div style="font-size:9px;width:100%;text-align:center;color:#888">第 <span class="pageNumber"></span> 页 / 共 <span class="totalPages"></span> 页</div>',
+            }
+          : {}),
       })
       writeFileSync(resolved, buf)
       return { success: true }

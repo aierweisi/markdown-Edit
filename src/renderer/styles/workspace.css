@@ -1,0 +1,152 @@
+/* Workspace file-tree sidebar. Lives left of .main-area; hidden unless .open. */
+
+.sidebar {
+  position: fixed;
+  top: 120px; /* below toolbar(46) + format-toolbar(40) + tabbar(34) */
+  left: 0;
+  bottom: 24px; /* above statusbar */
+  width: 240px;
+  display: none;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  z-index: 30;
+}
+.sidebar.open {
+  display: flex;
+}
+/* Make room for the fixed sidebar so the editor/preview area isn't covered. */
+.sidebar.open ~ .main-area {
+  padding-left: 240px;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--border);
+  gap: 4px;
+}
+.sidebar-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sidebar-actions {
+  display: flex;
+  gap: 2px;
+}
+.sidebar-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.sidebar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-tree {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-primary);
+  user-select: none;
+}
+.tree-row:hover {
+  background: var(--bg-hover);
+}
+.tree-row.active {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+.tree-icon {
+  width: 14px;
+  display: inline-block;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.tree-row.is-file .tree-icon {
+  color: var(--accent);
+}
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-children {
+  padding-left: 14px;
+}
+
+.workspace-empty {
+  padding: 16px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* context menu */
+.context-menu {
+  position: fixed;
+  z-index: 4000;
+  min-width: 160px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-modal);
+  padding: 4px;
+}
+.context-menu-item {
+  padding: 6px 12px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.context-menu-item:hover {
+  background: var(--bg-hover);
+}
+.context-menu-item.is-danger {
+  color: var(--danger);
+}
+.context-menu-item.is-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* prompt input inside modal */
+.workspace-prompt-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-xs);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.workspace-prompt-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}

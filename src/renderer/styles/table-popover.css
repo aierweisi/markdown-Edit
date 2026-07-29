@@ -1,0 +1,38 @@
+/* N×M table-size picker popover (opened from the toolbar table button). */
+
+.table-grid-popover {
+  position: fixed;
+  z-index: 3000;
+  background: var(--bg-modal);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-modal);
+  padding: 8px;
+  user-select: none;
+}
+
+.table-grid {
+  display: grid;
+  gap: 3px;
+}
+
+.table-grid-cell {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-input);
+  cursor: pointer;
+}
+
+.table-grid-cell.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.table-grid-label {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}

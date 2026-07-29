@@ -1,6 +1,7 @@
 import type { AppContext } from '../context'
 import type { EditorApi } from '../editor/editor-api'
 import type { TabManager } from '../tabs/tab-manager'
+import { compressImage, type CompressOptions } from '../lib/image-compress'
 
 interface PasteOpts {
   ctx: AppContext
@@ -28,6 +29,19 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary)
 }
 
+async function loadCompressConfig(ctx: AppContext): Promise<{ enabled: boolean } & CompressOptions> {
+  const [enabled, maxSize, quality] = await Promise.all([
+    ctx.api.storeGet('imageCompressEnabled'),
+    ctx.api.storeGet('imageCompressMaxSize'),
+    ctx.api.storeGet('imageCompressQuality'),
+  ])
+  return {
+    enabled: enabled ?? true,
+    maxSize: maxSize ?? 1920,
+    quality: quality ?? 0.85,
+  }
+}
+
 export function attachImagePaste(opts: PasteOpts): () => void {
   const handler = async (evt: ClipboardEvent): Promise<void> => {
     if (!evt.clipboardData) return
@@ -44,8 +58,10 @@ export function attachImagePaste(opts: PasteOpts): () => void {
       : null
     const imageDir = (await opts.ctx.api.storeGet('imageSaveDir')) ?? 'assets'
 
-    const fileName = generateFileName(blob.type)
-    const dataBase64 = await blobToBase64(blob)
+    const cfg = await loadCompressConfig(opts.ctx)
+    const out = cfg.enabled ? await compressImage(blob, cfg) : { blob, type: blob.type }
+    const fileName = generateFileName(out.type)
+    const dataBase64 = await blobToBase64(out.blob)
 
     const result = await opts.ctx.api.imageSave({
       baseDir,

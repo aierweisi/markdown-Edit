@@ -1,5 +1,6 @@
 import type Store from 'electron-store'
 import type { StoreSchema } from '@shared/ipc'
+import { DEFAULT_PDF_OPTIONS } from '@shared/ipc'
 import type { CacheEntry } from '@shared/types'
 
 const EMPTY_CACHE: CacheEntry = { tabs: [], activeTabId: null, savedAt: 0 }
@@ -14,10 +15,17 @@ export const defaults: StoreSchema = {
   exportNamingRule: '{title}_{date}',
   imageSaveDir: 'assets',
   paneOrder: 'preview-first',
+  lineNumbers: true,
+  codeFolding: true,
+  imageCompressEnabled: true,
+  imageCompressMaxSize: 1920,
+  imageCompressQuality: 0.85,
   dividerPos: 0,
   templates: [],
   recentFiles: [],
   tabOrder: [],
+  pdfOptions: DEFAULT_PDF_OPTIONS,
+  workspacePath: null,
   cache: EMPTY_CACHE,
 }
 
@@ -53,4 +61,10 @@ export function migrateStore(store: Store<StoreSchema>): void {
   if (!rawStore.has('dividerPos')) store.set('dividerPos', defaults.dividerPos)
   if (!rawStore.has('imageSaveDir')) store.set('imageSaveDir', defaults.imageSaveDir)
   if (!rawStore.has('tabOrder')) store.set('tabOrder', defaults.tabOrder)
+  if (!rawStore.has('lineNumbers')) store.set('lineNumbers', defaults.lineNumbers)
+  if (!rawStore.has('codeFolding')) store.set('codeFolding', defaults.codeFolding)
+  if (!rawStore.has('imageCompressEnabled')) store.set('imageCompressEnabled', defaults.imageCompressEnabled)
+  if (!rawStore.has('imageCompressMaxSize')) store.set('imageCompressMaxSize', defaults.imageCompressMaxSize)
+  if (!rawStore.has('imageCompressQuality')) store.set('imageCompressQuality', defaults.imageCompressQuality)
+  if (!rawStore.has('workspacePath')) store.set('workspacePath', defaults.workspacePath)
 }

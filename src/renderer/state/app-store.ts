@@ -26,6 +26,7 @@ export interface AppStore {
   viewMode: Signal<ViewMode>
   paneOrder: Signal<PaneOrder>
   dividerPos: Signal<number>
+  focusMode: Signal<boolean>
 
   // Settings (full snapshot)
   theme: Signal<Theme>
@@ -50,6 +51,7 @@ export function createAppStore(initialSettings: Settings): AppStore {
     viewMode: createSignal<ViewMode>('split'),
     paneOrder: createSignal<PaneOrder>(initialSettings.paneOrder),
     dividerPos: createSignal<number>(0),
+    focusMode: createSignal<boolean>(false),
 
     theme: createSignal<Theme>(initialSettings.theme),
     settings: createSignal<Settings>(initialSettings),
