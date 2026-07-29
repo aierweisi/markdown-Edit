@@ -82,5 +82,20 @@ export function createStatusBar(deps: StatusBarDeps): StatusBarApi {
     if (t) api.setTitle(t.title, t.modified)
   })
 
+  // Drive the "saving…" / "saved HH:MM:SS" indicator from the saving signal so
+  // both manual saves and autosave update the bar uniformly. Only show the
+  // "saved" timestamp after a real true→false transition — never on the initial
+  // false at app start — so we don't display a save that never happened.
+  let wasSaving = false
+  deps.ctx.store.saving.subscribe((saving) => {
+    if (saving) {
+      wasSaving = true
+      api.setSaving(true)
+    } else if (wasSaving) {
+      wasSaving = false
+      api.setSaving(false)
+    }
+  })
+
   return api
 }

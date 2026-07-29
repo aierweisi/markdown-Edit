@@ -13,8 +13,11 @@ export function loadKatex(): Promise<KatexApi> {
   return cached
 }
 
-const INLINE_RE = /\$([^\n$]+?)\$/g
-const BLOCK_RE = /\$\$([\s\S]+?)\$\$/g
+// NOTE: intentionally no `g` flag. These are used only with .test() in hasMath();
+// a global flag would advance lastIndex across calls and silently miss matches.
+// Global matching in walkAndReplace uses `combined` (a fresh RegExp) instead.
+const INLINE_RE = /\$([^\n$]+?)\$/
+const BLOCK_RE = /\$\$([\s\S]+?)\$\$/
 
 function hasMath(text: string): boolean {
   return INLINE_RE.test(text) || BLOCK_RE.test(text)

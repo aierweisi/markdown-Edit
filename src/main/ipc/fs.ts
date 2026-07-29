@@ -58,10 +58,10 @@ export function registerFsIpc(): void {
       if (!parsed.success) return { success: false, error: 'invalid request' }
       const oldResolved = pathResolve(parsed.data.oldPath)
       const newResolved = pathResolve(parsed.data.newPath)
-      if (oldResolved === newResolved) return { success: true, newPath: newResolved }
       if (!isPathSafe(oldResolved) || !isPathSafe(newResolved)) {
         return { success: false, error: 'invalid path' }
       }
+      if (oldResolved === newResolved) return { success: true, newPath: newResolved }
       if (existsSync(newResolved)) return { success: false, error: 'target exists' }
       try {
         await fsp.rename(oldResolved, newResolved)

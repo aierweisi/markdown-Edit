@@ -194,7 +194,7 @@ async function bootstrap(): Promise<void> {
       const result = await ctx.api.fileSave(tab.filePath, editor.getValue())
       if (result.success) {
         tabs.markModified(tab.id, false)
-        statusBar.setSaving(false)
+        // "已保存 时间" 由 status-bar 订阅 saving signal(saving→false)统一驱动
       } else {
         showToast(`自动保存失败: ${result.error}`, 'error')
       }
@@ -772,7 +772,7 @@ async function bootstrap(): Promise<void> {
     } else if (key === 'w') {
       evt.preventDefault()
       const tab = tabs.getActive()
-      if (tab) tabs.close(tab.id)
+      if (tab) void closeTabAndUpdate(tab.id)
     } else if (key === 't' && !evt.shiftKey) {
       evt.preventDefault()
       const tab = tabs.create({ title: '未命名' })

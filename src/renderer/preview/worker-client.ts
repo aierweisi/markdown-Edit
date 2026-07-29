@@ -21,6 +21,18 @@ export function createMarkdownWorkerClient(): MarkdownWorkerClient {
     }
   }
 
+  // If the worker throws uncaughtly (or a message fails to deserialize), reject
+  // every outstanding render so previews never hang on a stale pending promise.
+  const failAll = (err: unknown): void => {
+    const message = err instanceof Error ? err.message : 'worker error'
+    for (const resolver of pending.values()) {
+      resolver({ id: -1, html: '', error: message })
+    }
+    pending.clear()
+  }
+  worker.onerror = (e: ErrorEvent): void => failAll(e.error ?? new Error(e.message))
+  worker.onmessageerror = (): void => failAll(new Error('worker message error'))
+
   return {
     render(text) {
       const id = nextId++

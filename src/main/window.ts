@@ -67,10 +67,11 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
 }
 
 /**
- * Intercept link navigation inside the renderer so http(s)/mailto URLs open in
- * the user's default browser instead of replacing the app's UI. Local files
- * (file://) are opened in the OS's default handler too — the app itself only
- * ever stays on its own renderer URL.
+ * Intercept link navigation inside the renderer so http(s)/mailto/tel URLs open
+ * in the user's default browser instead of replacing the app's UI. `file:` is
+ * deliberately NOT forwarded to the OS handler — doing so would let a crafted
+ * link (e.g. file:///C:/.../something.exe) launch arbitrary local programs.
+ * The app itself only ever stays on its own renderer URL.
  */
 function attachExternalLinkHandler(win: BrowserWindow, rendererUrl: string | undefined): void {
   const isAppUrl = (target: string): boolean => {
@@ -80,7 +81,7 @@ function attachExternalLinkHandler(win: BrowserWindow, rendererUrl: string | und
   }
 
   const openExternal = (target: string): void => {
-    if (!/^(?:https?|mailto|tel|file):/i.test(target)) return
+    if (!/^(?:https?|mailto|tel):/i.test(target)) return
     void shell.openExternal(target)
   }
 
