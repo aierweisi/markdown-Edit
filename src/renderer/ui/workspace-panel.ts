@@ -203,6 +203,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
 
   // ── context menu ─────────────────────────────────────────────
   let menuEl: HTMLElement | null = null
+  let menuOutsideDown: ((e: MouseEvent) => void) | null = null
   function openNodeMenu(evt: MouseEvent, entry: DirEntry): void {
     closeNodeMenu()
     const items: Array<{ label: string; danger?: boolean; run: () => void }> = []
@@ -228,9 +229,22 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     menuEl.style.left = `${Math.min(evt.clientX, window.innerWidth - 180)}px`
     menuEl.style.top = `${evt.clientY}px`
     document.body.appendChild(menuEl)
-    setTimeout(() => document.addEventListener('mousedown', closeNodeMenu, { once: true }), 0)
+    // Close on an outside mousedown — but ignore ones that land INSIDE the menu.
+    // A click fires only after mousedown; if the outside-handler removed the
+    // menu on the item's own mousedown, the click (and thus the action) would
+    // never run, leaving 重命名/删除 dead.
+    menuOutsideDown = (e: MouseEvent): void => {
+      if (menuEl && !menuEl.contains(e.target as Node)) closeNodeMenu()
+    }
+    setTimeout(() => {
+      if (menuOutsideDown) document.addEventListener('mousedown', menuOutsideDown)
+    }, 0)
   }
   function closeNodeMenu(): void {
+    if (menuOutsideDown) {
+      document.removeEventListener('mousedown', menuOutsideDown)
+      menuOutsideDown = null
+    }
     menuEl?.remove()
     menuEl = null
   }
@@ -287,10 +301,12 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
       overlay.innerHTML = `
         <div class="modal modal-small" style="width: 340px">
           <div class="modal-header"><h2>${escapeHtml(title)}</h2></div>
-          <div class="modal-body"><input type="text" class="workspace-prompt-input" placeholder="${escapeHtml(placeholder)}" /></div>
-          <div class="modal-actions" style="justify-content: flex-end">
-            <button class="btn-secondary" data-act="cancel">取消</button>
-            <button class="btn-primary" data-act="ok">确定</button>
+          <div class="modal-body">
+            <input type="text" class="workspace-prompt-input" placeholder="${escapeHtml(placeholder)}" />
+            <div class="modal-actions">
+              <button class="btn-secondary" data-act="cancel">取消</button>
+              <button class="btn-primary" data-act="ok">确定</button>
+            </div>
           </div>
         </div>`
       document.body.appendChild(overlay)
