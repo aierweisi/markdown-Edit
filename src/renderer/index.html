@@ -40,9 +40,10 @@
         </svg></button><button class="toolbar-btn" id="btn-open" title="打开 (Ctrl+O)"><svg aria-hidden="true"
           viewBox="0 0 24 24">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-        </svg></button><button class="toolbar-btn" id="btn-workspace" title="打开工作区 (Ctrl+Shift+E)"><svg
+        </svg></button><button class="toolbar-btn" id="btn-workspace" title="工作区面板 (Ctrl+Shift+E)"><svg
           aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
         </svg></button><button class="toolbar-btn" id="btn-save" title="保存 (Ctrl+S)"><svg aria-hidden="true"
           viewBox="0 0 24 24">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -136,7 +137,7 @@
         <rect x="14" y="14" width="7" height="7" />
         <rect x="3" y="14" width="7" height="7" />
       </svg>
-      模板
+      <span class="toolbar-action-label">模板</span>
     </button><!-- Export -->
     <div class="export-wrap"><button class="toolbar-btn toolbar-action-btn" id="btn-export" title="导出文件"><svg
           aria-hidden="true" viewBox="0 0 24 24" style="
@@ -152,7 +153,7 @@
           <polyline points="7 10 12 15 17 10" />
           <line x1="12" y1="15" x2="12" y2="3" />
         </svg>
-        导出
+        <span class="toolbar-action-label">导出</span>
         <svg aria-hidden="true" viewBox="0 0 24 24" style="
               width: 10px;
               height: 10px;
@@ -238,17 +239,49 @@
     <div class="tabs-container" id="tabs-container"></div><button class="tab-new-btn" id="btn-tab-new"
       title="新建标签页 (Ctrl+T)">+</button>
   </div>
+  <button class="workspace-rail" id="ws-rail" title="展开工作区 (Ctrl+Shift+E)" aria-label="展开工作区" hidden><svg
+      aria-hidden="true" viewBox="0 0 24 24">
+      <polyline points="9 18 15 12 9 6" />
+    </svg></button>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-title">工作区</span>
+      <button class="sidebar-title" id="ws-title" type="button" title="切换工作区文件夹"><span
+          class="sidebar-title-name">工作区</span><svg aria-hidden="true" viewBox="0 0 24 24"><polyline
+            points="6 9 12 15 18 9" /></svg></button>
       <div class="sidebar-actions">
-        <button class="sidebar-btn" id="ws-newfile" title="新建文件">📄</button>
-        <button class="sidebar-btn" id="ws-newdir" title="新建文件夹">📁</button>
-        <button class="sidebar-btn" id="ws-refresh" title="刷新">↻</button>
-        <button class="sidebar-btn" id="ws-close" title="收起">✕</button>
+        <button class="sidebar-btn" id="ws-newfile" title="新建文件" aria-label="新建文件"><svg aria-hidden="true"
+            viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="12" y1="18" x2="12" y2="12" />
+            <line x1="9" y1="15" x2="15" y2="15" />
+          </svg></button>
+        <button class="sidebar-btn" id="ws-newdir" title="新建文件夹" aria-label="新建文件夹"><svg aria-hidden="true"
+            viewBox="0 0 24 24">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg></button>
+        <button class="sidebar-btn" id="ws-refresh" title="刷新" aria-label="刷新"><svg aria-hidden="true"
+            viewBox="0 0 24 24">
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg></button>
+        <button class="sidebar-btn" id="ws-close" title="收起" aria-label="收起工作区"><svg aria-hidden="true"
+            viewBox="0 0 24 24">
+            <polyline points="15 18 9 12 15 6" />
+          </svg></button>
       </div>
     </div>
+    <div class="sidebar-search">
+      <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21"
+          x2="16.65" y2="16.65" /></svg><span class="sidebar-search-spinner" aria-hidden="true"></span><input
+        type="search" id="ws-filter" class="sidebar-filter-input" placeholder="筛选文件" aria-label="筛选文件"
+        autocomplete="off" spellcheck="false" /><button class="sidebar-filter-clear" id="ws-filter-clear"
+        type="button" title="清除筛选" aria-label="清除筛选" hidden><svg aria-hidden="true" viewBox="0 0 24 24"><line
+            x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
+    </div>
     <div class="sidebar-tree" id="file-tree"></div>
+    <div class="sidebar-resizer" id="ws-resizer" role="separator" aria-orientation="vertical"
+      aria-label="拖动调整工作区宽度"></div>
   </aside><!-- ── Main Area ───────────────────────────────────────── -->
   <div class="main-area" id="main-area">
     <div class="editor-pane" id="editor-pane">
@@ -335,7 +368,7 @@
   <div class="statusbar" id="statusbar">
     <div class="statusbar-left"><span id="status-file">未命名</span><span class="statusbar-sep">·</span><span
         id="status-modified"></span><span class="statusbar-sep" id="status-sep2">·</span><span id="status-cursor">行 1, 列
-        1</span><span class="statusbar-sep">·</span><span id="status-selection"></span></div>
+        1</span><span class="statusbar-sep" id="status-selection-sep">·</span><span id="status-selection"></span></div>
     <div class="statusbar-right"><span id="status-readtime"></span><span class="statusbar-sep" id="status-readtime-sep"
         style="display: none">·</span><span id="status-chars"></span><span class="statusbar-sep" id="status-chars-sep"
         style="display: none">·</span><span id="status-autosave"></span><span class="statusbar-sep"
@@ -482,6 +515,12 @@
                       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                     </svg>
                     深色
+                  </button><button class="theme-toggle-btn" data-theme="auto" title="跟随系统"><svg aria-hidden="true"
+                      viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+                    </svg>
+                    自动
                   </button></div>
               </div>
             </div>
@@ -629,6 +668,25 @@
                     d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                 </svg></span>
               系统 </div>
+            <div class="setting-item">
+              <div class="setting-item-info">
+                <div class="setting-item-label">状态栏显示</div>
+                <div class="setting-item-desc">选择底部状态栏显示的信息</div>
+              </div>
+              <div class="setting-item-control" style="display: flex; gap: 12px; flex-wrap: wrap">
+                <label
+                  style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary)"><input
+                    type="checkbox" id="setting-status-cursor" checked /> 光标位置</label><label
+                  style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary)"><input
+                    type="checkbox" id="setting-status-selection" checked /> 选区</label><label
+                  style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary)"><input
+                    type="checkbox" id="setting-status-readtime" checked /> 阅读时间</label><label
+                  style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary)"><input
+                    type="checkbox" id="setting-status-chars" checked /> 字符数</label><label
+                  style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary)"><input
+                    type="checkbox" id="setting-status-autosave" checked /> 保存状态</label>
+              </div>
+            </div>
             <div class="setting-item">
               <div class="setting-item-info">
                 <div class="setting-item-label">清空缓存</div>

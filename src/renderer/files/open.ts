@@ -2,6 +2,7 @@ import type { AppContext } from '../context'
 import type { TabManager } from '../tabs/tab-manager'
 import type { EditorApi } from '../editor/editor-api'
 import { titleFromPath } from '../lib/fs-paths'
+import { showToast } from '../ui/toast'
 
 interface OpenDeps {
   ctx: AppContext
@@ -32,7 +33,7 @@ export async function openFileByPath(deps: OpenDeps, filePath: string): Promise<
 
   const read = await deps.ctx.api.fileRead(filePath)
   if (!read.success) {
-    console.error('[open] fileRead failed:', read.error)
+    showToast(`打开失败: ${read.error}`, 'error')
     return
   }
 

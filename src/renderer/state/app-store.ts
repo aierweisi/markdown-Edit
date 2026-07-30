@@ -43,14 +43,14 @@ export interface AppStore {
   menuEventPending: Signal<number>
 }
 
-export function createAppStore(initialSettings: Settings): AppStore {
+export function createAppStore(initialSettings: Settings, initialDividerPos = 0): AppStore {
   return {
     tabs: createSignal<TabState[]>([]),
     activeTabId: createSignal<string | null>(null),
 
     viewMode: createSignal<ViewMode>('split'),
     paneOrder: createSignal<PaneOrder>(initialSettings.paneOrder),
-    dividerPos: createSignal<number>(0),
+    dividerPos: createSignal<number>(initialDividerPos),
     focusMode: createSignal<boolean>(false),
 
     theme: createSignal<Theme>(initialSettings.theme),

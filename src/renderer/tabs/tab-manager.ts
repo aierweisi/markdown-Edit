@@ -7,6 +7,7 @@ export interface TabContent {
   title?: string
   filePath?: string | null
   content?: string
+  modified?: boolean
 }
 
 export interface TabManager {
@@ -23,6 +24,15 @@ export interface TabManager {
   /** Get the current document content for the active tab (in-memory snapshot). */
   getContent(id: string): string
   setContent(id: string, text: string): void
+  /** Reopen the most recently closed tab (if any). Returns the restored tab. */
+  reopenLast(): TabState | null
+}
+
+interface ClosedTab {
+  title: string
+  filePath: string | null
+  content: string
+  modified: boolean
 }
 
 let nextSuffix = 1
@@ -34,6 +44,8 @@ function makeId(): string {
 export function createTabManager(ctx: AppContext): TabManager {
   // Renderer-side in-memory document storage; persisted by CacheManager (Phase 6).
   const contents = new Map<string, string>()
+  const recentlyClosed: ClosedTab[] = []
+  const RECENTLY_CLOSED_MAX = 20
 
   function snapshot(): TabState[] {
     return ctx.store.tabs()
@@ -56,7 +68,7 @@ export function createTabManager(ctx: AppContext): TabManager {
         id,
         title: input.title ?? '未命名',
         filePath: input.filePath ?? null,
-        modified: false,
+        modified: input.modified ?? false,
       }
       contents.set(id, input.content ?? '')
       mutate((tabs) => [...tabs, tab])
@@ -64,6 +76,16 @@ export function createTabManager(ctx: AppContext): TabManager {
     },
 
     close(id) {
+      const closing = ctx.store.tabs().find((t) => t.id === id)
+      if (closing) {
+        recentlyClosed.unshift({
+          title: closing.title,
+          filePath: closing.filePath,
+          content: contents.get(id) ?? '',
+          modified: closing.modified,
+        })
+        if (recentlyClosed.length > RECENTLY_CLOSED_MAX) recentlyClosed.pop()
+      }
       contents.delete(id)
       mutate((tabs) => tabs.filter((t) => t.id !== id))
       const active = ctx.store.activeTabId()
@@ -120,6 +142,14 @@ export function createTabManager(ctx: AppContext): TabManager {
 
     setContent(id, text) {
       contents.set(id, text)
+    },
+
+    reopenLast() {
+      const last = recentlyClosed.shift()
+      if (!last) return null
+      const tab = manager.create({ title: last.title, filePath: last.filePath, content: last.content, modified: last.modified })
+      ctx.store.activeTabId.set(tab.id)
+      return tab
     },
   }
 

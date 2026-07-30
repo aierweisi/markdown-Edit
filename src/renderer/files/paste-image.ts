@@ -3,10 +3,31 @@ import type { EditorApi } from '../editor/editor-api'
 import type { TabManager } from '../tabs/tab-manager'
 import { compressImage, type CompressOptions } from '../lib/image-compress'
 
-interface PasteOpts {
+export interface PasteOpts {
   ctx: AppContext
   editor: EditorApi
   tabs: TabManager
+}
+
+/** Save an image blob to the active file's dir (honoring compress settings) and
+ *  insert a markdown image reference at the cursor. Returns false on save failure. */
+export async function insertImageBlob(blob: Blob, opts: PasteOpts): Promise<boolean> {
+  const active = opts.tabs.getActive()
+  const baseDir = active?.filePath
+    ? active.filePath.replace(/[\\/][^\\/]*$/, '')
+    : null
+  const imageDir = (await opts.ctx.api.storeGet('imageSaveDir')) ?? 'assets'
+  const cfg = await loadCompressConfig(opts.ctx)
+  const out = cfg.enabled ? await compressImage(blob, cfg) : { blob, type: blob.type }
+  const fileName = generateFileName(out.type)
+  const dataBase64 = await blobToBase64(out.blob)
+  const result = await opts.ctx.api.imageSave({ baseDir, fileName, dataBase64, imageDir })
+  if (!result.success) {
+    console.error('[image] save failed:', result.error)
+    return false
+  }
+  opts.editor.insertText(`![](${result.relPath})`)
+  return true
 }
 
 const IMG_PREFIX_RE = /^image\//
@@ -50,31 +71,8 @@ export function attachImagePaste(opts: PasteOpts): () => void {
     if (!image) return
     const blob = image.getAsFile()
     if (!blob) return
-
     evt.preventDefault()
-    const active = opts.tabs.getActive()
-    const baseDir = active?.filePath
-      ? active.filePath.replace(/[\\/][^\\/]*$/, '')
-      : null
-    const imageDir = (await opts.ctx.api.storeGet('imageSaveDir')) ?? 'assets'
-
-    const cfg = await loadCompressConfig(opts.ctx)
-    const out = cfg.enabled ? await compressImage(blob, cfg) : { blob, type: blob.type }
-    const fileName = generateFileName(out.type)
-    const dataBase64 = await blobToBase64(out.blob)
-
-    const result = await opts.ctx.api.imageSave({
-      baseDir,
-      fileName,
-      dataBase64,
-      imageDir,
-    })
-
-    if (!result.success) {
-      console.error('[paste-image] save failed:', result.error)
-      return
-    }
-    opts.editor.insertText(`![](${result.relPath})`)
+    await insertImageBlob(blob, opts)
   }
 
   const target = opts.ctx.dom.editorContainer

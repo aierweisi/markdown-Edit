@@ -25,6 +25,7 @@ const DEFAULTS: Settings = {
   imageCompressEnabled: true,
   imageCompressMaxSize: 1920,
   imageCompressQuality: 0.85,
+  statusBar: { cursor: true, selection: true, readtime: true, chars: true, autosave: true },
 }
 
 const CLEAR_BTN_RESET_DELAY = 2200
@@ -77,6 +78,11 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
     setChecked('setting-imgcompress-enabled', s.imageCompressEnabled)
     setVal('setting-imgcompress-size', String(s.imageCompressMaxSize))
     setVal('setting-imgcompress-quality', String(s.imageCompressQuality))
+    setChecked('setting-status-cursor', s.statusBar.cursor)
+    setChecked('setting-status-selection', s.statusBar.selection)
+    setChecked('setting-status-readtime', s.statusBar.readtime)
+    setChecked('setting-status-chars', s.statusBar.chars)
+    setChecked('setting-status-autosave', s.statusBar.autosave)
   }
 
   function readForm(): Settings {
@@ -95,6 +101,13 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
       imageCompressEnabled: getChecked('setting-imgcompress-enabled'),
       imageCompressMaxSize: parseInt(getVal('setting-imgcompress-size') || '1920', 10),
       imageCompressQuality: parseFloat(getVal('setting-imgcompress-quality') || '0.85'),
+      statusBar: {
+        cursor: getChecked('setting-status-cursor'),
+        selection: getChecked('setting-status-selection'),
+        readtime: getChecked('setting-status-readtime'),
+        chars: getChecked('setting-status-chars'),
+        autosave: getChecked('setting-status-autosave'),
+      },
     }
   }
 

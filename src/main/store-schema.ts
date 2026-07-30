@@ -26,6 +26,9 @@ export const defaults: StoreSchema = {
   tabOrder: [],
   pdfOptions: DEFAULT_PDF_OPTIONS,
   workspacePath: null,
+  workspaceCollapsed: false,
+  workspaceWidth: 240,
+  statusBar: { cursor: true, selection: true, readtime: true, chars: true, autosave: true },
   cache: EMPTY_CACHE,
 }
 
@@ -67,4 +70,7 @@ export function migrateStore(store: Store<StoreSchema>): void {
   if (!rawStore.has('imageCompressMaxSize')) store.set('imageCompressMaxSize', defaults.imageCompressMaxSize)
   if (!rawStore.has('imageCompressQuality')) store.set('imageCompressQuality', defaults.imageCompressQuality)
   if (!rawStore.has('workspacePath')) store.set('workspacePath', defaults.workspacePath)
+  if (!rawStore.has('workspaceCollapsed')) store.set('workspaceCollapsed', defaults.workspaceCollapsed)
+  if (!rawStore.has('workspaceWidth')) store.set('workspaceWidth', defaults.workspaceWidth)
+  if (!rawStore.has('statusBar')) store.set('statusBar', defaults.statusBar)
 }

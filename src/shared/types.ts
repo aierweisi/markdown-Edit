@@ -2,7 +2,7 @@
 
 export type Platform = 'aix' | 'darwin' | 'freebsd' | 'linux' | 'openbsd' | 'sunos' | 'win32' | 'cygwin' | 'netbsd' | 'android' | 'haiku'
 
-export type Theme = 'light' | 'dark'
+export type Theme = 'light' | 'dark' | 'auto'
 
 export type ViewMode = 'split' | 'editor' | 'preview'
 
@@ -27,6 +27,15 @@ export interface Settings {
   imageCompressEnabled: boolean
   imageCompressMaxSize: number
   imageCompressQuality: number
+  statusBar: StatusBarConfig
+}
+
+export interface StatusBarConfig {
+  cursor: boolean
+  selection: boolean
+  readtime: boolean
+  chars: boolean
+  autosave: boolean
 }
 
 export interface Template {

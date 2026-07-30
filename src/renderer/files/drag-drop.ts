@@ -1,6 +1,7 @@
 import type { AppContext } from '../context'
 import { isMdFile } from '@shared/paths'
 import { openFileByPath } from './open'
+import { insertImageBlob } from './paste-image'
 import type { TabManager } from '../tabs/tab-manager'
 import type { EditorApi } from '../editor/editor-api'
 
@@ -34,13 +35,16 @@ export function attachDragDrop(opts: DragDropOpts): () => void {
     container!.classList.remove(dragClass)
     const files = Array.from(evt.dataTransfer?.files ?? [])
     for (const file of files) {
-      if (!isMdFile(file.name)) continue
-      const filePath = opts.ctx.api.getFilePath(file)
-      if (!filePath) continue
-      await openFileByPath(
-        { ctx: opts.ctx, tabs: opts.tabs, editor: opts.editor, onContentLoaded: opts.onAfterOpen },
-        filePath,
-      )
+      if (isMdFile(file.name)) {
+        const filePath = opts.ctx.api.getFilePath(file)
+        if (!filePath) continue
+        await openFileByPath(
+          { ctx: opts.ctx, tabs: opts.tabs, editor: opts.editor, onContentLoaded: opts.onAfterOpen },
+          filePath,
+        )
+      } else if (file.type.startsWith('image/')) {
+        await insertImageBlob(file, { ctx: opts.ctx, editor: opts.editor, tabs: opts.tabs })
+      }
     }
   }
 

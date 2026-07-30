@@ -32,6 +32,7 @@ export function bindPersistence(store: AppStore): () => void {
         persist('exportNamingRule', next.exportNamingRule)
         persist('imageSaveDir', next.imageSaveDir)
         persist('paneOrder', next.paneOrder)
+        persist('statusBar', next.statusBar)
       }, PERSIST_DEBOUNCE_MS),
     ),
   )

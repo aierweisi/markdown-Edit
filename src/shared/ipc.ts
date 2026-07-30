@@ -15,6 +15,7 @@ import type {
   Template,
   Platform,
   RecentFile,
+  StatusBarConfig,
   Theme,
   WindowBounds,
   PaneOrder,
@@ -45,6 +46,9 @@ export const STORE_KEYS = [
   'tabOrder',
   'pdfOptions',
   'workspacePath',
+  'workspaceCollapsed',
+  'workspaceWidth',
+  'statusBar',
   'cache',
 ] as const
 
@@ -72,6 +76,9 @@ export interface StoreSchema {
   tabOrder: string[]
   pdfOptions: PdfExportOptions
   workspacePath: string | null
+  workspaceCollapsed: boolean
+  workspaceWidth: number
+  statusBar: StatusBarConfig
   cache: CacheEntry
 }
 

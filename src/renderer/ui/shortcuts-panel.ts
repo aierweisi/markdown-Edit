@@ -47,8 +47,8 @@ export const SHORTCUTS: ShortcutGroup[] = [
     items: [
       { key: 'Ctrl+\\', label: '切换视图模式' },
       { key: 'Ctrl+Shift+F', label: '专注模式' },
-      { key: 'Ctrl+Shift+E', label: '打开工作区' },
-      { key: 'Ctrl+Shift+T', label: '切换主题' },
+      { key: 'Ctrl+Shift+E', label: '收起/展开工作区' },
+      { key: 'Ctrl+Shift+L', label: '切换主题' },
       { key: 'Ctrl+Shift+O', label: '文章大纲' },
       { key: 'Ctrl+Shift+/', label: '快捷键展示' },
     ],
@@ -58,6 +58,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
     items: [
       { key: 'Ctrl+T', label: '新建标签页' },
       { key: 'Ctrl+W', label: '关闭当前标签' },
+      { key: 'Ctrl+Shift+T', label: '重开已关闭标签' },
       { key: 'Ctrl+Tab', label: '下一个标签' },
       { key: 'Ctrl+1..9', label: '跳转到第 N 个标签' },
     ],

@@ -1,5 +1,6 @@
 @import url('variables.css');
 @import url('animations.css');
+@import url('print.css');
 /* main.css — 入口文件，@import 引入各模块 */
 .theme-dark,
 *,
@@ -166,6 +167,23 @@ input {
 .toolbar-btn:hover,
 .win-ctrl:hover {
   background: var(--bg-hover);
+}
+
+/* Narrow windows: compact the format toolbar so it never clips (window min is
+   800px; this buys safety margin by going icon-only on the labeled actions). */
+@media (max-width: 900px) {
+  .format-toolbar {
+    padding: 0 4px;
+  }
+  .toolbar-action-btn {
+    padding: 0 6px;
+  }
+  .toolbar-action-label {
+    display: none;
+  }
+  .toolbar-separator {
+    margin: 0 3px;
+  }
 }
 .window-controls {
   display: flex;
@@ -1429,6 +1447,11 @@ input {
   color: #e8eaf6;
   border-color: #3949ab;
 }
+.theme-toggle-btn.active[data-theme='auto'] {
+  background: linear-gradient(135deg, #4a6cf7, #6b8aff);
+  color: #fff;
+  border-color: #4a6cf7;
+}
 .theme-toggle-btn:not(.active):hover {
   background: var(--bg-hover);
   color: var(--text-primary);
@@ -2580,7 +2603,6 @@ body.has-unsaved #btn-save {
 .image-lightbox-hint.show {
   opacity: 1;
 }
-@import url('print.css');
 
 /* ── Toast & Render Error ───────────────────────────────── */
 .theme-dark,
@@ -3444,4 +3466,14 @@ body.has-unsaved #btn-save::after {
 }
 .theme-dark .shortcuts-label {
   color: #e4e4ec;
+}
+
+/* While dragging the editor/preview divider, suppress text selection. */
+body.divider-dragging {
+  user-select: none;
+  cursor: col-resize;
+}
+body.divider-dragging .editor-pane,
+body.divider-dragging .preview-pane {
+  pointer-events: none;
 }

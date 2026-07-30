@@ -1,4 +1,5 @@
 import type { AppContext } from '../context'
+import type { StatusBarConfig } from '@shared/types'
 import { countChars, countWords, estimateReadingMinutes } from '../lib/word-count'
 
 export interface StatusBarApi {
@@ -25,21 +26,46 @@ const SLOT_IDS = {
 const SEP_IDS: Record<keyof typeof SLOT_IDS, string | undefined> = {
   file: undefined,
   modified: undefined,
-  cursor: undefined,
-  selection: undefined,
+  cursor: 'status-sep2',
+  selection: 'status-selection-sep',
   readtime: 'status-readtime-sep',
   chars: 'status-chars-sep',
   saving: 'status-autosave-sep',
 }
 
+/** Slots whose visibility the user can toggle in settings → their StatusBarConfig key. */
+const TOGGLE_CFG: Partial<Record<keyof typeof SLOT_IDS, keyof StatusBarConfig>> = {
+  cursor: 'cursor',
+  selection: 'selection',
+  readtime: 'readtime',
+  chars: 'chars',
+  saving: 'autosave',
+}
+
 export function createStatusBar(deps: StatusBarDeps): StatusBarApi {
+  let cfg: StatusBarConfig = deps.ctx.store.settings().statusBar ?? {
+    cursor: true,
+    selection: true,
+    readtime: true,
+    chars: true,
+    autosave: true,
+  }
+  const lastText: Partial<Record<keyof typeof SLOT_IDS, string>> = {}
+
   function setSlot(name: keyof typeof SLOT_IDS, text: string): void {
+    lastText[name] = text
+    const cfgKey = TOGGLE_CFG[name]
+    // Treat undefined as visible (backward compat with older 3-field statusBar).
+    const show = (cfgKey ? cfg[cfgKey] !== false : true) && !!text
     const el = document.getElementById(SLOT_IDS[name])
-    if (el) el.textContent = text
+    if (el) {
+      el.textContent = text
+      el.style.display = show ? '' : 'none'
+    }
     const sepId = SEP_IDS[name]
     if (sepId) {
       const sep = document.getElementById(sepId)
-      if (sep) sep.style.display = text ? '' : 'none'
+      if (sep) sep.style.display = show ? '' : 'none'
     }
   }
 
@@ -95,6 +121,12 @@ export function createStatusBar(deps: StatusBarDeps): StatusBarApi {
       wasSaving = false
       api.setSaving(false)
     }
+  })
+
+  // Re-apply segment visibility when the user toggles status-bar segments in settings.
+  deps.ctx.store.settings.subscribe((s) => {
+    cfg = s.statusBar
+    ;(['cursor', 'selection', 'readtime', 'chars', 'saving'] as const).forEach((k) => setSlot(k, lastText[k] ?? ''))
   })
 
   return api

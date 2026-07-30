@@ -71,6 +71,8 @@ describe('store migration', () => {
     expect(fake.data.dividerPos).toBe(defaults.dividerPos)
     expect(fake.data.imageSaveDir).toBe(defaults.imageSaveDir)
     expect(fake.data.tabOrder).toEqual(defaults.tabOrder)
+    expect(fake.data.workspaceCollapsed).toBe(defaults.workspaceCollapsed)
+    expect(fake.data.workspaceWidth).toBe(defaults.workspaceWidth)
   })
 
   it('preserves existing values for new keys', () => {
@@ -78,10 +80,12 @@ describe('store migration', () => {
       dividerPos: 0.4,
       imageSaveDir: 'images',
       tabOrder: ['a', 'b'],
+      workspaceWidth: 320,
     })
     migrateStore(fake as never)
     expect(fake.data.dividerPos).toBe(0.4)
     expect(fake.data.imageSaveDir).toBe('images')
     expect(fake.data.tabOrder).toEqual(['a', 'b'])
+    expect(fake.data.workspaceWidth).toBe(320)
   })
 })

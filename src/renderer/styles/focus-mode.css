@@ -5,8 +5,16 @@
 body.focus-mode .format-toolbar,
 body.focus-mode .tabbar,
 body.focus-mode .statusbar,
-body.focus-mode .outline-pane {
+body.focus-mode .outline-pane,
+body.focus-mode .sidebar,
+body.focus-mode .workspace-rail {
   display: none;
+}
+
+/* The sidebar normally pushes .main-area via padding-left; reclaim that space
+   in focus mode (display:none above doesn't clear the .open padding). */
+body.focus-mode .main-area {
+  padding-left: 0 !important;
 }
 
 /* Top toolbar holds the window controls (min/max/close) on Windows, so keep it

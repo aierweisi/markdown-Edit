@@ -24,10 +24,11 @@ import { openTableGrid } from './ui/table-grid-popover'
 import { createStatusBar } from './ui/status-bar'
 import { attachWelcome } from './ui/welcome'
 import { attachWindowControls } from './ui/window-controls'
-import { applyThemeSideEffects } from './ui/theme'
+import { applyThemeSideEffects, effectiveTheme } from './ui/theme'
 import { showToast } from './ui/toast'
 import { showCloseConfirm } from './ui/confirm-modal'
 import { createOutlinePanel } from './ui/outline-panel'
+import { installModalFocusTrap } from './ui/focus-trap'
 import { debounce as outlineDebounce } from './lib/debounce'
 import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
@@ -52,12 +53,13 @@ const DEFAULT_SETTINGS: Settings = {
   imageCompressEnabled: true,
   imageCompressMaxSize: 1920,
   imageCompressQuality: 0.85,
+  statusBar: { cursor: true, selection: true, readtime: true, chars: true, autosave: true },
 }
 
 const VIEW_MODES: ViewMode[] = ['split', 'editor', 'preview']
 
 async function loadSettings(): Promise<Settings> {
-  const [theme, fontSize, editorFont, autoSave, exportDir, naming, imageDir, paneOrder, lineNum, folding, imgCompOn, imgCompSize, imgCompQ] =
+  const [theme, fontSize, editorFont, autoSave, exportDir, naming, imageDir, paneOrder, lineNum, folding, imgCompOn, imgCompSize, imgCompQ, statusBarCfg] =
     await Promise.all([
       window.api.storeGet('theme'),
       window.api.storeGet('fontSize'),
@@ -72,6 +74,7 @@ async function loadSettings(): Promise<Settings> {
       window.api.storeGet('imageCompressEnabled'),
       window.api.storeGet('imageCompressMaxSize'),
       window.api.storeGet('imageCompressQuality'),
+      window.api.storeGet('statusBar'),
     ])
   return {
     theme: theme ?? DEFAULT_SETTINGS.theme,
@@ -87,13 +90,15 @@ async function loadSettings(): Promise<Settings> {
     imageCompressEnabled: imgCompOn ?? DEFAULT_SETTINGS.imageCompressEnabled,
     imageCompressMaxSize: imgCompSize ?? DEFAULT_SETTINGS.imageCompressMaxSize,
     imageCompressQuality: imgCompQ ?? DEFAULT_SETTINGS.imageCompressQuality,
+    statusBar: statusBarCfg ?? DEFAULT_SETTINGS.statusBar,
   }
 }
 
 async function bootstrap(): Promise<void> {
   const dom = collectDomRefs()
   const settings = await loadSettings()
-  const store = createAppStore(settings)
+  const dividerPos = (await window.api.storeGet('dividerPos')) ?? 0
+  const store = createAppStore(settings, dividerPos)
   const ctx = createAppContext(store, dom)
 
   applyThemeSideEffects(ctx, settings.theme)
@@ -111,7 +116,7 @@ async function bootstrap(): Promise<void> {
 
   const editor = createEditor({
     parent: dom.editorContainer,
-    theme: settings.theme,
+    theme: effectiveTheme(settings.theme),
     initialValue: '',
     lineNumbers: settings.lineNumbers,
     folding: settings.codeFolding,
@@ -137,6 +142,7 @@ async function bootstrap(): Promise<void> {
         }
       })()
     },
+    onHeadingClick: (line) => editor.jumpToLine(line),
   })
   // Sync preview's base-URL with the active tab so relative <img>/<a> resolve
   // against the document's directory, not against `out/renderer/`.
@@ -256,9 +262,19 @@ async function bootstrap(): Promise<void> {
 
   // ── Theme signal → editor + body class + mermaid theme refresh ──────
   ctx.store.theme.subscribe((next) => {
-    editor.setTheme(next)
+    const eff = effectiveTheme(next)
+    editor.setTheme(eff)
     applyThemeSideEffects(ctx, next)
-    refreshMermaidTheme(next)
+    refreshMermaidTheme(eff)
+  })
+  // Re-apply when the OS theme changes while following the system. Must also
+  // refresh the editor + mermaid themes, not just the body class.
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (ctx.store.theme() !== 'auto') return
+    const eff = effectiveTheme('auto')
+    editor.setTheme(eff)
+    applyThemeSideEffects(ctx, 'auto')
+    refreshMermaidTheme(eff)
   })
 
   // ── Settings signal → CSS vars ──────────────────────────────────────
@@ -527,7 +543,7 @@ async function bootstrap(): Promise<void> {
   }
   onBtnId('btn-new', newFile)
   onBtnId('btn-open', () => void openFile())
-  onBtnId('btn-workspace', () => void workspacePanel.open())
+  onBtnId('btn-workspace', () => workspacePanel.toggle())
   onBtnId('btn-save', () => void save())
   onBtnId('btn-template', () => templatesPanel.open())
   onBtnId('btn-theme', () => ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark'))
@@ -569,7 +585,7 @@ async function bootstrap(): Promise<void> {
       const content = editor.getValue()
       const title = tabs.getActive()?.title ?? '未命名'
       if (type === 'md') void exportMarkdown({ ctx, content, title })
-      else if (type === 'html') void exportHtml({ ctx, content, title, theme: ctx.store.theme() })
+      else if (type === 'html') void exportHtml({ ctx, content, title, theme: effectiveTheme(ctx.store.theme()) })
       else if (type === 'pdf') void exportPdf({ ctx, content, title })
       else if (type === 'settings') settingsPanel.open()
     })
@@ -651,7 +667,7 @@ async function bootstrap(): Promise<void> {
           ctx,
           content: editor.getValue(),
           title: tabs.getActive()?.title ?? '未命名',
-          theme: ctx.store.theme(),
+          theme: effectiveTheme(ctx.store.theme()),
         })
         break
       case 'export-pdf':
@@ -701,10 +717,58 @@ async function bootstrap(): Promise<void> {
     }
     applyPaneOrder(ctx.store.paneOrder())
     ctx.store.paneOrder.subscribe(applyPaneOrder)
+
+    // Apply the persisted editor/preview split ratio, and let the divider be dragged.
+    const applyDivider = (editorFrac: number): void => {
+      const editorPane = document.getElementById('editor-pane')
+      const previewPane = document.getElementById('preview-pane')
+      if (!editorPane || !previewPane) return
+      editorPane.style.flexGrow = String(editorFrac)
+      previewPane.style.flexGrow = String(1 - editorFrac)
+    }
+    const storedDivider = ctx.store.dividerPos()
+    if (storedDivider > 0) applyDivider(storedDivider)
+
+    const dividerEl = document.getElementById('divider')
+    let lastDragFrac = 0
+    dividerEl?.addEventListener('pointerdown', (e) => {
+      if (ctx.store.viewMode() !== 'split') return
+      e.preventDefault()
+      const mainAreaEl = dom.mainArea!
+      const onMove = (ev: PointerEvent): void => {
+        const rect = mainAreaEl.getBoundingClientRect()
+        // The split lives in the content box — subtract the sidebar's padding-left
+        // (240px when the workspace is open) so the fraction matches the visuals.
+        const padLeft = parseFloat(getComputedStyle(mainAreaEl).paddingLeft) || 0
+        const contentWidth = Math.max(1, rect.width - padLeft)
+        const leftFrac = Math.max(0.15, Math.min(0.85, (ev.clientX - rect.left - padLeft) / contentWidth))
+        // paneOrder physically reorders panes, so the editor may be on either side.
+        const editorOnLeft = dividerEl.previousElementSibling?.id === 'editor-pane'
+        lastDragFrac = editorOnLeft ? leftFrac : 1 - leftFrac
+        applyDivider(lastDragFrac)
+      }
+      const onUp = (): void => {
+        document.removeEventListener('pointermove', onMove)
+        document.removeEventListener('pointerup', onUp)
+        document.body.classList.remove('divider-dragging')
+        if (lastDragFrac > 0) ctx.store.dividerPos.set(lastDragFrac)
+      }
+      document.body.classList.add('divider-dragging')
+      document.addEventListener('pointermove', onMove)
+      document.addEventListener('pointerup', onUp)
+    })
   }
 
   // ── Find ────────────────────────────────────────────────────────────
   const find = attachFind(editor.view)
+  installModalFocusTrap()
+
+  function reopenClosedTab(): void {
+    const tab = tabs.reopenLast()
+    if (!tab) return
+    editor.setValue(tabs.getContent(tab.id))
+    preview.render(tabs.getContent(tab.id))
+  }
 
   // ── Palette commands ────────────────────────────────────────────────
   palette.register({ id: 'file.new', group: '文件', title: '新建', hint: 'Ctrl+N', run: newFile })
@@ -732,9 +796,10 @@ async function bootstrap(): Promise<void> {
     id: 'view.toggleTheme',
     group: '视图',
     title: '切换主题',
-    hint: 'Ctrl+Shift+T',
+    hint: 'Ctrl+Shift+L',
     run: () => ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark'),
   })
+  palette.register({ id: 'tab.reopen', group: '标签', title: '重开已关闭的标签', hint: 'Ctrl+Shift+T', run: reopenClosedTab })
   palette.register({
     id: 'view.toggleMode',
     group: '视图',
@@ -786,7 +851,7 @@ async function bootstrap(): Promise<void> {
         ctx,
         content: editor.getValue(),
         title: tabs.getActive()?.title ?? '未命名',
-        theme: ctx.store.theme(),
+        theme: effectiveTheme(ctx.store.theme()),
       })
     },
   })
@@ -810,10 +875,16 @@ async function bootstrap(): Promise<void> {
     run: () => ctx.store.focusMode.set(!ctx.store.focusMode()),
   })
   palette.register({
-    id: 'workspace.open',
-    group: '文件',
-    title: '打开工作区文件夹',
+    id: 'workspace.toggle',
+    group: '视图',
+    title: '收起/展开工作区面板',
     hint: 'Ctrl+Shift+E',
+    run: () => workspacePanel.toggle(),
+  })
+  palette.register({
+    id: 'workspace.openFolder',
+    group: '文件',
+    title: '打开/切换工作区文件夹',
     run: () => void workspacePanel.open(),
   })
 
@@ -881,10 +952,13 @@ async function bootstrap(): Promise<void> {
       ctx.store.focusMode.set(!ctx.store.focusMode())
     } else if (evt.shiftKey && key === 'e') {
       evt.preventDefault()
-      void workspacePanel.open()
-    } else if (evt.shiftKey && key === 't') {
+      workspacePanel.toggle()
+    } else if (evt.shiftKey && key === 'l') {
       evt.preventDefault()
       ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark')
+    } else if (evt.shiftKey && key === 't') {
+      evt.preventDefault()
+      reopenClosedTab()
     } else if (evt.shiftKey && (key === '/' || key === '?')) {
       evt.preventDefault()
       settingsPanel.open('shortcuts')
@@ -919,7 +993,7 @@ async function bootstrap(): Promise<void> {
           ctx,
           content: editor.getValue(),
           title: tabs.getActive()?.title ?? '未命名',
-          theme: ctx.store.theme(),
+          theme: effectiveTheme(ctx.store.theme()),
         })
         break
       case 'menu:export-pdf':

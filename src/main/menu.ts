@@ -48,10 +48,10 @@ export function setupApplicationMenu(opts: MenuOpts): void {
     {
       label: '视图',
       submenu: [
-        { label: '切换主题', accelerator: 'CmdOrCtrl+Shift+T', click: dispatch(EV.MENU_TOGGLE_THEME) },
+        { label: '切换主题', accelerator: 'CmdOrCtrl+Shift+L', click: dispatch(EV.MENU_TOGGLE_THEME) },
         { label: '切换视图模式', accelerator: 'CmdOrCtrl+\\', click: dispatch(EV.MENU_TOGGLE_VIEW) },
         { label: '专注模式', accelerator: 'CmdOrCtrl+Shift+F', click: dispatch(EV.MENU_TOGGLE_FOCUS) },
-        { label: '打开工作区', accelerator: 'CmdOrCtrl+Shift+E', click: dispatch(EV.MENU_OPEN_WORKSPACE) },
+        { label: '打开/切换工作区文件夹', click: dispatch(EV.MENU_OPEN_WORKSPACE) },
         { type: 'separator' },
         { role: 'reload', label: '刷新' },
         { role: 'toggleDevTools', label: '开发者工具' },

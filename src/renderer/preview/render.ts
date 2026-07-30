@@ -6,6 +6,7 @@ import { renderMathIn } from './lazy-katex'
 import { initCodeCopy, updateCodeCopyButtons } from './code-copy'
 import { initTaskCheckbox, updateTaskCheckboxes } from './task-checkbox'
 import { initWikiLinks } from './wiki-link'
+import { parseHeadings } from '../lib/parse-headings'
 
 export interface PreviewApi {
   render(text: string): void
@@ -22,6 +23,8 @@ interface PreviewOpts {
   onReplaceLine(line: number, newLine: string): void
   /** A `[[wiki]]` link was clicked — resolve & open in workspace. */
   onWikiClick(name: string): void
+  /** A heading was clicked in the preview — jump editor to its source line. */
+  onHeadingClick(line: number): void
 }
 
 const HAS_PROTOCOL = /^[a-z][a-z0-9+\-.]*:/i
@@ -46,6 +49,14 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
   initCodeCopy(opts.body)
   initTaskCheckbox(opts.body, { getDoc: opts.getDoc, onReplaceLine: opts.onReplaceLine })
   initWikiLinks(opts.body, opts.onWikiClick)
+  // Click a rendered heading to jump the editor to its source line.
+  opts.body.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement
+    if (target.closest('a')) return // let links inside headings navigate normally
+    const h = target.closest<HTMLElement>('h1, h2, h3, h4, h5, h6')
+    const line = parseInt(h?.dataset.line ?? '', 10)
+    if (h && line > 0) opts.onHeadingClick(line)
+  })
 
   function scheduleRender(text: string): void {
     pendingText = text
@@ -62,6 +73,7 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
         .then((html) => {
           if (renderingFor !== text) return
           applyHtml(html)
+          tagHeadingLines(opts.body, text)
           rewriteRelativeAssets(opts.body, baseFilePath)
           void renderMermaidIn(opts.body)
           void renderMathIn(opts.body)
@@ -132,6 +144,22 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
  * this rewrite the renderer's file:// base would resolve relative paths
  * against `out/renderer/` rather than the actual document folder.
  */
+/** Stamp each rendered heading with its 1-based source line (data-line) by pairing
+ *  the preview's h1-h6 in document order with parsed source headings. Only stamp
+ *  when the parser and renderer agree on the heading count — otherwise (Setext,
+ *  blockquote headings, etc.) skip rather than risk jumping to the wrong line. */
+function tagHeadingLines(host: HTMLElement, text: string): void {
+  const headings = parseHeadings(text)
+  const els = host.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')
+  if (els.length !== headings.length) {
+    els.forEach((el) => delete el.dataset.line)
+    return
+  }
+  els.forEach((el, i) => {
+    el.dataset.line = String(headings[i].line)
+  })
+}
+
 function rewriteRelativeAssets(host: HTMLElement, baseFilePath: string | null): void {
   if (!baseFilePath) return
   const baseUrl = toFileBaseUrl(baseFilePath)
