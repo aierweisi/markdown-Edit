@@ -19,6 +19,7 @@ import { createPalette } from './ui/palette'
 import { createSettingsPanel } from './ui/settings-panel'
 import { createRecentPanel } from './ui/recent-panel'
 import { createWorkspacePanel } from './ui/workspace-panel'
+import { createActivitybar, type ActivitybarApi } from './ui/activitybar'
 import { createTemplatesPanel } from './ui/templates-panel'
 import { openTableGrid } from './ui/table-grid-popover'
 import { createStatusBar } from './ui/status-bar'
@@ -34,7 +35,7 @@ import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
 import { attachFind } from './find/find-panel'
 import { debounce } from './lib/debounce'
-import { titleFromPath, getDirAndSep, getExtension, sanitizeFileName } from './lib/fs-paths'
+import { titleFromPath, getFileName, getDirAndSep, getExtension, sanitizeFileName } from './lib/fs-paths'
 import { refreshMermaidTheme } from './preview/lazy-mermaid'
 import type { Settings, ViewMode } from '@shared/types'
 import './styles/index.css'
@@ -167,12 +168,30 @@ async function bootstrap(): Promise<void> {
     onSelect: (path) =>
       void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
   })
+  const activitybarRef: { api: ActivitybarApi | null } = { api: null }
   const workspacePanel = createWorkspacePanel({
     ctx,
     onOpenFile: (path) =>
       void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
+    onFileMoved: (oldPath, newPath) => {
+      // Update any open tab whose file was moved, or lives inside a moved folder,
+      // so subsequent saves write to the new path (content stays in memory).
+      const norm = (p: string): string => p.replace(/\\/g, '/')
+      const oldN = norm(oldPath)
+      const newN = norm(newPath)
+      for (const t of tabs.getAll()) {
+        const fp = t.filePath
+        if (!fp) continue
+        const fpN = norm(fp)
+        if (fpN === oldN) {
+          tabs.setTitle(t.id, getFileName(newPath), newPath)
+        } else if (fpN.startsWith(oldN + '/')) {
+          tabs.setTitle(t.id, t.title, newN + fpN.slice(oldN.length))
+        }
+      }
+    },
+    onFolderOpened: () => activitybarRef.api?.openView('workspace'),
   })
-  void workspacePanel.restore()
   const templatesPanel = createTemplatesPanel(ctx)
   const outline = createOutlinePanel({
     ctx,
@@ -180,10 +199,20 @@ async function bootstrap(): Promise<void> {
       editor.jumpToLine(line)
     },
   })
-  const refreshOutlineDebounced = outlineDebounce(
-    (text: string) => outline.refresh(text),
-    150,
-  )
+  const activitybar = createActivitybar({
+    ctx,
+    workspace: workspacePanel,
+    outline,
+    getEditorText: () => editor.getValue(),
+  })
+  activitybarRef.api = activitybar
+  void (async () => {
+    await workspacePanel.restore()
+    await activitybar.init()
+  })()
+  const refreshOutlineDebounced = outlineDebounce((text: string) => {
+    if (activitybar.isActive('outline')) outline.refresh(text)
+  }, 150)
   function syncOutlineTitle(): void {
     const tab = tabs.getActive()
     outline.setTitle(tab?.title ?? '大纲')
@@ -192,7 +221,7 @@ async function bootstrap(): Promise<void> {
   ctx.store.tabs.subscribe(syncOutlineTitle)
   ctx.store.activeTabId.subscribe(() => {
     const t = tabs.getActive()
-    workspacePanel.markActive(t?.filePath ?? null)
+    activitybar.onActiveTabChange(t?.filePath ?? null)
   })
 
   templatesPanel.onApply((content, name) => {
@@ -299,7 +328,7 @@ async function bootstrap(): Promise<void> {
     editor.setValue(tabs.getContent(id))
     preview.render(tabs.getContent(id))
     statusBar.setText(tabs.getContent(id))
-    if (outline.isVisible()) outline.refresh(tabs.getContent(id))
+    if (activitybar.isActive('outline')) outline.refresh(tabs.getContent(id))
   }
   /**
    * Close one tab. If it has unsaved changes, prompt save / discard / cancel.
@@ -543,15 +572,12 @@ async function bootstrap(): Promise<void> {
   }
   onBtnId('btn-new', newFile)
   onBtnId('btn-open', () => void openFile())
-  onBtnId('btn-workspace', () => workspacePanel.toggle())
+  onBtnId('btn-workspace', () => activitybar.toggleView('workspace'))
   onBtnId('btn-save', () => void save())
   onBtnId('btn-template', () => templatesPanel.open())
   onBtnId('btn-theme', () => ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark'))
   onBtnId('btn-settings', () => settingsPanel.open())
-  onBtnId('btn-outline', () => {
-    outline.toggle()
-    if (outline.isVisible()) outline.refresh(editor.getValue())
-  })
+  onBtnId('btn-outline', () => activitybar.toggleView('outline'))
   onBtnId('btn-tab-new', () => {
     const tab = tabs.create({ title: '未命名' })
     tabs.setActive(tab.id)
@@ -818,10 +844,7 @@ async function bootstrap(): Promise<void> {
     group: '视图',
     title: '文章大纲',
     hint: 'Ctrl+Shift+O',
-    run: () => {
-      outline.toggle()
-      if (outline.isVisible()) outline.refresh(editor.getValue())
-    },
+    run: () => activitybar.toggleView('outline'),
   })
   palette.register({
     id: 'app.shortcuts',
@@ -879,7 +902,7 @@ async function bootstrap(): Promise<void> {
     group: '视图',
     title: '收起/展开工作区面板',
     hint: 'Ctrl+Shift+E',
-    run: () => workspacePanel.toggle(),
+    run: () => activitybar.toggleView('workspace'),
   })
   palette.register({
     id: 'workspace.openFolder',
@@ -952,7 +975,7 @@ async function bootstrap(): Promise<void> {
       ctx.store.focusMode.set(!ctx.store.focusMode())
     } else if (evt.shiftKey && key === 'e') {
       evt.preventDefault()
-      workspacePanel.toggle()
+      activitybar.toggleView('workspace')
     } else if (evt.shiftKey && key === 'l') {
       evt.preventDefault()
       ctx.store.theme.set(ctx.store.theme() === 'dark' ? 'light' : 'dark')
@@ -964,8 +987,7 @@ async function bootstrap(): Promise<void> {
       settingsPanel.open('shortcuts')
     } else if (evt.shiftKey && key === 'o') {
       evt.preventDefault()
-      outline.toggle()
-      if (outline.isVisible()) outline.refresh(editor.getValue())
+      activitybar.toggleView('outline')
     }
   })
 

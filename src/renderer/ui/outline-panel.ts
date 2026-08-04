@@ -4,14 +4,15 @@ import { parseHeadings, type Heading } from '../lib/parse-headings'
 export interface OutlineApi {
   refresh(text: string): void
   setTitle(title: string): void
-  toggle(): void
-  setVisible(visible: boolean): void
-  isVisible(): boolean
+  /** Re-render from the last parsed headings (used when the view becomes visible). */
+  reRender(): void
 }
 
 interface OutlineOpts {
   ctx: AppContext
   onJump(line: number): void
+  /** Called when the outline's own close button is clicked. */
+  onClose?(): void
 }
 
 function escape(s: string): string {
@@ -20,43 +21,32 @@ function escape(s: string): string {
   })
 }
 
+/** Outline (document headings) view, mounted into the sidebar host's outline
+ *  section. Visibility/view-switching is owned by the activitybar controller;
+ *  this module only renders headings and reports jumps/close. */
 export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
-  const panel = document.createElement('aside')
+  const panel = document.createElement('div')
   panel.className = 'outline-pane'
   panel.innerHTML = `
     <div class="outline-pane__header">
       <span class="outline-pane__title" data-slot="title">大纲</span>
       <span class="outline-pane__count" data-slot="count"></span>
-      <button type="button" class="outline-pane__close" title="关闭">✕</button>
+      <button type="button" class="outline-pane__close" title="收起">✕</button>
     </div>
     <div class="outline-pane__list" data-slot="list"></div>
   `
-  document.body.appendChild(panel)
+  // Mount into the sidebar host's outline view (the <section> in index.html).
+  document.getElementById('outline-view')?.appendChild(panel)
 
   const titleEl = panel.querySelector<HTMLElement>('[data-slot="title"]')!
   const listEl = panel.querySelector<HTMLElement>('[data-slot="list"]')!
   const countEl = panel.querySelector<HTMLElement>('[data-slot="count"]')!
-  let visible = false
   let lastHeadings: Heading[] = []
-
-  /** Anchor outline between tabbar's bottom and statusbar's top. */
-  function alignBounds(): void {
-    const tabbar = document.getElementById('tabbar')
-    const statusbar = document.getElementById('statusbar')
-    const tabRect = tabbar?.getBoundingClientRect()
-    const statusRect = statusbar?.getBoundingClientRect()
-    panel.style.top = tabRect && tabRect.bottom > 0 ? `${tabRect.bottom}px` : '108px'
-    const bottomGap = statusRect ? window.innerHeight - statusRect.top : 0
-    panel.style.bottom = `${Math.max(0, bottomGap)}px`
-  }
-
-  window.addEventListener('resize', alignBounds, { passive: true })
-  alignBounds()
 
   panel.addEventListener('click', (evt) => {
     const t = evt.target as HTMLElement
     if (t.closest('.outline-pane__close')) {
-      setVisible(false)
+      opts.onClose?.()
       return
     }
     const item = t.closest<HTMLElement>('[data-line]')
@@ -86,28 +76,6 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
       .join('')
   }
 
-  function onOutsideMouseDown(evt: MouseEvent): void {
-    if (!visible) return
-    const target = evt.target as Node | null
-    if (!target) return
-    // Clicks inside the panel itself never close it.
-    if (panel.contains(target)) return
-    // Let the toolbar toggle button handle its own click → don't double-close.
-    if ((target as Element).closest?.('#btn-outline')) return
-    setVisible(false)
-  }
-
-  function setVisible(v: boolean): void {
-    visible = v
-    if (v) alignBounds()
-    panel.classList.toggle('outline-pane--open', v)
-    document.body.classList.toggle('has-outline-open', v)
-    const btn = document.getElementById('btn-outline')
-    if (btn) btn.classList.toggle('active', v)
-    if (v) document.addEventListener('mousedown', onOutsideMouseDown, true)
-    else document.removeEventListener('mousedown', onOutsideMouseDown, true)
-  }
-
   return {
     refresh(text) {
       render(parseHeadings(text))
@@ -116,11 +84,8 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
       titleEl.textContent = title || '大纲'
       titleEl.title = title || ''
     },
-    toggle() {
-      setVisible(!visible)
-      if (visible && lastHeadings.length === 0) render(lastHeadings)
+    reRender() {
+      render(lastHeadings)
     },
-    setVisible,
-    isVisible: () => visible,
   }
 }

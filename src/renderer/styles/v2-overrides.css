@@ -152,28 +152,14 @@
 /* ── Outline floating sidebar ──────────────────────────────────
    top 由 JS 动态设为 tabbar 下边沿，避开 toolbar + format-toolbar + tabbar。
    颜色完全使用 v1 token，与设置/模板模态保持一致的玻璃质感。 */
+/* Outline view: a docked section inside the sidebar host (no longer a floating
+   fixed pane). Geometric positioning is owned by .sidebar-host. */
 .outline-pane {
-  position: fixed;
-  left: 0;
-  /* top + bottom are set in outline-panel.ts to hug the tabbar and statusbar */
-  width: 244px;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   background: var(--bg-panel);
-  border-right: 1px solid var(--border);
-  box-shadow: 6px 0 22px rgba(15, 20, 30, 0.06);
-  transform: translateX(-100%);
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 50;
-  border-top-right-radius: 12px;
-}
-
-.theme-dark .outline-pane {
-  box-shadow: 6px 0 22px rgba(0, 0, 0, 0.45);
-}
-
-.outline-pane--open {
-  transform: translateX(0);
 }
 
 .outline-pane__header {
@@ -182,8 +168,6 @@
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(135deg, var(--accent-soft) 0%, transparent 60%);
-  border-top-right-radius: 12px;
 }
 
 .outline-pane__title {

@@ -47,6 +47,9 @@ export const STORE_KEYS = [
   'pdfOptions',
   'workspacePath',
   'workspaceCollapsed',
+  'workspaceClosed',
+  'sidebarActiveView',
+  'sidebarOpen',
   'workspaceWidth',
   'statusBar',
   'cache',
@@ -77,6 +80,9 @@ export interface StoreSchema {
   pdfOptions: PdfExportOptions
   workspacePath: string | null
   workspaceCollapsed: boolean
+  workspaceClosed: boolean
+  sidebarActiveView: 'workspace' | 'outline'
+  sidebarOpen: boolean
   workspaceWidth: number
   statusBar: StatusBarConfig
   cache: CacheEntry

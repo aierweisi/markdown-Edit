@@ -226,7 +226,7 @@ input {
 }
 .format-toolbar {
   height: 40px;
-  padding: 0 10px;
+  padding: 0 10px 0 calc(10px + var(--activitybar-w));
   background: var(--bg-toolbar);
   gap: 4px;
   flex-shrink: 0;
@@ -292,6 +292,7 @@ input {
 }
 .tabbar {
   height: 34px;
+  padding-left: var(--activitybar-w);
   background: var(--bg-tabbar);
   flex-shrink: 0;
   overflow: hidden;

@@ -27,6 +27,9 @@ export const defaults: StoreSchema = {
   pdfOptions: DEFAULT_PDF_OPTIONS,
   workspacePath: null,
   workspaceCollapsed: false,
+  workspaceClosed: false,
+  sidebarActiveView: 'workspace',
+  sidebarOpen: false,
   workspaceWidth: 240,
   statusBar: { cursor: true, selection: true, readtime: true, chars: true, autosave: true },
   cache: EMPTY_CACHE,
@@ -71,6 +74,15 @@ export function migrateStore(store: Store<StoreSchema>): void {
   if (!rawStore.has('imageCompressQuality')) store.set('imageCompressQuality', defaults.imageCompressQuality)
   if (!rawStore.has('workspacePath')) store.set('workspacePath', defaults.workspacePath)
   if (!rawStore.has('workspaceCollapsed')) store.set('workspaceCollapsed', defaults.workspaceCollapsed)
+  if (!rawStore.has('workspaceClosed')) store.set('workspaceClosed', defaults.workspaceClosed)
+  if (!rawStore.has('sidebarActiveView')) store.set('sidebarActiveView', defaults.sidebarActiveView)
+  if (!rawStore.has('sidebarOpen')) {
+    // Legacy migration: derive the new sidebarOpen flag from the old
+    // workspaceClosed / workspaceCollapsed flags so prior UI state survives.
+    const fullyClosed = rawStore.get('workspaceClosed') === true
+    const collapsed = rawStore.get('workspaceCollapsed') === true
+    store.set('sidebarOpen', fullyClosed ? false : !collapsed)
+  }
   if (!rawStore.has('workspaceWidth')) store.set('workspaceWidth', defaults.workspaceWidth)
   if (!rawStore.has('statusBar')) store.set('statusBar', defaults.statusBar)
 }

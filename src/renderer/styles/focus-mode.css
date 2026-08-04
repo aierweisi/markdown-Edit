@@ -5,9 +5,8 @@
 body.focus-mode .format-toolbar,
 body.focus-mode .tabbar,
 body.focus-mode .statusbar,
-body.focus-mode .outline-pane,
-body.focus-mode .sidebar,
-body.focus-mode .workspace-rail {
+body.focus-mode .activitybar,
+body.focus-mode .sidebar-host {
   display: none;
 }
 

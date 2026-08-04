@@ -5,17 +5,27 @@ import { showConfirm } from './confirm-modal'
 import { showToast } from './toast'
 
 export interface WorkspacePanelApi {
-  open(): Promise<void>
+  /** Prompt for a workspace folder. Returns true if one was chosen. */
+  open(): Promise<boolean>
+  /** Load the persisted folder + width and render the root tree (no visibility side effects). */
   restore(): Promise<void>
   refresh(): Promise<void>
-  toggle(): void
-  isVisible(): boolean
   markActive(filePath: string | null): void
+  /** Ensure the root tree is rendered and reveal the active file (host-open content). */
+  reveal(): Promise<void>
+  /** Expand ancestors of the active file and scroll it into view (no rerender). */
+  revealActiveFile(): Promise<void>
+  hasRoot(): boolean
 }
 
 interface WorkspaceDeps {
   ctx: AppContext
   onOpenFile(path: string): void
+  /** Called after a drag-move so open tabs can retarget to the new path. */
+  onFileMoved?(oldPath: string, newPath: string): void
+  /** Called after the user picks a new workspace folder, so the host controller
+   *  can switch to (and open) the workspace view. */
+  onFolderOpened?(): void
 }
 
 /** File-tree sidebar over an opened folder (lazy-loaded, with CRUD). */
@@ -23,10 +33,11 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
   let root: string | null = null
   let activePath: string | null = null
   const expanded = new Set<string>()
+  // Drag-and-drop move source row.
+  let dragSrc: DirEntry | null = null
 
-  const $sidebar = (): HTMLElement | null => document.getElementById('sidebar')
+  const $host = (): HTMLElement | null => document.getElementById('sidebar-host')
   const $tree = (): HTMLElement | null => document.getElementById('file-tree')
-  const $rail = (): HTMLElement | null => document.getElementById('ws-rail')
 
   // ── width (resizable sidebar) ─────────────────────────────────
   let curWidth = WS_WIDTH_DEFAULT
@@ -76,6 +87,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     if (!entry.isDir && entry.path === activePath) row.classList.add('active')
     row.dataset.path = entry.path
     row.dataset.isDir = String(entry.isDir)
+    row.draggable = true
 
     const label = document.createElement('div')
     label.className = 'tree-label'
@@ -97,6 +109,19 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
         e.stopPropagation()
         void toggleDir(entry, row, kids)
       })
+      // Accept dropped rows to move them INTO this directory.
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+        row.classList.add('drag-over')
+      })
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over'))
+      row.addEventListener('drop', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        row.classList.remove('drag-over')
+        void moveEntry(dragSrc, entry)
+      })
     } else {
       label.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -105,8 +130,28 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
         refreshActive()
       })
     }
+    row.addEventListener('dragstart', (e) => {
+      dragSrc = entry
+      row.classList.add('dragging')
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+        // Plain text payload (NOT 'Files') so the editor's external-file drop
+        // handler ignores this internal move.
+        e.dataTransfer.setData('text/plain', entry.path)
+      }
+    })
+    row.addEventListener('dragend', () => {
+      dragSrc = null
+      row.classList.remove('dragging')
+      $tree()?.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'))
+    })
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault()
+      // Stop the event bubbling into an ancestor directory row, which would
+      // otherwise close this menu and rebuild it for the parent — surfacing the
+      // parent's entry (so "new file here" / rename / delete would hit the
+      // parent, not the right-clicked node).
+      e.stopPropagation()
       openNodeMenu(e, entry)
     })
     return row
@@ -293,6 +338,38 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     await refresh()
   }
 
+  // ── drag-and-drop move ──────────────────────────────────────
+  async function moveEntry(src: DirEntry | null, destDir: DirEntry): Promise<void> {
+    if (!src || !root) return
+    const srcN = normPath(src.path)
+    const destN = normPath(destDir.path)
+    if (destN === srcN) return // dropped onto itself
+    // Cannot move a folder into itself or any of its descendants.
+    if (src.isDir && destN.startsWith(srcN + '/')) {
+      showToast('不能移动到自身或其子文件夹内', 'error')
+      return
+    }
+    const newPath = joinPath(destDir.path, basename(src.path))
+    if (normPath(newPath) === srcN) return // already inside the destination
+    const res = await deps.ctx.api.fileRename(src.path, newPath)
+    if (!res.success) {
+      const msg = res.error === 'target exists' ? '目标已存在同名项' : res.error
+      showToast(`移动失败: ${msg}`, 'error')
+      return
+    }
+    await refresh()
+    deps.onFileMoved?.(src.path, newPath)
+    // Keep activePath in sync if the active file was the moved item or lived
+    // inside a moved folder, so the tree highlight stays correct afterwards.
+    if (activePath) {
+      const aN = normPath(activePath)
+      const sN = normPath(src.path)
+      if (aN === sN) activePath = newPath
+      else if (aN.startsWith(sN + '/')) activePath = normPath(newPath) + aN.slice(sN.length)
+    }
+    showToast('已移动', 'success')
+  }
+
   // ── text-input modal ─────────────────────────────────────────
   function promptText(title: string, placeholder: string, initial = ''): Promise<string | null> {
     return new Promise((resolve) => {
@@ -410,9 +487,9 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     hideNonMatches(tree, q)
   }
 
-  async function open(): Promise<void> {
+  async function open(): Promise<boolean> {
     const res = await deps.ctx.api.dialogSelectDir()
-    if (res.canceled || !res.filePaths.length) return
+    if (res.canceled || !res.filePaths.length) return false
     root = res.filePaths[0]
     await deps.ctx.api.storeSet('workspacePath', root)
     expanded.clear()
@@ -422,8 +499,9 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     const fc = document.getElementById('ws-filter-clear')
     if (fc) fc.hidden = true
     setTitle(root)
-    show()
     await renderRoot()
+    deps.onFolderOpened?.()
+    return true
   }
 
   async function restore(): Promise<void> {
@@ -437,58 +515,25 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
         ? storedWidth
         : WS_WIDTH_DEFAULT
     applyWidth(curWidth)
-    const collapsed = (await deps.ctx.api.storeGet('workspaceCollapsed')) === true
-    if (collapsed) {
-      // Respect the persisted collapsed state; tree loads lazily on expand.
-      syncChrome()
-      return
-    }
-    show()
+    // Visibility (open/closed, active view) is owned by the host controller,
+    // which reads sidebarOpen / sidebarActiveView. We only prime the tree.
     await renderRoot()
-    if (activePath) await revealActive(activePath)
   }
 
-  function syncChrome(): void {
-    const open = $sidebar()?.classList.contains('open') ?? false
-    document.getElementById('btn-workspace')?.classList.toggle('active', open)
-    // Rail shows only when a workspace is loaded AND the sidebar is collapsed.
-    const rail = $rail()
-    if (rail) rail.hidden = open || root == null
-  }
-  function show(): void {
-    $sidebar()?.classList.add('open')
-    void deps.ctx.api.storeSet('workspaceCollapsed', false)
-    syncChrome()
-  }
-  function hide(): void {
-    $sidebar()?.classList.remove('open')
-    void deps.ctx.api.storeSet('workspaceCollapsed', true)
-    syncChrome()
-  }
   function setTitle(path: string): void {
     const el = document.querySelector('.sidebar-title-name')
     if (el) el.textContent = basename(path)
   }
-  /** Collapse/expand the panel; if no workspace is loaded yet, prompt for a folder. */
-  function toggle(): void {
-    if (!root) {
-      void open()
-      return
-    }
-    if ($sidebar()?.classList.contains('open')) {
-      hide()
-      return
-    }
-    show()
-    void expandAndReveal()
+  /** Expand ancestors of the active file and scroll it into view (no rerender). */
+  async function revealActiveFile(): Promise<void> {
+    if (activePath) await revealActive(activePath)
   }
-  function isVisible(): boolean {
-    return $sidebar()?.classList.contains('open') ?? false
+  function hasRoot(): boolean {
+    return root != null
   }
   function markActive(filePath: string | null): void {
     activePath = filePath
     refreshActive()
-    if (filePath && $sidebar()?.classList.contains('open')) void revealActive(filePath)
   }
 
   // header buttons
@@ -500,20 +545,30 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     if (root) void promptCreate(root, true)
   })
   document.getElementById('ws-refresh')?.addEventListener('click', () => void refresh())
-  document.getElementById('ws-close')?.addEventListener('click', () => hide())
-  document.getElementById('ws-rail')?.addEventListener('click', () => toggle())
+  // ws-close (collapse) is bound by the host controller — visibility is its concern.
+
+  // Drop onto the tree background → move into the workspace root.
+  const treeEl = $tree()
+  treeEl?.addEventListener('dragover', (e) => {
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  })
+  treeEl?.addEventListener('drop', (e) => {
+    e.preventDefault()
+    if (dragSrc && root) void moveEntry(dragSrc, { path: root, name: '', isDir: true })
+  })
 
   // Resize the sidebar by dragging the right-edge handle.
   const resizer = document.getElementById('ws-resizer')
   resizer?.addEventListener('pointerdown', (e) => {
-    if (!$sidebar()?.classList.contains('open')) return
+    if (!$host()?.classList.contains('open')) return
     e.preventDefault()
     try {
       resizer.setPointerCapture(e.pointerId)
     } catch {
       /* ignore — capture unavailable */
     }
-    $sidebar()?.classList.add('resizing')
+    $host()?.classList.add('resizing')
     const onMove = (ev: PointerEvent): void => {
       curWidth = clampWidth(ev.clientX)
       applyWidth(curWidth)
@@ -527,7 +582,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
       } catch {
         /* ignore */
       }
-      $sidebar()?.classList.remove('resizing')
+      $host()?.classList.remove('resizing')
       void persistWidth()
     }
     resizer.addEventListener('pointermove', onMove)
@@ -557,7 +612,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     void runFilter('')
   })
 
-  return { open, restore, refresh, toggle, isVisible, markActive }
+  return { open, restore, refresh, markActive, reveal: expandAndReveal, revealActiveFile, hasRoot }
 }
 
 // ── tree icon SVGs (stroke set via `.tree-icon svg` CSS) ───────────────

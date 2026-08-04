@@ -5,12 +5,13 @@
    gap. Keep these two transitions as a pair if you ever tweak the timing. */
 :root {
   --workspace-w: 240px;
+  --activitybar-w: 48px;
 }
 
-.sidebar {
+.sidebar-host {
   position: fixed;
-  top: 120px; /* below toolbar(46) + format-toolbar(40) + tabbar(34) */
-  left: 0;
+  top: 46px; /* below the title toolbar; activity bar + sidebar start here */
+  left: var(--activitybar-w); /* flush against the activity bar's right edge */
   bottom: 24px; /* above statusbar */
   width: var(--workspace-w);
   display: flex;
@@ -19,23 +20,36 @@
   border-right: 1px solid var(--border);
   overflow: visible; /* let the resizer straddle the right border */
   z-index: 30;
-  transform: translateX(-100%);
+  /* Slide fully behind the activity bar so no edge peeks during transition. */
+  transform: translateX(calc(-100% - var(--activitybar-w)));
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.sidebar.open {
+.sidebar-host.open {
   transform: translateX(0);
 }
-/* Push the editor area right by the sidebar width; transition in lockstep. */
-.sidebar ~ .main-area {
-  padding-left: 0;
+/* Each view fills the host; the inactive one is hidden via the [hidden] attribute
+   (toggled by the activitybar controller). */
+.sidebar-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.sidebar-view[hidden] {
+  display: none;
+}
+/* The activity bar is always present (48px gutter); the sidebar host adds its
+   width on top when open. Both transition in lockstep with the host's transform. */
+body:not(.focus-mode) .main-area {
+  padding-left: var(--activitybar-w);
   transition: padding-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.sidebar.open ~ .main-area {
-  padding-left: var(--workspace-w);
+.sidebar-host.open ~ .main-area {
+  padding-left: calc(var(--activitybar-w) + var(--workspace-w));
 }
 /* While dragging the resizer, freeze transitions so width tracks the cursor 1:1. */
-.sidebar.resizing,
-.sidebar.resizing ~ .main-area {
+.sidebar-host.resizing,
+.sidebar-host.resizing ~ .main-area {
   transition: none;
 }
 
@@ -52,45 +66,63 @@
   background: transparent;
 }
 .sidebar-resizer:hover,
-.sidebar.resizing .sidebar-resizer {
+.sidebar-host.resizing .sidebar-resizer {
   background: var(--accent-light);
 }
 
-/* Thin "reopen" rail on the left edge, shown only when a workspace is loaded
-   but collapsed. z-index below the sidebar so an open sidebar covers it. */
-.workspace-rail {
+/* Activity bar: a constant 48px column on the far left, from the title toolbar
+   down to the status bar. Hosts the view-switcher icons. */
+.activitybar {
   position: fixed;
-  top: 120px;
+  top: 46px;
   left: 0;
   bottom: 24px;
-  width: 14px;
+  width: var(--activitybar-w);
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 8px;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 4px;
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
-  border-top-right-radius: 6px;
-  border-bottom-right-radius: 6px;
-  box-shadow: 2px 0 8px rgba(15, 20, 30, 0.05);
-  cursor: pointer;
+  z-index: 30;
+  -webkit-app-region: no-drag;
+}
+.ab-item {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  z-index: 29;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
 }
-.workspace-rail[hidden] {
-  display: none;
+.ab-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
-.workspace-rail:hover {
+.ab-item.active {
   color: var(--accent);
 }
-.workspace-rail svg {
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* VS Code-style active indicator: a vertical bar hugging the left edge. */
+.ab-item.active::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+.ab-item svg {
+  width: 20px;
+  height: 20px;
 }
 
 .sidebar-header {
@@ -302,6 +334,18 @@
 }
 .tree-row.filter-hidden {
   display: none;
+}
+/* Drag-and-drop move: grab cursor on rows + drop-target highlight on dir rows. */
+.tree-row[draggable="true"] > .tree-label {
+  cursor: grab;
+}
+.tree-row.dragging > .tree-label {
+  cursor: grabbing;
+}
+.tree-row.drag-over > .tree-label {
+  background: var(--accent-light);
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
 }
 .tree-icon {
   display: inline-flex;
