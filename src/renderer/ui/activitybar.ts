@@ -99,7 +99,7 @@ export function createActivitybar(opts: ActivitybarOpts): ActivitybarApi {
     // so it is always defined here.
     sidebarOpen = (await ctx.api.storeGet('sidebarOpen')) === true
     applyState()
-    if (sidebarOpen && activeView === 'workspace' && workspace.hasRoot()) await workspace.reveal()
+    if (sidebarOpen && activeView === 'workspace') await workspace.reveal()
   }
 
   // Activity-bar icon clicks → toggle that view.

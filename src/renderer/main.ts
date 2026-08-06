@@ -10,6 +10,7 @@ import { createCacheManager, exposeForMainProcess } from './cache/cache-manager'
 import { createRecentManager } from './recent/recent-files'
 import { openFileByPath, openFileViaDialog } from './files/open'
 import { saveActiveTab } from './files/save'
+import { createFileSync } from './files/file-sync'
 import { attachDragDrop } from './files/drag-drop'
 import { attachImagePaste } from './files/paste-image'
 import { exportMarkdown } from './export/export-md'
@@ -38,6 +39,7 @@ import { debounce } from './lib/debounce'
 import { titleFromPath, getFileName, getDirAndSep, getExtension, sanitizeFileName } from './lib/fs-paths'
 import { refreshMermaidTheme } from './preview/lazy-mermaid'
 import type { Settings, ViewMode } from '@shared/types'
+import type { TabState } from './state/app-store'
 import './styles/index.css'
 
 const DEFAULT_SETTINGS: Settings = {
@@ -199,6 +201,8 @@ async function bootstrap(): Promise<void> {
       editor.jumpToLine(line)
     },
   })
+  // Reflect the heading currently in view as the active outline item.
+  if (dom.previewContainer) outline.attachScrollSpy(dom.previewContainer)
   const activitybar = createActivitybar({
     ctx,
     workspace: workspacePanel,
@@ -210,6 +214,18 @@ async function bootstrap(): Promise<void> {
     await workspacePanel.restore()
     await activitybar.init()
   })()
+  // Reload a tab from disk when its file is modified externally (file-sync.ts).
+  function reloadTabContent(tab: TabState, content: string): void {
+    tabs.setContent(tab.id, content)
+    if (tabs.getActive()?.id !== tab.id) return
+    const top = editor.getScrollTop()
+    editor.setValue(content)
+    editor.setScrollTop(top) // out-of-range values are clamped by the scroller
+    preview.render(content)
+    statusBar.setText(content)
+    if (activitybar.isActive('outline')) outline.refresh(content)
+  }
+  const fileSync = createFileSync({ ctx, tabs, editor, reloadTab: reloadTabContent })
   const refreshOutlineDebounced = outlineDebounce((text: string) => {
     if (activitybar.isActive('outline')) outline.refresh(text)
   }, 150)
@@ -560,6 +576,7 @@ async function bootstrap(): Promise<void> {
       const tab = tabs.getActive()
       if (tab?.filePath) {
         await recent.add(tab.filePath)
+        await fileSync.noteSaved(tab.id)
         showToast(`已保存: ${titleFromPath(tab.filePath)}`, 'success')
       }
     }

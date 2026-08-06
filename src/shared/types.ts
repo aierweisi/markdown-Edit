@@ -93,6 +93,12 @@ export interface FileReadResult {
   content: string
 }
 
+export interface FileStatResult {
+  exists: boolean
+  mtimeMs: number
+  size: number
+}
+
 export interface FileRenameResult {
   newPath: string
 }

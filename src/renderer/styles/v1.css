@@ -53,18 +53,43 @@ select {
   height: 46px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 0 0 10px;
+  justify-content: flex-start;
+  padding: 0 10px;
   background: var(--bg-toolbar);
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
   -webkit-app-region: drag;
 }
+/* Responsive: as the window narrows, progressively hide lower-priority tools so
+   the title bar never overflows. Core ops (new/open/save/workspace), the most
+   common formats (heading/bold/italic), export and settings stay to the end. */
+@media (max-width: 1100px) {
+  #btn-swap-panes,
+  .fmt-btn[data-action='hr'] {
+    display: none !important;
+  }
+}
+@media (max-width: 950px) {
+  #btn-template,
+  #btn-theme,
+  .fmt-btn[data-action='strikethrough'],
+  .fmt-btn[data-action='quote'],
+  .fmt-btn[data-action='table'],
+  .fmt-btn[data-action='codeblock'] {
+    display: none !important;
+  }
+}
+@media (max-width: 850px) {
+  .fmt-btn[data-action='ul'],
+  .fmt-btn[data-action='ol'],
+  .fmt-btn[data-action='code'],
+  .fmt-btn[data-action='image'],
+  .fmt-btn[data-action='link'] {
+    display: none !important;
+  }
+}
 .toolbar > * {
   -webkit-app-region: no-drag;
-}
-body.is-maximized {
-  padding-top: 8px;
 }
 .app-logo,
 .app-logo-icon {
@@ -92,17 +117,9 @@ body.is-maximized {
   letter-spacing: -0.5px;
   flex-shrink: 0;
 }
-.toolbar-btn-group,
-.toolbar-left,
-.toolbar-right {
+.toolbar-btn-group {
   display: flex;
   align-items: center;
-}
-.toolbar-left,
-.toolbar-right {
-  gap: 2px;
-}
-.toolbar-btn-group {
   gap: 1px;
 }
 .toolbar-separator {
@@ -172,9 +189,6 @@ input {
 /* Narrow windows: compact the format toolbar so it never clips (window min is
    800px; this buys safety margin by going icon-only on the labeled actions). */
 @media (max-width: 900px) {
-  .format-toolbar {
-    padding: 0 4px;
-  }
   .toolbar-action-btn {
     padding: 0 6px;
   }
@@ -192,7 +206,6 @@ input {
   margin-left: 6px;
   -webkit-app-region: no-drag;
 }
-.format-toolbar,
 .win-ctrl {
   display: flex;
   align-items: center;
@@ -224,22 +237,8 @@ input {
   width: 10px;
   height: 10px;
 }
-.format-toolbar {
-  height: 40px;
-  padding: 0 10px 0 calc(10px + var(--activitybar-w));
-  background: var(--bg-toolbar);
-  gap: 4px;
-  flex-shrink: 0;
-}
-.format-toolbar .toolbar-btn-group {
-  gap: 1px;
-}
 .format-toolbar-spacer {
   flex: 1;
-}
-.theme-dark .format-toolbar {
-  background: var(--bg-toolbar);
-  border-bottom: 1px solid var(--border);
 }
 .export-wrap {
   position: relative;
@@ -296,6 +295,7 @@ input {
   background: var(--bg-tabbar);
   flex-shrink: 0;
   overflow: hidden;
+  transition: padding-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .tabs-container {
   overflow-x: auto;
@@ -407,7 +407,7 @@ input {
   display: flex;
   flex: 1;
   overflow: hidden;
-  height: calc(100vh - 46px - 40px - 34px - 24px);
+  height: calc(100vh - 46px - 34px - 24px);
 }
 .editor-pane,
 .preview-pane {
@@ -579,6 +579,23 @@ input {
 .main-area.view-preview-only .divider,
 .main-area.view-preview-only .editor-pane {
   display: none;
+}
+/* Single-pane mode: let the content fill the pane. In split view each pane is
+   narrow so the 760px reading width (set on .markdown-body) rarely binds; but
+   once one pane spans the full area that centered fixed-width column leaves
+   wide empty gutters that read as "not filling". Drop the cap here. */
+.main-area.view-preview-only .markdown-body {
+  max-width: none;
+}
+/* Single-pane: force the visible pane to fill the area. The dragged divider
+   (applyDivider in main.ts) leaves an inline flex-grow on each pane; in split
+   view that's the saved ratio, but with the other pane display:none the inline
+   grow no longer matches intent and the pane ends up undersized. !important
+   overrides the inline value here; the rule stops applying (so the stored ratio
+   returns) the moment we switch back to split. */
+.main-area.view-editor-only .editor-pane,
+.main-area.view-preview-only .preview-pane {
+  flex: 1 1 0% !important;
 }
 .editor-container {
   flex: 1;
@@ -1745,16 +1762,6 @@ body {
 .fmt-btn:hover svg {
   stroke: var(--accent);
 }
-.format-toolbar {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-toolbar) 96%, var(--accent) 4%),
-    var(--bg-toolbar)
-  ) !important;
-}
-.theme-dark .format-toolbar {
-  background: linear-gradient(180deg, #181b22, #14171d) !important;
-}
 .toolbar::after {
   background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
@@ -2611,7 +2618,6 @@ body,
 html {
   background: var(--bg-mesh) !important;
 }
-.format-toolbar,
 .pane-header,
 .statusbar,
 .tabbar,
@@ -2620,7 +2626,6 @@ html {
   -webkit-backdrop-filter: blur(20px) saturate(1.5);
   backdrop-filter: blur(20px) saturate(1.5);
 }
-.format-toolbar,
 .pane-header,
 .tabbar,
 .toolbar {
@@ -2976,7 +2981,6 @@ textarea:focus {
     var(--shadow-z2),
     inset 0 1px 0 var(--glass-stroke) !important;
 }
-.format-toolbar,
 .modal,
 .pane-header,
 .statusbar,
@@ -3078,28 +3082,6 @@ textarea:focus {
     0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 2px 12px rgba(0, 0, 0, 0.35);
 }
-.theme-light .format-toolbar {
-  background: linear-gradient(
-    180deg,
-    rgba(243, 240, 252, 0.78) 0,
-    rgba(238, 235, 250, 0.72) 100%
-  ) !important;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.14) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.5) inset,
-    inset 0-1px 0 rgba(99, 102, 241, 0.06);
-}
-.theme-dark .format-toolbar {
-  background: linear-gradient(
-    180deg,
-    rgba(22, 24, 36, 0.78) 0,
-    rgba(18, 20, 32, 0.74) 100%
-  ) !important;
-  border-bottom: 1px solid rgba(129, 140, 248, 0.14) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.03) inset,
-    inset 0-1px 0 rgba(129, 140, 248, 0.08);
-}
 .theme-light .tabbar {
   background: linear-gradient(
     180deg,
@@ -3116,10 +3098,9 @@ textarea:focus {
   ) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
 }
-.format-toolbar,
 .toolbar {
   position: relative;
-  z-index: 30;
+  z-index: 40;
 }
 .main-area {
   position: relative;

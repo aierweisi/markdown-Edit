@@ -6,6 +6,8 @@ export interface OutlineApi {
   setTitle(title: string): void
   /** Re-render from the last parsed headings (used when the view becomes visible). */
   reRender(): void
+  /** Highlight the item for the heading currently scrolled into view. */
+  attachScrollSpy(scrollContainer: HTMLElement): () => void
 }
 
 interface OutlineOpts {
@@ -74,6 +76,71 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
         </div>`,
       )
       .join('')
+    // Items were just rebuilt, so re-stamp the active highlight if the spy runs.
+    if (spyEl) syncActiveFromScroll()
+  }
+
+  // ── Scroll spy ─────────────────────────────────────────────────────────
+  // Highlight the item whose source heading is currently in view inside the
+  // preview. Preview <h1..h6> and outline items both carry data-line — the
+  // 1-based source line from parseHeadings (see render.ts tagHeadingLines) —
+  // so we match on that. The editor drives the preview via sync-scroll, so
+  // listening on the preview container alone covers scrolling from either side.
+  let spyEl: HTMLElement | null = null
+  let spyRaf = 0
+
+  function clearActive(): void {
+    listEl.querySelectorAll('.outline-pane__item--active').forEach((el) => {
+      el.classList.remove('outline-pane__item--active')
+    })
+  }
+
+  function highlightLine(line: number): void {
+    const items = Array.from(listEl.querySelectorAll<HTMLElement>('.outline-pane__item'))
+    let matched: HTMLElement | null = null
+    for (const it of items) {
+      const active = line > 0 && parseInt(it.dataset.line ?? '0', 10) === line
+      it.classList.toggle('outline-pane__item--active', active)
+      if (active) matched = it
+    }
+    // Scroll the active item into the list's own viewport (manual so we never
+    // bump the page or the preview — only the outline list scrolls).
+    if (matched) {
+      const m = matched
+      const lr = listEl.getBoundingClientRect()
+      const ir = m.getBoundingClientRect()
+      if (ir.top < lr.top) listEl.scrollTop -= lr.top - ir.top + 4
+      else if (ir.bottom > lr.bottom) listEl.scrollTop += ir.bottom - lr.bottom + 4
+    }
+  }
+
+  function syncActiveFromScroll(): void {
+    if (!spyEl) return
+    const headings = Array.from(
+      spyEl.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6'),
+    ).filter((h) => h.dataset.line)
+    if (headings.length === 0) {
+      clearActive()
+      return
+    }
+    // A heading counts as "current" once it has scrolled past a line a little
+    // below the preview's top edge; the active item is the last such heading
+    // (i.e. the deepest section currently on screen). Headings are in document
+    // order, so we can stop at the first one still below the threshold.
+    const cTop = spyEl.getBoundingClientRect().top
+    const threshold = cTop + Math.min(140, spyEl.clientHeight * 0.25)
+    let activeLine = 0
+    for (const h of headings) {
+      if (h.getBoundingClientRect().top <= threshold) {
+        const ln = parseInt(h.dataset.line ?? '0', 10)
+        if (ln > 0) activeLine = ln
+      } else {
+        break
+      }
+    }
+    // At the very top, before any heading clears the threshold, pin the first.
+    if (activeLine === 0) activeLine = parseInt(headings[0]?.dataset.line ?? '0', 10)
+    highlightLine(activeLine)
   }
 
   return {
@@ -86,6 +153,25 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
     },
     reRender() {
       render(lastHeadings)
+    },
+    attachScrollSpy(scrollContainer: HTMLElement): () => void {
+      spyEl = scrollContainer
+      const onScroll = (): void => {
+        if (spyRaf) return
+        spyRaf = requestAnimationFrame(() => {
+          spyRaf = 0
+          syncActiveFromScroll()
+        })
+      }
+      scrollContainer.addEventListener('scroll', onScroll, { passive: true })
+      syncActiveFromScroll()
+      return () => {
+        scrollContainer.removeEventListener('scroll', onScroll)
+        if (spyRaf) cancelAnimationFrame(spyRaf)
+        spyRaf = 0
+        spyEl = null
+        clearActive()
+      }
     },
   }
 }

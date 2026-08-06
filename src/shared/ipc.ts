@@ -6,6 +6,7 @@ import type {
   DirEntry,
   FileReadResult,
   FileRenameResult,
+  FileStatResult,
   ImageSaveRequest,
   ImageSaveResult,
   OpenFileErrorPayload,
@@ -93,8 +94,11 @@ export const CH = {
   STORE_GET: 'store:get',
   STORE_SET: 'store:set',
   FILE_READ: 'file:read',
+  FILE_STAT: 'file:stat',
   FILE_SAVE: 'file:save',
   FILE_RENAME: 'file:rename',
+  FILE_WATCH: 'file:watch',
+  FILE_UNWATCH: 'file:unwatch',
   IMAGE_SAVE: 'image:save',
   DIALOG_OPEN_FILE: 'dialog:open-file',
   DIALOG_SAVE_FILE: 'dialog:save-file',
@@ -120,6 +124,7 @@ export const EV = {
   OPEN_FILE_FROM_OS: 'event:open-file-from-os',
   OPEN_FILE_ERROR: 'event:open-file-error',
   WIN_MAXIMIZED: 'event:win-maximized',
+  FILE_CHANGED: 'event:file-changed',
   MENU_NEW: 'menu:new',
   MENU_OPEN: 'menu:open',
   MENU_SAVE: 'menu:save',
@@ -158,8 +163,11 @@ export type MenuEventName =
 export const StoreKeySchema = z.enum(STORE_KEYS)
 
 export const FileReadReqSchema = z.string().min(1)
+export const FileStatReqSchema = z.string().min(1)
 export const FileSaveReqSchema = z.object({ filePath: z.string().min(1), content: z.string() })
 export const FileRenameReqSchema = z.object({ oldPath: z.string().min(1), newPath: z.string().min(1) })
+export const FileWatchReqSchema = z.string().min(1)
+export const FileUnwatchReqSchema = z.string().min(1)
 
 export const ImageSaveReqSchema = z.object({
   baseDir: z.string().nullable(),
@@ -208,8 +216,14 @@ export const UpdateTitlebarReqSchema = z.object({
 // ── Result helpers ──────────────────────────────────────────────────────
 export type StoreSetResult = Result<{ key: string }>
 export type FileReadResp = Result<FileReadResult>
+export type FileStatResp = Result<FileStatResult>
 export type FileSaveResp = Result
 export type FileRenameResp = Result<FileRenameResult>
+
+export interface FileChangedEvent {
+  path: string
+  event: 'change' | 'rename' | 'error'
+}
 export type ImageSaveResp = ImageSaveResult | { success: false; error: string }
 export type ExportPdfResp = Result
 export type ClearCacheResp = Result<{ freed: number }>
@@ -235,9 +249,12 @@ export interface Api {
 
   // File ops
   fileRead(filePath: string): Promise<FileReadResp>
+  fileStat(filePath: string): Promise<FileStatResp>
   fileSave(filePath: string, content: string): Promise<FileSaveResp>
   fileRename(oldPath: string, newPath: string): Promise<FileRenameResp>
   imageSave(req: ImageSaveRequest): Promise<ImageSaveResp>
+  fileWatch(filePath: string): Promise<Result>
+  fileUnwatch(filePath: string): Promise<Result>
 
   // Dialogs
   dialogOpenFile(): Promise<DialogOpenResult>
@@ -269,5 +286,6 @@ export interface Api {
   onWinMaximized(cb: (maximized: boolean) => void): () => void
   onOpenFileFromOS(cb: (payload: OpenFileFromOSPayload) => void): () => void
   onOpenFileError(cb: (payload: OpenFileErrorPayload) => void): () => void
+  onFileChanged(cb: (payload: FileChangedEvent) => void): () => void
   onMenuEvent(cb: (event: MenuEventName) => void): () => void
 }

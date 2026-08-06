@@ -10,14 +10,16 @@
 
 .sidebar-host {
   position: fixed;
-  top: 46px; /* below the title toolbar; activity bar + sidebar start here */
+  top: 46px; /* below the merged title/format toolbar; tab bar + main area dock to its right */
   left: var(--activitybar-w); /* flush against the activity bar's right edge */
   bottom: 24px; /* above statusbar */
   width: var(--workspace-w);
   display: flex;
   flex-direction: column;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border-right: 1px solid var(--glass-border);
   overflow: visible; /* let the resizer straddle the right border */
   z-index: 30;
   /* Slide fully behind the activity bar so no edge peeks during transition. */
@@ -47,9 +49,19 @@ body:not(.focus-mode) .main-area {
 .sidebar-host.open ~ .main-area {
   padding-left: calc(var(--activitybar-w) + var(--workspace-w));
 }
+/* Tab bar + main area both sit to the sidebar's right; shift the tab strip by
+   the same offset so it clears the sidebar and aligns with the editor. The bar
+   precedes .sidebar-host in the DOM, so the ~ sibling selector can't reach it
+   — :has() on body does. */
+body:has(.sidebar-host.open) .tabbar {
+  padding-left: calc(var(--activitybar-w) + var(--workspace-w));
+}
 /* While dragging the resizer, freeze transitions so width tracks the cursor 1:1. */
 .sidebar-host.resizing,
 .sidebar-host.resizing ~ .main-area {
+  transition: none;
+}
+body:has(.sidebar-host.resizing) .tabbar {
   transition: none;
 }
 
@@ -83,8 +95,10 @@ body:not(.focus-mode) .main-area {
   align-items: center;
   padding: 8px 0;
   gap: 4px;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  border-right: 1px solid var(--glass-border);
   z-index: 30;
   -webkit-app-region: no-drag;
 }
@@ -395,6 +409,12 @@ body:not(.focus-mode) .main-area {
   color: var(--text-muted);
   font-size: 12px;
   text-align: center;
+}
+.workspace-empty--action {
+  cursor: pointer;
+}
+.workspace-empty--action:hover {
+  color: var(--text-primary);
 }
 
 /* context menu */

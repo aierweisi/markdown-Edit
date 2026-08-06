@@ -413,17 +413,23 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
 
   // ── panel ops ────────────────────────────────────────────────
   async function renderRoot(): Promise<void> {
-    if (!root) return
     const t = $tree()
     if (!t) return
+    if (!root) {
+      t.innerHTML =
+        '<div class="workspace-empty workspace-empty--action">未打开工作区<br>点击此处选择文件夹</div>'
+      t.querySelector('.workspace-empty')?.addEventListener('click', () => void open())
+      return
+    }
     t.innerHTML = ''
     await loadDir(root, t)
   }
 
   async function refresh(): Promise<void> {
-    expanded.clear()
     fullyLoaded = false
     await renderRoot()
+    const tree = $tree()
+    if (tree) await restoreExpanded(tree)
     const f = document.getElementById('ws-filter') as HTMLInputElement | null
     if (f && f.value.trim()) await runFilter(f.value)
   }
@@ -439,6 +445,23 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
       if (kids.childElementCount === 0) await loadDir(dp, kids)
       await loadAll(kids)
     }
+  }
+  /** After a re-render, repopulate every dir the user had expanded — preserving
+   *  expand state across refresh / delete / rename / create. renderRow already
+   *  flagged expanded dirs (class + unhidden kids); here we fill those kids and
+   *  recurse, mirroring loadAll but scoped to previously-expanded dirs only. */
+  async function restoreExpanded(container: HTMLElement): Promise<void> {
+    const dirs = Array.from(container.querySelectorAll<HTMLElement>(':scope > .tree-row.is-dir'))
+    await Promise.all(
+      dirs
+        .filter((d) => expanded.has(d.dataset.path ?? ''))
+        .map(async (d) => {
+          const kids = d.querySelector<HTMLElement>(':scope > .tree-children')
+          if (!kids) return
+          if (kids.childElementCount === 0) await loadDir(d.dataset.path ?? '', kids)
+          await restoreExpanded(kids)
+        }),
+    )
   }
   /** Hide non-matching rows; expand dirs that contain matches. Returns whether
    *  this subtree contains any matching file. */

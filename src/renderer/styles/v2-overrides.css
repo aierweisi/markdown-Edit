@@ -149,17 +149,16 @@
 .recent-item__name { font-size: 13px; color: var(--text-primary); }
 .recent-item__path { font-size: 11px; color: var(--text-muted, var(--text-secondary)); }
 
-/* ── Outline floating sidebar ──────────────────────────────────
-   top 由 JS 动态设为 tabbar 下边沿，避开 toolbar + format-toolbar + tabbar。
-   颜色完全使用 v1 token，与设置/模板模态保持一致的玻璃质感。 */
-/* Outline view: a docked section inside the sidebar host (no longer a floating
-   fixed pane). Geometric positioning is owned by .sidebar-host. */
+/* ── Outline panel ──────────────────────────────────────────────
+   A docked section inside the sidebar host. Vertical positioning is owned by
+   .sidebar-host (which docks below the top chrome via --chrome-top); colors
+   use v1 tokens to match the settings/templates modal glass. */
 .outline-pane {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  background: var(--bg-panel);
+  background: transparent; /* let the sidebar host's glass show through */
 }
 
 .outline-pane__header {
@@ -232,6 +231,14 @@
   border-left-color: var(--accent);
   color: var(--accent);
 }
+/* Active (currently in-view) item: the same accent treatment as hover, but
+   sticky so the reader can see where they are, plus slightly bolder text. */
+.outline-pane__item--active {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
 
 .outline-pane__bullet {
   width: 5px;
@@ -242,6 +249,7 @@
   flex-shrink: 0;
 }
 
+.outline-pane__item--active .outline-pane__bullet,
 .outline-pane__item:hover .outline-pane__bullet {
   opacity: 1;
 }
