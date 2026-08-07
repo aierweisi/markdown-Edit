@@ -23,21 +23,28 @@ export function refreshMermaidTheme(theme: 'light' | 'dark'): void {
   )
 }
 
-export async function renderMermaidIn(host: HTMLElement): Promise<void> {
+export async function renderMermaidIn(host: HTMLElement, isStale: () => boolean = () => false): Promise<void> {
   const blocks = host.querySelectorAll<HTMLElement>('pre code.language-mermaid')
   if (blocks.length === 0) return
   const mermaid = await loadMermaid()
   for (const code of Array.from(blocks)) {
+    if (isStale()) return
     const pre = code.parentElement
-    if (!pre || pre.dataset.mermaidRendered === '1') continue
+    // The block's <pre> may have been removed (document switched + body cleared)
+    // by the time mermaid finished loading/rendering — skip it rather than
+    // reinserting the old document's diagram into the new one.
+    if (!pre || !pre.isConnected || pre.dataset.mermaidRendered === '1') continue
+    pre.dataset.mermaidRendered = '1'
     const id = `mmd-${Math.random().toString(36).slice(2)}`
     try {
       const { svg } = await mermaid.render(id, code.textContent ?? '')
+      if (isStale() || !pre.isConnected) continue
       const wrap = document.createElement('div')
       wrap.className = 'mermaid-block'
       wrap.innerHTML = svg
       pre.replaceWith(wrap)
     } catch (err) {
+      if (!pre.isConnected) continue
       const wrap = document.createElement('pre')
       wrap.className = 'mermaid-error'
       wrap.textContent = `Mermaid 渲染失败：${err instanceof Error ? err.message : String(err)}`

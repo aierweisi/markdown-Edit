@@ -256,6 +256,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
       items.push({ label: '在此新建文件', run: () => void promptCreate(entry.path, false) })
       items.push({ label: '在此新建文件夹', run: () => void promptCreate(entry.path, true) })
     }
+    items.push({ label: '在资源管理器中显示', run: () => void revealInExplorer(entry) })
     items.push({ label: '重命名', run: () => void promptRename(entry) })
     items.push({ label: '删除', danger: true, run: () => void doDelete(entry) })
 
@@ -336,6 +337,12 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     }
     showToast('已删除', 'success')
     await refresh()
+  }
+
+  // Open the OS file manager with this entry selected ("Open file location").
+  async function revealInExplorer(entry: DirEntry): Promise<void> {
+    const res = await deps.ctx.api.shellShowItem(entry.path)
+    if (!res.success) showToast(`无法打开所在位置: ${res.error}`, 'error')
   }
 
   // ── drag-and-drop move ──────────────────────────────────────

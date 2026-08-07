@@ -220,6 +220,10 @@ async function bootstrap(): Promise<void> {
   // sync — editor.setValue() is programmatic and does not fire onChange, so
   // without this the outline would keep the previous document's headings.
   function presentContent(content: string): void {
+    // Document switch → hard-reset the preview first so it re-renders from an
+    // empty body rather than morphdom-diffing against the previous document
+    // (which on large files left stale content at the top after switching).
+    preview.reset()
     preview.render(content)
     statusBar.setText(content)
     if (activitybar.isActive('outline')) outline.refresh(content)

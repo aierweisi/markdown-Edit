@@ -23,11 +23,12 @@ function hasMath(text: string): boolean {
   return INLINE_RE.test(text) || BLOCK_RE.test(text)
 }
 
-export async function renderMathIn(host: HTMLElement): Promise<void> {
+export async function renderMathIn(host: HTMLElement, isStale: () => boolean = () => false): Promise<void> {
   // Walk text nodes and replace inline math; CodeMirror code blocks are
   // already protected by being inside <code>. We process only non-code spans.
   if (!host.textContent || !hasMath(host.textContent)) return
   const katex = await loadKatex()
+  if (isStale()) return
   walkAndReplace(host, katex)
 }
 

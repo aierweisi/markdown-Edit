@@ -10,6 +10,11 @@ import { parseHeadings } from '../lib/parse-headings'
 
 export interface PreviewApi {
   render(text: string): void
+  /** Hard-reset for a document switch: cancel pending renders, clear the body,
+   *  and invalidate any in-flight async work (mermaid/katex). Call before render()
+   *  when swapping to a different document so morphdom diffs against an empty
+   *  body instead of the previous (possibly large) file's DOM. */
+  reset(): void
   /** Tell preview which file's directory to use as base URL for relative <img>/<a> hrefs. */
   setBaseFilePath(filePath: string | null): void
   destroy(): void
@@ -44,6 +49,17 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
   let idleHandle: number | null = null
   let scheduledWithRaf = false
   let baseFilePath: string | null = null
+  // Bumped on reset(); each render captures the value and bails if it changed,
+  // so a slow render for a document we've already switched away from can never
+  // write into (or reuse nodes of) the new document.
+  let docGen = 0
+
+  function cancelIdle(): void {
+    if (idleHandle == null) return
+    if (scheduledWithRaf) cancelAnimationFrame(idleHandle)
+    else if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleHandle)
+    idleHandle = null
+  }
 
   // One-time init: set up delegated copy button + task checkbox handlers
   initCodeCopy(opts.body)
@@ -68,15 +84,17 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
       const text = pendingText
       pendingText = null
       renderingFor = text
+      const gen = docGen
+      const isStale = (): boolean => gen !== docGen
       void worker
         .render(text)
         .then((html) => {
-          if (renderingFor !== text) return
+          if (renderingFor !== text || isStale()) return
           applyHtml(html)
           tagHeadingLines(opts.body, text)
           rewriteRelativeAssets(opts.body, baseFilePath)
-          void renderMermaidIn(opts.body)
-          void renderMathIn(opts.body)
+          void renderMermaidIn(opts.body, isStale)
+          void renderMathIn(opts.body, isStale)
           updateCodeCopyButtons(opts.body)
           updateTaskCheckboxes(opts.body, opts.getDoc)
         })
@@ -121,19 +139,29 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
     })
   }
 
+  function reset(): void {
+    cancelIdle()
+    pendingText = null
+    renderingFor = null
+    docGen++
+    // Hard-clear so the next render starts from an empty body instead of
+    // morphdom-diffing against the previous (possibly large) document, which
+    // could reuse/retain stale nodes (e.g. already-rendered mermaid blocks) and
+    // leave the top showing the old file's content after a switch.
+    opts.body.innerHTML = ''
+  }
+
   return {
     render(text) {
       scheduleRender(text)
     },
+    reset,
     setBaseFilePath(filePath) {
       baseFilePath = filePath
     },
     destroy() {
       worker.destroy()
-      if (idleHandle != null) {
-        if (scheduledWithRaf) cancelAnimationFrame(idleHandle)
-        else if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleHandle)
-      }
+      cancelIdle()
     },
   }
 }
