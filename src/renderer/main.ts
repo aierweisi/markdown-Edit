@@ -134,7 +134,7 @@ async function bootstrap(): Promise<void> {
         const res = await ctx.api.workspaceResolveWiki(name)
         if (res.success) {
           void openFileByPath(
-            { ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) },
+            { ctx, tabs, editor, onContentLoaded: presentContent },
             res.path,
           )
         } else {
@@ -168,13 +168,13 @@ async function bootstrap(): Promise<void> {
   const recentPanel = createRecentPanel({
     recent,
     onSelect: (path) =>
-      void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
+      void openFileByPath({ ctx, tabs, editor, onContentLoaded: presentContent }, path),
   })
   const activitybarRef: { api: ActivitybarApi | null } = { api: null }
   const workspacePanel = createWorkspacePanel({
     ctx,
     onOpenFile: (path) =>
-      void openFileByPath({ ctx, tabs, editor, onContentLoaded: (c) => preview.render(c) }, path),
+      void openFileByPath({ ctx, tabs, editor, onContentLoaded: presentContent }, path),
     onFileMoved: (oldPath, newPath) => {
       // Update any open tab whose file was moved, or lives inside a moved folder,
       // so subsequent saves write to the new path (content stays in memory).
@@ -214,6 +214,16 @@ async function bootstrap(): Promise<void> {
     await workspacePanel.restore()
     await activitybar.init()
   })()
+  // Reflect freshly-loaded content across every surface. Used by all
+  // programmatic open paths (dialog, OS association, workspace tree, wiki,
+  // recent, drag-drop, file-sync reload) so the outline + status bar stay in
+  // sync — editor.setValue() is programmatic and does not fire onChange, so
+  // without this the outline would keep the previous document's headings.
+  function presentContent(content: string): void {
+    preview.render(content)
+    statusBar.setText(content)
+    if (activitybar.isActive('outline')) outline.refresh(content)
+  }
   // Reload a tab from disk when its file is modified externally (file-sync.ts).
   function reloadTabContent(tab: TabState, content: string): void {
     tabs.setContent(tab.id, content)
@@ -221,9 +231,7 @@ async function bootstrap(): Promise<void> {
     const top = editor.getScrollTop()
     editor.setValue(content)
     editor.setScrollTop(top) // out-of-range values are clamped by the scroller
-    preview.render(content)
-    statusBar.setText(content)
-    if (activitybar.isActive('outline')) outline.refresh(content)
+    presentContent(content)
   }
   const fileSync = createFileSync({ ctx, tabs, editor, reloadTab: reloadTabContent })
   const refreshOutlineDebounced = outlineDebounce((text: string) => {
@@ -254,7 +262,7 @@ async function bootstrap(): Promise<void> {
       editor.setValue(content)
       tabs.markModified(tab.id, content.length > 0)
     }
-    preview.render(content)
+    presentContent(content)
   })
 
   // ── Editor change → tab content + preview + cache markDirty ─────────
@@ -341,10 +349,9 @@ async function bootstrap(): Promise<void> {
     if (cur === id) return
     if (cur) tabs.setContent(cur, editor.getValue())
     ctx.store.activeTabId.set(id)
-    editor.setValue(tabs.getContent(id))
-    preview.render(tabs.getContent(id))
-    statusBar.setText(tabs.getContent(id))
-    if (activitybar.isActive('outline')) outline.refresh(tabs.getContent(id))
+    const content = tabs.getContent(id)
+    editor.setValue(content)
+    presentContent(content)
   }
   /**
    * Close one tab. If it has unsaved changes, prompt save / discard / cancel.
@@ -367,13 +374,12 @@ async function bootstrap(): Promise<void> {
     tabs.close(id)
     const next = ctx.store.activeTabId()
     if (next) {
-      editor.setValue(tabs.getContent(next))
-      preview.render(tabs.getContent(next))
-      statusBar.setText(tabs.getContent(next))
+      const content = tabs.getContent(next)
+      editor.setValue(content)
+      presentContent(content)
     } else {
       editor.setValue('')
-      preview.render('')
-      statusBar.setText('')
+      presentContent('')
       // No tabs left → welcome page shows; blur editor so keystrokes don't land in it.
       editor.blur()
     }
@@ -503,10 +509,7 @@ async function bootstrap(): Promise<void> {
     ctx,
     tabs,
     editor,
-    onAfterOpen(content) {
-      preview.render(content)
-      statusBar.setText(content)
-    },
+    onAfterOpen: presentContent,
   })
   attachImagePaste({ ctx, editor, tabs })
 
@@ -519,9 +522,9 @@ async function bootstrap(): Promise<void> {
     cache.applySnapshot(snapshot)
     const active = tabs.getActive()
     if (active) {
-      editor.setValue(tabs.getContent(active.id))
-      preview.render(tabs.getContent(active.id))
-      statusBar.setText(tabs.getContent(active.id))
+      const content = tabs.getContent(active.id)
+      editor.setValue(content)
+      presentContent(content)
     }
   } else {
     const tab = tabs.create({
@@ -529,9 +532,9 @@ async function bootstrap(): Promise<void> {
       content: '# 开始写作\n\n输入 Markdown，右侧实时预览。',
     })
     tabs.setActive(tab.id)
-    editor.setValue(tabs.getContent(tab.id))
-    preview.render(tabs.getContent(tab.id))
-    statusBar.setText(tabs.getContent(tab.id))
+    const content = tabs.getContent(tab.id)
+    editor.setValue(content)
+    presentContent(content)
   }
   cache.start()
 
@@ -549,8 +552,7 @@ async function bootstrap(): Promise<void> {
     const tab = tabs.create({ title: '未命名' })
     tabs.setActive(tab.id)
     editor.setValue('')
-    preview.render('')
-    statusBar.setText('')
+    presentContent('')
     editor.focus()
   }
   async function openFile(): Promise<void> {
@@ -559,8 +561,7 @@ async function bootstrap(): Promise<void> {
       tabs,
       editor,
       onContentLoaded(content) {
-        preview.render(content)
-        statusBar.setText(content)
+        presentContent(content)
         const active = tabs.getActive()
         if (active?.filePath) void recent.add(active.filePath)
       },
@@ -599,8 +600,7 @@ async function bootstrap(): Promise<void> {
     const tab = tabs.create({ title: '未命名' })
     tabs.setActive(tab.id)
     editor.setValue('')
-    preview.render('')
-    statusBar.setText('')
+    presentContent('')
     editor.focus()
   })
   onBtnId('btn-view-toggle', () => {
@@ -676,8 +676,7 @@ async function bootstrap(): Promise<void> {
         const tab = tabs.create({ title: '未命名' })
         tabs.setActive(tab.id)
         editor.setValue('')
-        preview.render('')
-        statusBar.setText('')
+        presentContent('')
         editor.focus()
         break
       }
@@ -809,8 +808,9 @@ async function bootstrap(): Promise<void> {
   function reopenClosedTab(): void {
     const tab = tabs.reopenLast()
     if (!tab) return
-    editor.setValue(tabs.getContent(tab.id))
-    preview.render(tabs.getContent(tab.id))
+    const content = tabs.getContent(tab.id)
+    editor.setValue(content)
+    presentContent(content)
   }
 
   // ── Palette commands ────────────────────────────────────────────────
@@ -970,7 +970,7 @@ async function bootstrap(): Promise<void> {
       const tab = tabs.create({ title: '未命名' })
       tabs.setActive(tab.id)
       editor.setValue('')
-      preview.render('')
+      presentContent('')
     } else if (key === 'tab') {
       evt.preventDefault()
       const all = tabs.getAll()
@@ -980,8 +980,9 @@ async function bootstrap(): Promise<void> {
       const dir = evt.shiftKey ? -1 : 1
       const next = all[(curIdx + dir + all.length) % all.length]
       ctx.store.activeTabId.set(next.id)
-      editor.setValue(tabs.getContent(next.id))
-      preview.render(tabs.getContent(next.id))
+      const content = tabs.getContent(next.id)
+      editor.setValue(content)
+      presentContent(content)
     } else if (key >= '1' && key <= '9') {
       evt.preventDefault()
       const idx = parseInt(key, 10) - 1
@@ -1075,20 +1076,26 @@ async function bootstrap(): Promise<void> {
     if (existing) {
       ctx.store.activeTabId.set(existing.id)
       editor.setValue(content)
-      preview.render(content)
+      presentContent(content)
       return
     }
     const tab = tabs.create({ title: titleFromPath(name) || '未命名', filePath, content })
     tabs.setActive(tab.id)
     tabs.markModified(tab.id, false)
     editor.setValue(content)
-    preview.render(content)
+    presentContent(content)
     void recent.add(filePath)
   })
 
   ctx.api.onOpenFileError(({ error }) => {
     showToast(`打开文件失败: ${error}`, 'error')
   })
+
+  // Cold-launch handshake: if the app was opened by double-clicking a file, the
+  // main process queued it but could not deliver it (the listener above didn't
+  // exist yet at did-finish-load). Tell main we're now ready so it can flush any
+  // pending file. No-op when nothing is queued.
+  void ctx.api.requestPendingFile()
 
   // ── Debounced status-bar update for typing ──────────────────────────
   const updateStatus = debounce((value: string) => statusBar.setText(value), 300)

@@ -49,6 +49,7 @@ const api: Api = {
   clearCache: () => ipcRenderer.invoke(CH.CLEAR_CACHE),
   focusWindow: () => ipcRenderer.invoke(CH.FOCUS_WINDOW),
   hasPendingFile: () => ipcRenderer.invoke(CH.HAS_PENDING_FILE),
+  requestPendingFile: () => ipcRenderer.invoke(CH.REQUEST_PENDING_FILE),
   getFilePath: (file) => webUtils.getPathForFile(file),
 
   updateTitleBar: (opts) => ipcRenderer.invoke(CH.UPDATE_TITLEBAR, opts),

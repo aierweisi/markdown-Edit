@@ -9,10 +9,10 @@ import { setupApplicationMenu } from './menu'
 import { registerAllIpc } from './ipc'
 import {
   extractFileArg,
+  flushPendingFile,
   hasPendingFile,
   sendOpenFile,
   setPending,
-  takePendingPath,
 } from './os-file'
 
 let mainWindow: BrowserWindow | null = null
@@ -66,10 +66,11 @@ async function createWindow(): Promise<void> {
     onClose: () => undefined,
   })
   attachCloseHandler(mainWindow)
-  mainWindow.webContents.on('did-finish-load', () => {
-    const pending = takePendingPath()
-    if (pending && mainWindow) sendOpenFile(mainWindow, pending)
-  })
+  // Note: a pending launch file is NOT sent on did-finish-load. At that moment
+  // the renderer's bootstrap() is still running and its OPEN_FILE_FROM_OS
+  // listener is not registered yet — the message would be silently dropped.
+  // Instead the renderer calls api.requestPendingFile() once it is ready, which
+  // routes through flushPendingFile() below.
 
   createTray({ getWindow, onQuit })
   setupApplicationMenu({ sendToRenderer: dispatchMenu, onQuit })
@@ -112,7 +113,7 @@ if (!gotLock) {
     const initial = extractFileArg(process.argv)
     if (initial) setPending(initial)
 
-    registerAllIpc({ store, getWindow, hasPendingFile })
+    registerAllIpc({ store, getWindow, hasPendingFile, flushPendingFile: () => flushPendingFile(getWindow()) })
     await createWindow()
   })
 }

@@ -25,6 +25,16 @@ export function setPending(filePath: string): void {
 }
 
 /**
+ * Hand off any file queued during launch (e.g. opened via OS file association
+ * before the renderer registered its listener) once the renderer signals it is
+ * ready. Reads, clears, and sends the payload in one step.
+ */
+export function flushPendingFile(win: BrowserWindow | null): void {
+  const pending = takePendingPath()
+  if (pending) sendOpenFile(win, pending)
+}
+
+/**
  * Find a Markdown-like file argument in argv. Electron packaged: argv[1] is
  * usually the file path; in dev we scan from the end for resilience.
  */

@@ -113,6 +113,7 @@ export const CH = {
   WIN_CLOSE: 'window:close',
   WIN_IS_MAXIMIZED: 'window:is-maximized',
   HAS_PENDING_FILE: 'system:has-pending-file',
+  REQUEST_PENDING_FILE: 'system:request-pending-file',
   WORKSPACE_LIST: 'workspace:list',
   FILE_CREATE: 'file:create',
   FILE_DELETE: 'file:delete',
@@ -273,6 +274,7 @@ export interface Api {
   clearCache(): Promise<ClearCacheResp>
   focusWindow(): Promise<void>
   hasPendingFile(): Promise<boolean>
+  requestPendingFile(): Promise<void>
   getFilePath(file: File): string
 
   // Window controls

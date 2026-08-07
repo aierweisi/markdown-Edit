@@ -15,6 +15,7 @@ export interface IpcContext {
   store: Store<StoreSchema>
   getWindow(): BrowserWindow | null
   hasPendingFile(): boolean
+  flushPendingFile(): void
 }
 
 export function registerAllIpc(ctx: IpcContext): void {
@@ -25,6 +26,6 @@ export function registerAllIpc(ctx: IpcContext): void {
   registerExportIpc(ctx.getWindow)
   registerShellIpc()
   registerWindowIpc(ctx.getWindow)
-  registerSystemIpc(ctx.hasPendingFile)
+  registerSystemIpc(ctx.hasPendingFile, ctx.flushPendingFile)
   registerWorkspaceIpc(ctx.store)
 }
