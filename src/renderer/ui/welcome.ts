@@ -23,13 +23,12 @@ export function attachWelcome(deps: WelcomeDeps): () => void {
       overlay!.classList.add('hidden')
       return
     }
-    const active = deps.tabs.getActive()
-    const showWelcome =
-      all.length === 0 ||
-      (all.length === 1 &&
-        !active?.filePath &&
-        !active?.modified &&
-        deps.tabs.getContent(active?.id ?? '').trim().length === 0)
+    // Show the welcome page only when there are no tabs. The previous heuristic
+    // also surfaced it for a single pristine untitled tab — but the only way to
+    // reach that state is an explicit "new tab" action, where the user expects
+    // to see the empty editor, not the welcome page. That misfired after closing
+    // all tabs then creating one (welcome stayed until a second tab was added).
+    const showWelcome = all.length === 0
     overlay!.classList.toggle('hidden', !showWelcome)
   }
 

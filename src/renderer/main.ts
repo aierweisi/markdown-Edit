@@ -418,9 +418,18 @@ async function bootstrap(): Promise<void> {
     }
     if (confirmed.length > 0) {
       confirmed.forEach((id) => tabs.close(id))
-      // Land on the anchor tab (the one the user acted on); it is never in the
-      // closed set, so it always survives and gives a predictable result.
-      if (tabs.getById(anchorId)) switchActive(anchorId)
+      // Land on the anchor tab and force its content into the editor. Don't use
+      // switchActive() here: it short-circuits when the anchor is already active
+      // (tabs.close often promotes it to the new active tab), which would leave
+      // the editor showing the last closed tab's unsaved content attributed to
+      // the anchor. We also skip persisting the outgoing tab, since the editor
+      // currently holds a to-be-discarded tab's content.
+      if (tabs.getById(anchorId)) {
+        ctx.store.activeTabId.set(anchorId)
+        const content = tabs.getContent(anchorId)
+        editor.setValue(content)
+        presentContent(content)
+      }
     } else if (originalActive && tabs.getById(originalActive)) {
       // Nothing was closed (user cancelled) → restore the tab we may have
       // switched away from while showing what would have been lost.
