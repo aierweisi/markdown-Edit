@@ -48,13 +48,25 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
   let renderingFor: string | null = null
   let idleHandle: number | null = null
   let scheduledWithRaf = false
+  let debounceHandle: ReturnType<typeof setTimeout> | null = null
   let baseFilePath: string | null = null
   // Bumped on reset(); each render captures the value and bails if it changed,
   // so a slow render for a document we've already switched away from can never
   // write into (or reuse nodes of) the new document.
   let docGen = 0
 
+  // Coalesce rapid edits (fast typing) into one render. Without it, every
+  // keystroke schedules an idle render — for large docs that means a full
+  // marked.parse + DOMPurify + morphdom pass back-to-back. The debounce lets
+  // pendingText absorb intermediate edits so only the latest is rendered, while
+  // requestIdleCallback still defers the actual work to an idle frame.
+  const RENDER_DEBOUNCE_MS = 80
+
   function cancelIdle(): void {
+    if (debounceHandle != null) {
+      clearTimeout(debounceHandle)
+      debounceHandle = null
+    }
     if (idleHandle == null) return
     if (scheduledWithRaf) cancelAnimationFrame(idleHandle)
     else if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleHandle)
@@ -74,42 +86,48 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
     if (h && line > 0) opts.onHeadingClick(line)
   })
 
+  function flush(): void {
+    idleHandle = null
+    if (pendingText === null) return
+    const text = pendingText
+    pendingText = null
+    renderingFor = text
+    const gen = docGen
+    const isStale = (): boolean => gen !== docGen
+    void worker
+      .render(text)
+      .then((html) => {
+        if (renderingFor !== text || isStale()) return
+        applyHtml(html)
+        tagHeadingLines(opts.body, text)
+        rewriteRelativeAssets(opts.body, baseFilePath)
+        void renderMermaidIn(opts.body, isStale)
+        void renderMathIn(opts.body, isStale)
+        updateCodeCopyButtons(opts.body)
+        updateTaskCheckboxes(opts.body, opts.getDoc)
+      })
+      .catch((err) => {
+        console.error('[preview] render failed:', err)
+      })
+  }
+
   function scheduleRender(text: string): void {
     pendingText = text
+    // A render is already queued in the idle phase (or in flight): it will pick
+    // up the latest pendingText when it runs, so just update the buffer and bail.
     if (idleHandle != null) return
-
-    const flush = (): void => {
-      idleHandle = null
-      if (pendingText === null) return
-      const text = pendingText
-      pendingText = null
-      renderingFor = text
-      const gen = docGen
-      const isStale = (): boolean => gen !== docGen
-      void worker
-        .render(text)
-        .then((html) => {
-          if (renderingFor !== text || isStale()) return
-          applyHtml(html)
-          tagHeadingLines(opts.body, text)
-          rewriteRelativeAssets(opts.body, baseFilePath)
-          void renderMermaidIn(opts.body, isStale)
-          void renderMathIn(opts.body, isStale)
-          updateCodeCopyButtons(opts.body)
-          updateTaskCheckboxes(opts.body, opts.getDoc)
-        })
-        .catch((err) => {
-          console.error('[preview] render failed:', err)
-        })
-    }
-
-    if (typeof requestIdleCallback === 'function') {
-      idleHandle = requestIdleCallback(flush, { timeout: 100 }) as unknown as number
-      scheduledWithRaf = false
-    } else {
-      idleHandle = window.requestAnimationFrame(flush)
-      scheduledWithRaf = true
-    }
+    if (debounceHandle != null) clearTimeout(debounceHandle)
+    debounceHandle = setTimeout(() => {
+      debounceHandle = null
+      if (pendingText === null || idleHandle != null) return
+      if (typeof requestIdleCallback === 'function') {
+        idleHandle = requestIdleCallback(flush, { timeout: 200 }) as unknown as number
+        scheduledWithRaf = false
+      } else {
+        idleHandle = window.requestAnimationFrame(flush)
+        scheduledWithRaf = true
+      }
+    }, RENDER_DEBOUNCE_MS)
   }
 
   function applyHtml(rawHtml: string): void {

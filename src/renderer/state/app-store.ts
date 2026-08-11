@@ -8,15 +8,6 @@ export interface TabState {
   modified: boolean
 }
 
-export interface FindState {
-  open: boolean
-  query: string
-  caseSensitive: boolean
-  wholeWord: boolean
-  regex: boolean
-  replaceMode: boolean
-}
-
 export interface AppStore {
   // Tabs
   tabs: Signal<TabState[]>
@@ -35,12 +26,6 @@ export interface AppStore {
   // Editor state
   saving: Signal<boolean>
   autosaveMs: Signal<number>
-
-  // Find/replace state
-  findState: Signal<FindState>
-
-  // Menu IPC pending counter (replaces window.__menuEventPending)
-  menuEventPending: Signal<number>
 }
 
 export function createAppStore(initialSettings: Settings, initialDividerPos = 0): AppStore {
@@ -58,16 +43,5 @@ export function createAppStore(initialSettings: Settings, initialDividerPos = 0)
 
     saving: createSignal(false),
     autosaveMs: createSignal(initialSettings.autoSaveInterval * 1000),
-
-    findState: createSignal<FindState>({
-      open: false,
-      query: '',
-      caseSensitive: false,
-      wholeWord: false,
-      regex: false,
-      replaceMode: false,
-    }),
-
-    menuEventPending: createSignal(0),
   }
 }

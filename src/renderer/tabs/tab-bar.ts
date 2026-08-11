@@ -1,6 +1,7 @@
 import type { AppContext } from '../context'
 import type { TabManager } from './tab-manager'
 import { showTabContextMenu } from './tab-context-menu'
+import { escHtml } from '../lib/fs-paths'
 
 interface TabBarOpts {
   ctx: AppContext
@@ -14,12 +15,6 @@ interface TabBarOpts {
 }
 
 const DATA_MIME = 'text/tab-id'
-
-function escape(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c
-  })
-}
 
 export function mountTabBar(opts: TabBarOpts): () => void {
   const container = opts.ctx.dom.tabsContainer
@@ -41,7 +36,7 @@ export function mountTabBar(opts: TabBarOpts): () => void {
       el.draggable = true
       el.title = tab.title
       el.innerHTML =
-        `<span class="tab-title">${escape(tab.title)}</span>` +
+        `<span class="tab-title">${escHtml(tab.title)}</span>` +
         `<span class="tab-dot"></span>` +
         `<button type="button" class="tab-close" data-action="tab-close">✕</button>`
       container!.appendChild(el)

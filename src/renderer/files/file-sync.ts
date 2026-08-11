@@ -14,30 +14,37 @@ interface FileSyncDeps {
 }
 
 export interface FileSyncApi {
-  /** Call after a successful save: absorbs the watcher event our own write
-   *  triggers (1s grace) and refreshes the mtime baseline. */
-  noteSaved(tabId: string): Promise<void>
+  /** Call after a successful write (manual save or autosave): stamps the given
+   *  post-write mtime/size as the baseline SYNCHRONOUSLY. Taking the values
+   *  straight from the save result (instead of re-stat'ing) removes the window
+   *  in which a focus-triggered check could compare a stale baseline against
+   *  the just-written file and false-fire "外部已更新". */
+  noteSaved(tabId: string, mtimeMs: number, size: number): void
+  /** Stat the active tab's file and reload/prompt if it changed on disk.
+   *  Pull-based — no background watcher. Safe to call any time. */
+  checkActiveTab(): Promise<void>
   dispose(): void
 }
 
-const SAVING_GRACE_MS = 1000
-
 /**
- * Keeps open files in sync with the disk: the main process watches each file
- * (see src/main/file-watcher.ts) and pushes FILE_CHANGED events; here we compare
- * mtime/size against the last-known baseline and reload — automatically when the
- * tab is clean, via a confirm dialog when it has unsaved edits (never silent
- * overwrite). Owns its own watcher add/remove by reconciling against the tabs.
+ * Detects external file changes lazily: only when a tab is activated (opened or
+ * switched to) do we stat its file and compare mtime/size against the last-known
+ * baseline. Replaces an earlier fs.watch push model, which produced false
+ * positives on Windows (spurious native events) and right after autosave wrote
+ * the file — both because it reacted to native change events rather than
+ * checking on demand.
+ *
+ * Baselines are refreshed whenever a file is written (noteSaved) and whenever a
+ * file-backed tab appears or its path changes; the activation check is the only
+ * place that decides "the file changed externally → reload".
  */
 export function createFileSync(deps: FileSyncDeps): FileSyncApi {
   const { ctx, tabs } = deps
   // tabId → last known disk mtimeMs/size
   const mtimes = new Map<string, { mtimeMs: number; size: number }>()
-  // tabId inside a "just saved" grace window — skip reload, only refresh baseline
-  const savingGrace = new Map<string, number>()
-  // filePath → tabId we asked the main process to watch
-  const watchedPaths = new Map<string, string>()
-  // paths whose change-handling is already in flight (avoid re-entrancy)
+  // tabId → filePath we last baselined (detect save-as / external move)
+  const knownPaths = new Map<string, string>()
+  // tabs whose check is already in flight (avoid re-entrancy on rapid switches)
   const inflight = new Set<string>()
 
   let disposed = false
@@ -46,28 +53,6 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
     const st = await ctx.api.fileStat(filePath)
     if (disposed) return
     if (st.success && st.exists) mtimes.set(tabId, { mtimeMs: st.mtimeMs, size: st.size })
-  }
-
-  function reconcile(): void {
-    const wantPath = new Map<string, string>()
-    for (const t of tabs.getAll()) if (t.filePath) wantPath.set(t.filePath, t.id)
-
-    // add newly-wanted paths
-    for (const [path, tabId] of wantPath) {
-      if (watchedPaths.has(path)) continue
-      watchedPaths.set(path, tabId)
-      void ctx.api.fileWatch(path)
-      void recordMtime(tabId, path)
-    }
-    // remove no-longer-wanted paths (tab closed or saved-as to a new path)
-    const stale: string[] = []
-    for (const path of watchedPaths.keys()) if (!wantPath.has(path)) stale.push(path)
-    for (const path of stale) {
-      const tabId = watchedPaths.get(path)
-      watchedPaths.delete(path)
-      void ctx.api.fileUnwatch(path)
-      if (tabId) mtimes.delete(tabId)
-    }
   }
 
   async function reload(tab: TabState): Promise<void> {
@@ -92,7 +77,7 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
       })
       if (disposed) return
       if (!ok) {
-        // Keep local edits; refresh the baseline so we don't nag repeatedly.
+        // Keep local edits; refresh the baseline so we don't nag on every activation.
         await recordMtime(tab.id, tab.filePath!)
         return
       }
@@ -104,68 +89,77 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
     }
   }
 
-  async function onFileChanged(payload: { path: string; event: string }): Promise<void> {
-    if (disposed) return
-    const path = payload.path
-    if (inflight.has(path)) return
-    const tabId = watchedPaths.get(path)
-    if (!tabId) return
-    const tab = tabs.getById(tabId)
-    if (!tab?.filePath) return
-
-    inflight.add(path)
+  async function checkTab(tab: TabState): Promise<void> {
+    if (!tab.filePath) return
+    if (inflight.has(tab.id)) return
+    inflight.add(tab.id)
     try {
-      // our own save: only refresh the baseline, never reload
-      const grace = savingGrace.get(tabId)
-      if (grace && Date.now() < grace) {
-        savingGrace.delete(tabId)
-        await recordMtime(tabId, path)
-        return
-      }
-      savingGrace.delete(tabId)
-
-      const st = await ctx.api.fileStat(path)
+      const st = await ctx.api.fileStat(tab.filePath)
       if (disposed || !st.success) return
       if (!st.exists) {
-        watchedPaths.delete(path)
-        void ctx.api.fileUnwatch(path)
-        mtimes.delete(tabId)
+        mtimes.delete(tab.id)
         showToast(`"${tab.title}" 已被删除`, 'error')
         return
       }
-      const last = mtimes.get(tabId)
+      const last = mtimes.get(tab.id)
       if (!last) {
-        // Tab just opened; baseline not recorded yet (reconcile's recordMtime is
-        // async). Stamp it and skip — avoids a false reload on the first watch
-        // flutter right after open. The next real change still reloads.
-        await recordMtime(tabId, path)
+        // No baseline yet (recordMtime is async and may not have landed). Stamp
+        // it from the current stat and skip — avoids a false reload right after
+        // open. The next real activation still catches external changes.
+        mtimes.set(tab.id, { mtimeMs: st.mtimeMs, size: st.size })
         return
       }
       if (last.mtimeMs === st.mtimeMs && last.size === st.size) return // spurious
-      mtimes.set(tabId, { mtimeMs: st.mtimeMs, size: st.size })
+      mtimes.set(tab.id, { mtimeMs: st.mtimeMs, size: st.size })
       await handleChange(tab)
     } finally {
-      inflight.delete(path)
+      inflight.delete(tab.id)
     }
   }
 
-  const unsubTabs = ctx.store.tabs.subscribe(reconcile)
-  const unsubEvent = ctx.api.onFileChanged((p) => void onFileChanged(p))
-  reconcile() // pick up tabs already open before we attached
+  async function checkActiveTab(): Promise<void> {
+    if (disposed) return
+    const tab = tabs.getActive()
+    if (!tab?.filePath) return
+    await checkTab(tab)
+  }
+
+  // Keep baselines fresh for every file-backed tab: record on first appearance,
+  // re-record when its path changes (save-as / external move), and drop entries
+  // for closed tabs. Covers open, drag-drop, OS-association and cache-restore.
+  const unsubTabs = ctx.store.tabs.subscribe((next) => {
+    const live = new Set<string>()
+    for (const t of next) {
+      if (!t.filePath) continue
+      live.add(t.id)
+      if (knownPaths.get(t.id) !== t.filePath) {
+        knownPaths.set(t.id, t.filePath)
+        void recordMtime(t.id, t.filePath)
+      }
+    }
+    for (const id of knownPaths.keys()) {
+      if (!live.has(id)) {
+        knownPaths.delete(id)
+        mtimes.delete(id)
+      }
+    }
+  })
+  // The one place we actually decide to reload: when the user activates a tab.
+  const unsubActive = ctx.store.activeTabId.subscribe(() => void checkActiveTab())
 
   return {
-    async noteSaved(tabId) {
-      savingGrace.set(tabId, Date.now() + SAVING_GRACE_MS)
+    noteSaved(tabId, mtimeMs, size) {
+      mtimes.set(tabId, { mtimeMs, size })
       const t = tabs.getById(tabId)
-      if (t?.filePath) await recordMtime(tabId, t.filePath)
+      if (t?.filePath) knownPaths.set(tabId, t.filePath)
     },
+    checkActiveTab,
     dispose() {
       disposed = true
       unsubTabs()
-      unsubEvent()
-      for (const path of watchedPaths.keys()) void ctx.api.fileUnwatch(path)
-      watchedPaths.clear()
+      unsubActive()
       mtimes.clear()
+      knownPaths.clear()
     },
   }
 }

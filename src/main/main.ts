@@ -61,10 +61,7 @@ function attachCloseHandler(win: BrowserWindow): void {
 }
 
 async function createWindow(): Promise<void> {
-  mainWindow = createMainWindow({
-    store,
-    onClose: () => undefined,
-  })
+  mainWindow = createMainWindow({ store })
   attachCloseHandler(mainWindow)
   // Note: a pending launch file is NOT sent on did-finish-load. At that moment
   // the renderer's bootstrap() is still running and its OPEN_FILE_FROM_OS

@@ -1,5 +1,6 @@
 import type { AppContext } from '../context'
 import { parseHeadings, type Heading } from '../lib/parse-headings'
+import { escHtml } from '../lib/fs-paths'
 
 export interface OutlineApi {
   refresh(text: string): void
@@ -15,12 +16,6 @@ interface OutlineOpts {
   onJump(line: number): void
   /** Called when the outline's own close button is clicked. */
   onClose?(): void
-}
-
-function escape(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c
-  })
 }
 
 /** Outline (document headings) view, mounted into the sidebar host's outline
@@ -68,11 +63,11 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
     listEl.innerHTML = headings
       .map(
         (h) => `
-        <div class="outline-pane__item outline-pane__item--h${h.level}" data-line="${h.line}" title="${escape(
+        <div class="outline-pane__item outline-pane__item--h${h.level}" data-line="${h.line}" title="${escHtml(
           h.text,
         )}">
           <span class="outline-pane__bullet"></span>
-          <span class="outline-pane__text">${escape(h.text)}</span>
+          <span class="outline-pane__text">${escHtml(h.text)}</span>
         </div>`,
       )
       .join('')

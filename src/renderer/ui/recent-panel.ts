@@ -1,4 +1,5 @@
 import type { RecentManager } from '../recent/recent-files'
+import { escHtml } from '../lib/fs-paths'
 
 export interface RecentPanelApi {
   open(): void
@@ -49,9 +50,9 @@ export function createRecentPanel(deps: RecentDeps): RecentPanelApi {
     body.innerHTML = items
       .map(
         (r) => `
-        <div class="recent-item" data-recent-path="${escape(r.path)}">
-          <div class="recent-item__name">${escape(r.name)}</div>
-          <div class="recent-item__path">${escape(r.path)}</div>
+        <div class="recent-item" data-recent-path="${escHtml(r.path)}">
+          <div class="recent-item__name">${escHtml(r.name)}</div>
+          <div class="recent-item__path">${escHtml(r.path)}</div>
         </div>`,
       )
       .join('')
@@ -77,10 +78,4 @@ export function createRecentPanel(deps: RecentDeps): RecentPanelApi {
     },
     close,
   }
-}
-
-function escape(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c
-  })
 }

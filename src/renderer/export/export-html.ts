@@ -2,6 +2,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { AppContext } from '../context'
 import { escHtml } from '../lib/fs-paths'
+import { showToast } from '../ui/toast'
 import { resolveExportDialog } from './export-dialog'
 
 interface ExportDeps {
@@ -49,5 +50,9 @@ export async function exportHtml(deps: ExportDeps): Promise<boolean> {
     `<body>\n${safe}\n</body></html>\n`
 
   const result = await deps.ctx.api.fileSave(filePath, html)
-  return result.success
+  if (!result.success) {
+    showToast(`导出失败: ${result.error}`, 'error')
+    return false
+  }
+  return true
 }

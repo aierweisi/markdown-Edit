@@ -2,6 +2,8 @@
 // old 200-line implementation; supports click-to-open, ESC-to-close, click
 // outside to close. (Zoom/drag deferred — can be added later if needed.)
 
+import { escHtml } from '../lib/fs-paths'
+
 export function attachImageLightbox(host: HTMLElement): () => void {
   function onClick(evt: MouseEvent): void {
     const target = evt.target as HTMLElement
@@ -17,7 +19,7 @@ export function attachImageLightbox(host: HTMLElement): () => void {
 function openLightbox(src: string): void {
   const overlay = document.createElement('div')
   overlay.className = 'lightbox'
-  overlay.innerHTML = `<img class="lightbox__image" src="${escapeAttr(src)}" alt="" />`
+  overlay.innerHTML = `<img class="lightbox__image" src="${escHtml(src)}" alt="" />`
   document.body.appendChild(overlay)
 
   function close(): void {
@@ -29,8 +31,4 @@ function openLightbox(src: string): void {
   }
   overlay.addEventListener('click', close)
   document.addEventListener('keydown', onKey)
-}
-
-function escapeAttr(s: string): string {
-  return s.replace(/"/g, '&quot;')
 }

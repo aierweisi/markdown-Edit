@@ -31,7 +31,6 @@ import { showToast } from './ui/toast'
 import { showCloseConfirm } from './ui/confirm-modal'
 import { createOutlinePanel } from './ui/outline-panel'
 import { installModalFocusTrap } from './ui/focus-trap'
-import { debounce as outlineDebounce } from './lib/debounce'
 import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
 import { attachFind } from './find/find-panel'
@@ -41,23 +40,7 @@ import { refreshMermaidTheme } from './preview/lazy-mermaid'
 import type { Settings, ViewMode } from '@shared/types'
 import type { TabState } from './state/app-store'
 import './styles/index.css'
-
-const DEFAULT_SETTINGS: Settings = {
-  theme: 'light',
-  fontSize: 15,
-  editorFont: "'JetBrains Mono', 'Fira Code', monospace",
-  autoSaveInterval: 10,
-  exportDir: '',
-  exportNamingRule: '{title}_{date}',
-  imageSaveDir: 'assets',
-  paneOrder: 'preview-first',
-  lineNumbers: true,
-  codeFolding: true,
-  imageCompressEnabled: true,
-  imageCompressMaxSize: 1920,
-  imageCompressQuality: 0.85,
-  statusBar: { cursor: true, selection: true, readtime: true, chars: true, autosave: true },
-}
+import { DEFAULT_SETTINGS } from '@shared/defaults'
 
 const VIEW_MODES: ViewMode[] = ['split', 'editor', 'preview']
 
@@ -113,7 +96,7 @@ async function bootstrap(): Promise<void> {
   const tabs = createTabManager(ctx)
 
   if (!dom.editorContainer || !dom.previewBody) {
-    document.body.innerHTML = '<p>missing editor/preview container</p>'
+    document.body.innerHTML = '<p>缺少编辑器/预览容器</p>'
     return
   }
 
@@ -238,7 +221,7 @@ async function bootstrap(): Promise<void> {
     presentContent(content)
   }
   const fileSync = createFileSync({ ctx, tabs, editor, reloadTab: reloadTabContent })
-  const refreshOutlineDebounced = outlineDebounce((text: string) => {
+  const refreshOutlineDebounced = debounce((text: string) => {
     if (activitybar.isActive('outline')) outline.refresh(text)
   }, 150)
   function syncOutlineTitle(): void {
@@ -259,12 +242,16 @@ async function bootstrap(): Promise<void> {
       editor.setValue(content)
       tabs.setContent(active.id, content)
       tabs.setTitle(active.id, name)
-      tabs.markModified(active.id, content.length > 0)
+      // Applying a template is like loading a fresh document: an untitled tab
+      // stays clean (dirty only after the first real edit, via onChange); a
+      // file-backed tab does become dirty since the template overwrites disk.
+      tabs.markModified(active.id, active.filePath ? content.length > 0 : false)
     } else {
       const tab = tabs.create({ title: name, content })
       tabs.setActive(tab.id)
       editor.setValue(content)
-      tabs.markModified(tab.id, content.length > 0)
+      // New tab is untitled — clean until edited.
+      tabs.markModified(tab.id, false)
     }
     presentContent(content)
   })
@@ -306,6 +293,11 @@ async function bootstrap(): Promise<void> {
       const result = await ctx.api.fileSave(tab.filePath, editor.getValue())
       if (result.success) {
         tabs.markModified(tab.id, false)
+        // Stamp the baseline with the post-write mtime/size straight from the
+        // save result — synchronously, no second stat — so a focus-triggered
+        // check can't slip in between the write and the baseline refresh and
+        // false-fire "外部已更新".
+        fileSync.noteSaved(tab.id, result.mtimeMs, result.size)
         // "已保存 时间" 由 status-bar 订阅 saving signal(saving→false)统一驱动
       } else {
         showToast(`自动保存失败: ${result.error}`, 'error')
@@ -529,6 +521,21 @@ async function bootstrap(): Promise<void> {
   // ── Window controls ─────────────────────────────────────────────────
   attachWindowControls(ctx)
 
+  // Re-check the active tab's file when the window regains focus — catches
+  // external edits made while the app was in the background, without forcing
+  // the user to switch tabs. Only acts on real mtime/size diffs, so this can't
+  // introduce false positives. Tracked as a blurred→focused transition to avoid
+  // firing on internal focus changes.
+  let windowBlurred = false
+  window.addEventListener('blur', () => {
+    windowBlurred = true
+  })
+  window.addEventListener('focus', () => {
+    if (!windowBlurred) return
+    windowBlurred = false
+    void fileSync.checkActiveTab()
+  })
+
   // ── Restore from cache or create blank tab ──────────────────────────
   const snapshot = await cache.loadSnapshot()
   if (snapshot && snapshot.tabs.length > 0) {
@@ -581,20 +588,20 @@ async function bootstrap(): Promise<void> {
     })
   }
   async function save(saveAs = false): Promise<boolean> {
-    const ok = await saveActiveTab({
+    const result = await saveActiveTab({
       ctx,
       tabs,
       getCurrentContent: () => editor.getValue(),
     }, saveAs)
-    if (ok) {
+    if (result?.success) {
       const tab = tabs.getActive()
       if (tab?.filePath) {
         await recent.add(tab.filePath)
-        await fileSync.noteSaved(tab.id)
+        fileSync.noteSaved(tab.id, result.mtimeMs, result.size)
         showToast(`已保存: ${titleFromPath(tab.filePath)}`, 'success')
       }
     }
-    return ok
+    return result?.success === true
   }
 
   // ── Toolbar buttons: v1 element IDs + v2 data-action delegation ─────
@@ -1000,7 +1007,10 @@ async function bootstrap(): Promise<void> {
       evt.preventDefault()
       const idx = parseInt(key, 10) - 1
       const all = tabs.getAll()
-      if (all[idx]) ctx.store.activeTabId.set(all[idx].id)
+      // Route through switchActive so the editor + preview swap to the target
+      // tab — a bare activeTabId.set left the editor showing the old tab while
+      // active pointed at the new one, so typing wrote into the wrong tab.
+      if (all[idx]) switchActive(all[idx].id)
     } else if (evt.shiftKey && key === 'f') {
       evt.preventDefault()
       ctx.store.focusMode.set(!ctx.store.focusMode())
@@ -1087,9 +1097,12 @@ async function bootstrap(): Promise<void> {
 
     const existing = tabs.getAll().find((t) => t.filePath === filePath)
     if (existing) {
-      ctx.store.activeTabId.set(existing.id)
-      editor.setValue(content)
-      presentContent(content)
+      // Just focus the already-open tab. Don't overwrite the editor with the OS
+      // payload — that would discard unsaved edits and desync contents (the
+      // programmatic setValue doesn't fire onChange, so contents[existing]
+      // would keep its stale value). If the file changed on disk since, the
+      // activeTabId change fires file-sync's checkActiveTab, which prompts.
+      switchActive(existing.id)
       return
     }
     const tab = tabs.create({ title: titleFromPath(name) || '未命名', filePath, content })
@@ -1119,7 +1132,7 @@ async function bootstrap(): Promise<void> {
 
 void bootstrap().catch((err) => {
   console.error('[bootstrap] failed:', err)
-  document.body.innerHTML = `<pre style="padding:20px;color:red">Bootstrap failed: ${
+  document.body.innerHTML = `<pre style="padding:20px;color:red">启动失败: ${
     err instanceof Error ? err.message : String(err)
   }</pre>`
 })

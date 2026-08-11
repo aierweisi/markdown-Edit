@@ -3,6 +3,7 @@ import type { DirEntry } from '@shared/types'
 import { MD_EXTENSIONS } from '@shared/paths'
 import { showConfirm } from './confirm-modal'
 import { showToast } from './toast'
+import { escHtml } from '../lib/fs-paths'
 
 export interface WorkspacePanelApi {
   /** Prompt for a workspace folder. Returns true if one was chosen. */
@@ -69,7 +70,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
   async function loadDir(dir: string, container: HTMLElement): Promise<void> {
     const res = await deps.ctx.api.workspaceList(dir)
     if (!res.success) {
-      container.innerHTML = `<div class="workspace-empty">读取失败:${escapeHtml(res.error)}</div>`
+      container.innerHTML = `<div class="workspace-empty">读取失败:${escHtml(res.error)}</div>`
       return
     }
     container.innerHTML = ''
@@ -82,7 +83,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
 
   function renderRow(entry: DirEntry): HTMLElement {
     const row = document.createElement('div')
-    const isExpandedDir = entry.isDir && expanded.has(entry.path)
+    const isExpandedDir = entry.isDir && expanded.has(normPath(entry.path))
     row.className = 'tree-row' + (entry.isDir ? ' is-dir' : ' is-file') + (isExpandedDir ? ' expanded' : '')
     if (!entry.isDir && entry.path === activePath) row.classList.add('active')
     row.dataset.path = entry.path
@@ -158,12 +159,12 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
   }
 
   async function toggleDir(entry: DirEntry, row: HTMLElement, kids: HTMLElement): Promise<void> {
-    if (expanded.has(entry.path)) {
-      expanded.delete(entry.path)
+    if (expanded.has(normPath(entry.path))) {
+      expanded.delete(normPath(entry.path))
       row.classList.remove('expanded')
       kids.hidden = true
     } else {
-      expanded.add(entry.path)
+      expanded.add(normPath(entry.path))
       row.classList.add('expanded')
       kids.hidden = false
       if (kids.childElementCount === 0) await loadDir(entry.path, kids)
@@ -209,8 +210,8 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     const origPath = row.dataset.path ?? dirPath
     const kids = row.querySelector<HTMLElement>(':scope > .tree-children')
     if (!kids) return
-    if (!expanded.has(origPath)) {
-      expanded.add(origPath)
+    if (!expanded.has(normPath(origPath))) {
+      expanded.add(normPath(origPath))
       row.classList.add('expanded')
       kids.hidden = false
       if (kids.childElementCount === 0) await loadDir(origPath, kids)
@@ -296,9 +297,41 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
   }
 
   // ── CRUD ─────────────────────────────────────────────────────
+  /** After a rename/move of a folder, remap every expanded path that lived at or
+   *  under the old path to the new path — so expansion survives the rename and
+   *  refresh() doesn't collapse the just-renamed subtree. No-op for files and
+   *  when the old path wasn't expanded. Compared normalized because joinPath
+   *  produces '/' but entry.path uses the OS separator. */
+  function remapExpanded(oldPath: string, newPath: string): void {
+    const oldN = normPath(oldPath)
+    if (!expanded.has(oldN)) return
+    const newN = normPath(newPath)
+    let touched = false
+    const remapped = new Set<string>()
+    for (const p of expanded) {
+      if (p === oldN) {
+        remapped.add(newN)
+        touched = true
+      } else if (p.startsWith(oldN + '/')) {
+        remapped.add(newN + p.slice(oldN.length))
+        touched = true
+      } else {
+        remapped.add(p)
+      }
+    }
+    if (touched) {
+      expanded.clear()
+      for (const p of remapped) expanded.add(p)
+    }
+  }
+
   async function promptCreate(parentDir: string, isDir: boolean): Promise<void> {
     const name = await promptText(isDir ? '新建文件夹' : '新建文件', isDir ? '文件夹名' : '文件名（.md）')
     if (!name) return
+    if (/[\\/]/.test(name)) {
+      showToast('名称不能包含路径分隔符', 'error')
+      return
+    }
     const finalName = isDir ? name : ensureMdExt(name)
     const full = joinPath(parentDir, finalName)
     const res = await deps.ctx.api.fileCreate(full, isDir)
@@ -313,12 +346,18 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
   async function promptRename(entry: DirEntry): Promise<void> {
     const name = await promptText('重命名', entry.name, entry.name)
     if (!name || name === entry.name) return
+    if (/[\\/]/.test(name)) {
+      showToast('名称不能包含路径分隔符', 'error')
+      return
+    }
     const dir = parentDirOf(entry.path)
-    const res = await deps.ctx.api.fileRename(entry.path, joinPath(dir, name))
+    const newPath = joinPath(dir, name)
+    const res = await deps.ctx.api.fileRename(entry.path, newPath)
     if (!res.success) {
       showToast(`重命名失败: ${res.error}`, 'error')
       return
     }
+    remapExpanded(entry.path, newPath)
     await refresh()
   }
 
@@ -364,6 +403,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
       showToast(`移动失败: ${msg}`, 'error')
       return
     }
+    remapExpanded(src.path, newPath)
     await refresh()
     deps.onFileMoved?.(src.path, newPath)
     // Keep activePath in sync if the active file was the moved item or lived
@@ -384,9 +424,9 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
       overlay.className = 'modal-overlay open'
       overlay.innerHTML = `
         <div class="modal modal-small" style="width: 340px">
-          <div class="modal-header"><h2>${escapeHtml(title)}</h2></div>
+          <div class="modal-header"><h2>${escHtml(title)}</h2></div>
           <div class="modal-body">
-            <input type="text" class="workspace-prompt-input" placeholder="${escapeHtml(placeholder)}" />
+            <input type="text" class="workspace-prompt-input" placeholder="${escHtml(placeholder)}" />
             <div class="modal-actions">
               <button class="btn-secondary" data-act="cancel">取消</button>
               <button class="btn-primary" data-act="ok">确定</button>
@@ -461,7 +501,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
     const dirs = Array.from(container.querySelectorAll<HTMLElement>(':scope > .tree-row.is-dir'))
     await Promise.all(
       dirs
-        .filter((d) => expanded.has(d.dataset.path ?? ''))
+        .filter((d) => expanded.has(normPath(d.dataset.path ?? '')))
         .map(async (d) => {
           const kids = d.querySelector<HTMLElement>(':scope > .tree-children')
           if (!kids) return
@@ -483,7 +523,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
         const show = subMatch || name.includes(q)
         r.classList.toggle('filter-hidden', !show)
         if (subMatch) {
-          expanded.add(r.dataset.path ?? '')
+          expanded.add(normPath(r.dataset.path ?? ''))
           r.classList.add('expanded')
           if (kids) kids.hidden = false
         }
@@ -668,9 +708,6 @@ function parentDirOf(full: string): string {
 /** Normalize a path to forward slashes with no trailing slash (for matching). */
 function normPath(p: string): string {
   return p.replace(/\\/g, '/').replace(/\/+$/, '')
-}
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c))
 }
 function basename(p: string): string {
   const clean = p.replace(/[\\/]+$/, '')

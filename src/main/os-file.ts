@@ -12,7 +12,7 @@ export function hasPendingFile(): boolean {
   return pendingFlag
 }
 
-export function takePendingPath(): string | null {
+function takePendingPath(): string | null {
   const p = pendingPath
   pendingPath = null
   pendingFlag = false

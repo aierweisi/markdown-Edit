@@ -6,6 +6,7 @@ import type {
   DirEntry,
   FileReadResult,
   FileRenameResult,
+  FileSaveResult,
   FileStatResult,
   ImageSaveRequest,
   ImageSaveResult,
@@ -97,8 +98,6 @@ export const CH = {
   FILE_STAT: 'file:stat',
   FILE_SAVE: 'file:save',
   FILE_RENAME: 'file:rename',
-  FILE_WATCH: 'file:watch',
-  FILE_UNWATCH: 'file:unwatch',
   IMAGE_SAVE: 'image:save',
   DIALOG_OPEN_FILE: 'dialog:open-file',
   DIALOG_SAVE_FILE: 'dialog:save-file',
@@ -125,7 +124,6 @@ export const EV = {
   OPEN_FILE_FROM_OS: 'event:open-file-from-os',
   OPEN_FILE_ERROR: 'event:open-file-error',
   WIN_MAXIMIZED: 'event:win-maximized',
-  FILE_CHANGED: 'event:file-changed',
   MENU_NEW: 'menu:new',
   MENU_OPEN: 'menu:open',
   MENU_SAVE: 'menu:save',
@@ -167,8 +165,6 @@ export const FileReadReqSchema = z.string().min(1)
 export const FileStatReqSchema = z.string().min(1)
 export const FileSaveReqSchema = z.object({ filePath: z.string().min(1), content: z.string() })
 export const FileRenameReqSchema = z.object({ oldPath: z.string().min(1), newPath: z.string().min(1) })
-export const FileWatchReqSchema = z.string().min(1)
-export const FileUnwatchReqSchema = z.string().min(1)
 
 export const ImageSaveReqSchema = z.object({
   baseDir: z.string().nullable(),
@@ -201,6 +197,84 @@ export const DEFAULT_PDF_OPTIONS: PdfExportOptions = {
 
 export const ShellShowItemReqSchema = z.string().min(1)
 
+// ── Domain schemas for electron-store values ───────────────────────────
+// Used by the STORE_SET handler to validate the `value` for each allowlisted
+// key (the key itself is already gated by STORE_KEYS). Without this, a
+// renderer compromise (or a future bug) could persist arbitrary JSON under a
+// trusted key and have it consumed later as a typed value — e.g. poisoning
+// `workspacePath` / `imageSaveDir`, or crashing a consumer that assumes the
+// stored shape.
+export const WindowBoundsSchema = z.object({ width: z.number(), height: z.number() })
+
+export const StatusBarConfigSchema = z.object({
+  cursor: z.boolean(),
+  selection: z.boolean(),
+  readtime: z.boolean(),
+  chars: z.boolean(),
+  autosave: z.boolean(),
+})
+
+export const TemplateSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  icon: z.string(),
+  content: z.string(),
+  createdAt: z.number(),
+})
+
+export const RecentFileSchema = z.object({
+  path: z.string(),
+  name: z.string(),
+  lastOpenedAt: z.number(),
+})
+
+export const TabSnapshotSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  filePath: z.string().nullable(),
+  content: z.string(),
+  modified: z.boolean(),
+  scrollTop: z.number(),
+})
+
+export const CacheEntrySchema = z.object({
+  version: z.number().optional(),
+  tabs: z.array(TabSnapshotSchema),
+  activeTabId: z.string().nullable(),
+  savedAt: z.number(),
+})
+
+export const STORE_SCHEMAS: Record<StoreKey, z.ZodTypeAny> = {
+  windowBounds: WindowBoundsSchema,
+  theme: z.enum(['light', 'dark', 'auto']),
+  fontSize: z.number(),
+  editorFont: z.string(),
+  autoSaveInterval: z.number(),
+  exportDir: z.string(),
+  exportNamingRule: z.string(),
+  imageSaveDir: z.string(),
+  paneOrder: z.enum(['preview-first', 'editor-first']),
+  lineNumbers: z.boolean(),
+  codeFolding: z.boolean(),
+  imageCompressEnabled: z.boolean(),
+  imageCompressMaxSize: z.number(),
+  imageCompressQuality: z.number(),
+  dividerPos: z.number(),
+  templates: z.array(TemplateSchema),
+  recentFiles: z.array(RecentFileSchema),
+  tabOrder: z.array(z.string()),
+  pdfOptions: PdfExportOptionsSchema,
+  workspacePath: z.string().nullable(),
+  workspaceCollapsed: z.boolean(),
+  workspaceClosed: z.boolean(),
+  sidebarActiveView: z.enum(['workspace', 'outline']),
+  sidebarOpen: z.boolean(),
+  workspaceWidth: z.number(),
+  statusBar: StatusBarConfigSchema,
+  cache: CacheEntrySchema,
+}
+
+
 export const DirListReqSchema = z.string().min(1)
 export const FileCreateReqSchema = z.object({ path: z.string().min(1), isDir: z.boolean() })
 export const FileDeleteReqSchema = z.object({ path: z.string().min(1), isDir: z.boolean() })
@@ -218,13 +292,9 @@ export const UpdateTitlebarReqSchema = z.object({
 export type StoreSetResult = Result<{ key: string }>
 export type FileReadResp = Result<FileReadResult>
 export type FileStatResp = Result<FileStatResult>
-export type FileSaveResp = Result
+export type FileSaveResp = Result<FileSaveResult>
 export type FileRenameResp = Result<FileRenameResult>
 
-export interface FileChangedEvent {
-  path: string
-  event: 'change' | 'rename' | 'error'
-}
 export type ImageSaveResp = ImageSaveResult | { success: false; error: string }
 export type ExportPdfResp = Result
 export type ClearCacheResp = Result<{ freed: number }>
@@ -254,8 +324,6 @@ export interface Api {
   fileSave(filePath: string, content: string): Promise<FileSaveResp>
   fileRename(oldPath: string, newPath: string): Promise<FileRenameResp>
   imageSave(req: ImageSaveRequest): Promise<ImageSaveResp>
-  fileWatch(filePath: string): Promise<Result>
-  fileUnwatch(filePath: string): Promise<Result>
 
   // Dialogs
   dialogOpenFile(): Promise<DialogOpenResult>
@@ -288,6 +356,5 @@ export interface Api {
   onWinMaximized(cb: (maximized: boolean) => void): () => void
   onOpenFileFromOS(cb: (payload: OpenFileFromOSPayload) => void): () => void
   onOpenFileError(cb: (payload: OpenFileErrorPayload) => void): () => void
-  onFileChanged(cb: (payload: FileChangedEvent) => void): () => void
   onMenuEvent(cb: (event: MenuEventName) => void): () => void
 }

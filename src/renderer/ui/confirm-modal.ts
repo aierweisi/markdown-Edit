@@ -1,3 +1,5 @@
+import { escHtml } from '../lib/fs-paths'
+
 export interface ConfirmOpts {
   title?: string
   message: string
@@ -6,26 +8,20 @@ export interface ConfirmOpts {
   danger?: boolean
 }
 
-function escape(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c
-  })
-}
-
 export function showConfirm(opts: ConfirmOpts): Promise<boolean> {
   return new Promise((resolve) => {
     const overlay = document.createElement('div')
     overlay.className = 'modal-overlay confirm-overlay'
     overlay.innerHTML = `
       <div class="modal modal-small">
-        <div class="modal-header"><h2>${escape(opts.title ?? '确认')}</h2></div>
+        <div class="modal-header"><h2>${escHtml(opts.title ?? '确认')}</h2></div>
         <div class="modal-body">
-          <p class="confirm-message">${escape(opts.message)}</p>
+          <p class="confirm-message">${escHtml(opts.message)}</p>
           <div class="modal-actions">
-            <button class="btn-secondary confirm-cancel">${escape(opts.cancelText ?? '取消')}</button>
+            <button class="btn-secondary confirm-cancel">${escHtml(opts.cancelText ?? '取消')}</button>
             <button class="${
               opts.danger ? 'btn-danger' : 'btn-primary'
-            } confirm-ok">${escape(opts.okText ?? '确定')}</button>
+            } confirm-ok">${escHtml(opts.okText ?? '确定')}</button>
           </div>
         </div>
       </div>`
@@ -81,13 +77,13 @@ export function showCloseConfirm(opts: ConfirmCloseOpts): Promise<CloseChoice> {
     overlay.className = 'modal-overlay confirm-overlay'
     overlay.innerHTML = `
       <div class="modal modal-small">
-        <div class="modal-header"><h2>${escape(opts.title ?? '关闭确认')}</h2></div>
+        <div class="modal-header"><h2>${escHtml(opts.title ?? '关闭确认')}</h2></div>
         <div class="modal-body">
-          <p class="confirm-message">${escape(opts.message)}</p>
+          <p class="confirm-message">${escHtml(opts.message)}</p>
           <div class="modal-actions">
-            <button class="btn-secondary confirm-cancel">${escape(opts.cancelText ?? '取消')}</button>
-            <button class="btn-danger confirm-discard">${escape(opts.discardText ?? '不保存')}</button>
-            <button class="btn-primary confirm-save">${escape(opts.saveText ?? '保存')}</button>
+            <button class="btn-secondary confirm-cancel">${escHtml(opts.cancelText ?? '取消')}</button>
+            <button class="btn-danger confirm-discard">${escHtml(opts.discardText ?? '不保存')}</button>
+            <button class="btn-primary confirm-save">${escHtml(opts.saveText ?? '保存')}</button>
           </div>
         </div>
       </div>`

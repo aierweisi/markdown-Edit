@@ -9,7 +9,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 interface WindowOpts {
   store: Store<StoreSchema>
-  onClose(win: BrowserWindow, isQuitting: boolean): Promise<void> | void
 }
 
 export function createMainWindow(opts: WindowOpts): BrowserWindow {

@@ -1,6 +1,7 @@
 import type { AppContext } from '../context'
 import type { Template } from '@shared/types'
 import { showConfirm } from './confirm-modal'
+import { escHtml } from '../lib/fs-paths'
 
 export interface TemplatesPanelApi {
   open(): void
@@ -10,12 +11,6 @@ export interface TemplatesPanelApi {
 
 function makeId(): string {
   return `tpl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
-}
-
-function escape(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c
-  })
 }
 
 /** Drives v1 template modal (#tpl-overlay) already present in index.html. */
@@ -50,8 +45,8 @@ export function createTemplatesPanel(ctx: AppContext): TemplatesPanelApi {
       .map(
         (t) => `
         <div class="tpl-item${t.id === selectedId ? ' active' : ''}" data-tpl-id="${t.id}">
-          <span class="tpl-item-icon">${escape(t.icon || '📄')}</span>
-          <span class="tpl-item-name">${escape(t.name)}</span>
+          <span class="tpl-item-icon">${escHtml(t.icon || '📄')}</span>
+          <span class="tpl-item-name">${escHtml(t.name)}</span>
         </div>`,
       )
       .join('')

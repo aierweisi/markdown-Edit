@@ -1,6 +1,6 @@
-// Lazy-load KaTeX only on first $…$ or $$…$$ detection. The CSS is imported
-// statically (via styles/index.css) because the font URLs need to resolve at
-// page load; the JS portion is the real cost.
+// Lazy-load KaTeX only on first $…$ or $$…$$ detection. Both the JS and the
+// CSS (katex.min.css) are imported dynamically on first use, so neither is
+// paid for until a document actually contains math.
 
 type KatexApi = typeof import('katex').default
 

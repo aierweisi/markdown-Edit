@@ -9,6 +9,15 @@ interface WelcomeDeps {
   onTemplate(): void
 }
 
+// v1 buttons expose their action via #welcome-new / #welcome-open /
+// #welcome-template IDs; v2 carries it on data-welcome-action. Map the v1 IDs
+// once at module scope instead of re-creating the lookup on every click.
+const WELCOME_ACTION_BY_ID: Record<string, 'new' | 'open' | 'template'> = {
+  'welcome-new': 'new',
+  'welcome-open': 'open',
+  'welcome-template': 'template',
+}
+
 export function attachWelcome(deps: WelcomeDeps): () => void {
   const overlay = deps.ctx.dom.welcomeOverlay
   if (!overlay) return () => undefined
@@ -34,19 +43,11 @@ export function attachWelcome(deps: WelcomeDeps): () => void {
 
   function onClick(evt: MouseEvent): void {
     const t = evt.target as HTMLElement
-    // v1 uses #welcome-new / #welcome-open / #welcome-template button IDs
+    // v1 used #welcome-* button IDs; v2 carries the action on data-welcome-action.
     const action =
       t.dataset.welcomeAction ??
-      ({
-        'welcome-new': 'new',
-        'welcome-open': 'open',
-        'welcome-template': 'template',
-      }[t.id] ??
-        ({
-          'welcome-new': 'new',
-          'welcome-open': 'open',
-          'welcome-template': 'template',
-        }[t.closest<HTMLElement>('button')?.id ?? ''] ?? ''))
+      WELCOME_ACTION_BY_ID[t.id] ??
+      WELCOME_ACTION_BY_ID[t.closest<HTMLElement>('button')?.id ?? '']
     if (action === 'new') {
       dismissed = true
       deps.onNew()

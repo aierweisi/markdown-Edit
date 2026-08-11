@@ -1,6 +1,7 @@
 import type { AppContext } from '../context'
 import type { PdfExportOptions } from '@shared/types'
 import { DEFAULT_PDF_OPTIONS } from '@shared/ipc'
+import { showToast } from '../ui/toast'
 import { resolveExportDialog } from './export-dialog'
 import { promptPdfOptions } from './pdf-options-dialog'
 
@@ -20,5 +21,9 @@ export async function exportPdf(deps: ExportPdfDeps): Promise<boolean> {
   if (!chosen) return false
   await deps.ctx.api.storeSet('pdfOptions', chosen)
   const result = await deps.ctx.api.exportPDF({ savePath: filePath, ...chosen })
-  return result.success
+  if (!result.success) {
+    showToast(`导出失败: ${result.error}`, 'error')
+    return false
+  }
+  return true
 }

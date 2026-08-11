@@ -3,20 +3,16 @@ import { promises as fsp, readFileSync, existsSync } from 'node:fs'
 import { resolve as pathResolve } from 'node:path'
 import {
   CH,
-  type Result,
   FileReadReqSchema,
   FileRenameReqSchema,
   FileSaveReqSchema,
   FileStatReqSchema,
-  FileUnwatchReqSchema,
-  FileWatchReqSchema,
   type FileReadResp,
   type FileRenameResp,
   type FileSaveResp,
   type FileStatResp,
 } from '@shared/ipc'
 import { isPathSafe } from '../security/isPathSafe'
-import { bindWebContents, watchFile, unwatchFile } from '../file-watcher'
 
 export function registerFsIpc(): void {
   ipcMain.handle(CH.FILE_READ, async (_event, filePath: unknown): Promise<FileReadResp> => {
@@ -45,7 +41,12 @@ export function registerFsIpc(): void {
       try {
         await fsp.writeFile(tmp, parsed.data.content, 'utf-8')
         await fsp.rename(tmp, resolved)
-        return { success: true }
+        // Return the post-write mtime/size so the renderer can refresh its
+        // file-sync baseline without a second stat round-trip (which opened a
+        // race where a focus-triggered check fired between save and the
+        // follow-up stat, false-firing " externally updated").
+        const st = await fsp.stat(resolved)
+        return { success: true, mtimeMs: st.mtimeMs, size: st.size }
       } catch (err) {
         try {
           await fsp.unlink(tmp)
@@ -92,19 +93,5 @@ export function registerFsIpc(): void {
       }
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
-  })
-
-  ipcMain.handle(CH.FILE_WATCH, (event, filePath: unknown): Result => {
-    const parsed = FileWatchReqSchema.safeParse(filePath)
-    if (!parsed.success) return { success: false, error: 'invalid request' }
-    bindWebContents(event.sender)
-    return watchFile(parsed.data) ? { success: true } : { success: false, error: 'watch failed' }
-  })
-
-  ipcMain.handle(CH.FILE_UNWATCH, (_event, filePath: unknown): Result => {
-    const parsed = FileUnwatchReqSchema.safeParse(filePath)
-    if (!parsed.success) return { success: false, error: 'invalid request' }
-    unwatchFile(parsed.data)
-    return { success: true }
   })
 }

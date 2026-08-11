@@ -1,4 +1,5 @@
 import type { AppContext } from '../context'
+import { showToast } from '../ui/toast'
 import { resolveExportDialog } from './export-dialog'
 
 interface ExportDeps {
@@ -9,7 +10,11 @@ interface ExportDeps {
 
 export async function exportMarkdown(deps: ExportDeps): Promise<boolean> {
   const filePath = await resolveExportDialog(deps, 'md', 'Markdown')
-  if (!filePath) return false
+  if (!filePath) return false // user canceled — silent
   const result = await deps.ctx.api.fileSave(filePath, deps.content)
-  return result.success
+  if (!result.success) {
+    showToast(`导出失败: ${result.error}`, 'error')
+    return false
+  }
+  return true
 }

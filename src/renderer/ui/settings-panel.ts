@@ -3,29 +3,13 @@ import type { Settings, Theme } from '@shared/types'
 import { renderShortcutsHTML } from './shortcuts-panel'
 import { showConfirm } from './confirm-modal'
 import { showToast } from './toast'
+import { DEFAULT_SETTINGS } from '@shared/defaults'
 
 type PanelId = 'appearance' | 'editor' | 'autosave' | 'export' | 'system' | 'shortcuts'
 
 export interface SettingsPanelApi {
   open(panel?: PanelId): void
   close(): void
-}
-
-const DEFAULTS: Settings = {
-  theme: 'light',
-  fontSize: 15,
-  editorFont: "'JetBrains Mono', 'Fira Code', monospace",
-  autoSaveInterval: 10,
-  exportDir: '',
-  exportNamingRule: '{title}_{date}',
-  imageSaveDir: 'assets',
-  paneOrder: 'preview-first',
-  lineNumbers: true,
-  codeFolding: true,
-  imageCompressEnabled: true,
-  imageCompressMaxSize: 1920,
-  imageCompressQuality: 0.85,
-  statusBar: { cursor: true, selection: true, readtime: true, chars: true, autosave: true },
 }
 
 const CLEAR_BTN_RESET_DELAY = 2200
@@ -90,7 +74,7 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
     return {
       theme: (activeTheme?.dataset.theme as Theme) ?? 'light',
       fontSize: parseInt(getVal('setting-fontsize') || '15', 10),
-      editorFont: getVal('setting-editorfont') || DEFAULTS.editorFont,
+      editorFont: getVal('setting-editorfont') || DEFAULT_SETTINGS.editorFont,
       autoSaveInterval: parseInt(getVal('setting-autosave') || '10', 10),
       exportDir: getVal('setting-exportdir'),
       exportNamingRule: getVal('setting-namingrule').trim() || '{title}_{date}',
@@ -128,9 +112,9 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
       danger: true,
     })
     if (!ok) return
-    ctx.store.settings.set(DEFAULTS)
-    ctx.store.theme.set(DEFAULTS.theme)
-    ctx.store.autosaveMs.set(DEFAULTS.autoSaveInterval * 1000)
+    ctx.store.settings.set(DEFAULT_SETTINGS)
+    ctx.store.theme.set(DEFAULT_SETTINGS.theme)
+    ctx.store.autosaveMs.set(DEFAULT_SETTINGS.autoSaveInterval * 1000)
     close()
     showToast('设置已重置', 'info')
   }

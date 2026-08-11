@@ -31,8 +31,6 @@ const api: Api = {
   fileStat: (filePath) => ipcRenderer.invoke(CH.FILE_STAT, filePath),
   fileSave: (filePath, content) => ipcRenderer.invoke(CH.FILE_SAVE, filePath, content),
   fileRename: (oldPath, newPath) => ipcRenderer.invoke(CH.FILE_RENAME, oldPath, newPath),
-  fileWatch: (filePath) => ipcRenderer.invoke(CH.FILE_WATCH, filePath),
-  fileUnwatch: (filePath) => ipcRenderer.invoke(CH.FILE_UNWATCH, filePath),
   imageSave: (req) => ipcRenderer.invoke(CH.IMAGE_SAVE, req),
 
   dialogOpenFile: () => ipcRenderer.invoke(CH.DIALOG_OPEN_FILE),
@@ -76,12 +74,6 @@ const api: Api = {
       cb(payload as Parameters<typeof cb>[0])
     ipcRenderer.on(EV.OPEN_FILE_ERROR, handler)
     return () => ipcRenderer.removeListener(EV.OPEN_FILE_ERROR, handler)
-  },
-  onFileChanged(cb) {
-    const handler = (_e: Electron.IpcRendererEvent, payload: unknown): void =>
-      cb(payload as Parameters<typeof cb>[0])
-    ipcRenderer.on(EV.FILE_CHANGED, handler)
-    return () => ipcRenderer.removeListener(EV.FILE_CHANGED, handler)
   },
 
   onMenuEvent(cb) {

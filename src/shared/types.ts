@@ -99,6 +99,11 @@ export interface FileStatResult {
   size: number
 }
 
+export interface FileSaveResult {
+  mtimeMs: number
+  size: number
+}
+
 export interface FileRenameResult {
   newPath: string
 }

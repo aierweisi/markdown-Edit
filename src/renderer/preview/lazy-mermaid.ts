@@ -5,7 +5,12 @@ let cached: Promise<MermaidApi> | null = null
 export function loadMermaid(): Promise<MermaidApi> {
   if (!cached) {
     cached = import('mermaid').then((m) => {
-      m.default.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' })
+      // 'strict' (mermaid 11 default) strips unsafe HTML from diagram text.
+      // We render the resulting SVG via innerHTML AFTER DOMPurify has already
+      // run on the markdown body, so 'loose' would let diagram-embedded
+      // <script>/event handlers bypass sanitization. CSP still backstops this,
+      // but defense-in-depth: don't emit untrusted HTML in the first place.
+      m.default.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' })
       return m.default
     })
   }
@@ -18,7 +23,7 @@ export function refreshMermaidTheme(theme: 'light' | 'dark'): void {
     m.initialize({
       startOnLoad: false,
       theme: theme === 'dark' ? 'dark' : 'default',
-      securityLevel: 'loose',
+      securityLevel: 'strict',
     }),
   )
 }

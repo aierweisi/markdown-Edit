@@ -22,12 +22,12 @@ export function createRecentManager(ctx: AppContext): RecentManager {
   // Serialize read-modify-write ops so concurrent calls (e.g. opening several
   // files at once, or a rename doing remove+add) can't clobber each other.
   let chain: Promise<unknown> = Promise.resolve()
-  function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  function serialize<T>(fn: () => Promise<T>): Promise<T | undefined> {
     const run = chain.then(fn, fn).catch((err: unknown) => {
       // Keep the chain going + surface the failure visibly (callers use `void`),
       // instead of letting it become an unhandled rejection.
       console.warn('[recent] operation failed:', err)
-      return undefined as unknown as T
+      return undefined
     })
     chain = run.then(
       () => undefined,
