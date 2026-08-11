@@ -25,7 +25,7 @@ export async function openFileByPath(deps: OpenDeps, filePath: string): Promise<
   const existing = deps.tabs.getAll().find((t) => t.filePath === filePath)
   if (existing) {
     deps.tabs.setActive(existing.id)
-    deps.editor.setValue(deps.tabs.getContent(existing.id))
+    deps.editor.openTab(existing.id, deps.tabs.getContent(existing.id))
     deps.editor.focus()
     deps.onContentLoaded?.(deps.tabs.getContent(existing.id))
     return
@@ -46,7 +46,7 @@ export async function openFileByPath(deps: OpenDeps, filePath: string): Promise<
   })
   deps.tabs.setActive(tab.id)
   deps.tabs.markModified(tab.id, false)
-  deps.editor.setValue(read.content)
+  deps.editor.openTab(tab.id, read.content)
   deps.editor.focus()
   deps.onContentLoaded?.(read.content)
 }

@@ -216,7 +216,7 @@ async function bootstrap(): Promise<void> {
     tabs.setContent(tab.id, content)
     if (tabs.getActive()?.id !== tab.id) return
     const top = editor.getScrollTop()
-    editor.setValue(content)
+    editor.swapDoc(content)
     editor.setScrollTop(top) // out-of-range values are clamped by the scroller
     presentContent(content)
   }
@@ -239,7 +239,7 @@ async function bootstrap(): Promise<void> {
     const active = tabs.getActive()
     if (active && tabs.getContent(active.id).trim().length === 0) {
       // Apply into current empty tab
-      editor.setValue(content)
+      editor.swapDoc(content)
       tabs.setContent(active.id, content)
       tabs.setTitle(active.id, name)
       // Applying a template is like loading a fresh document: an untitled tab
@@ -249,7 +249,7 @@ async function bootstrap(): Promise<void> {
     } else {
       const tab = tabs.create({ title: name, content })
       tabs.setActive(tab.id)
-      editor.setValue(content)
+      editor.openTab(tab.id, content)
       // New tab is untitled — clean until edited.
       tabs.markModified(tab.id, false)
     }
@@ -346,7 +346,7 @@ async function bootstrap(): Promise<void> {
     if (cur) tabs.setContent(cur, editor.getValue())
     ctx.store.activeTabId.set(id)
     const content = tabs.getContent(id)
-    editor.setValue(content)
+    editor.openTab(id, content)
     presentContent(content)
   }
   /**
@@ -368,13 +368,14 @@ async function bootstrap(): Promise<void> {
       }
     }
     tabs.close(id)
+    editor.closeTab(id)
     const next = ctx.store.activeTabId()
     if (next) {
       const content = tabs.getContent(next)
-      editor.setValue(content)
+      editor.openTab(next, content)
       presentContent(content)
     } else {
-      editor.setValue('')
+      editor.openTab(null, '')
       presentContent('')
       // No tabs left → welcome page shows; blur editor so keystrokes don't land in it.
       editor.blur()
@@ -409,7 +410,10 @@ async function bootstrap(): Promise<void> {
       confirmed.push(id)
     }
     if (confirmed.length > 0) {
-      confirmed.forEach((id) => tabs.close(id))
+      confirmed.forEach((id) => {
+        editor.closeTab(id)
+        tabs.close(id)
+      })
       // Land on the anchor tab and force its content into the editor. Don't use
       // switchActive() here: it short-circuits when the anchor is already active
       // (tabs.close often promotes it to the new active tab), which would leave
@@ -419,7 +423,7 @@ async function bootstrap(): Promise<void> {
       if (tabs.getById(anchorId)) {
         ctx.store.activeTabId.set(anchorId)
         const content = tabs.getContent(anchorId)
-        editor.setValue(content)
+        editor.openTab(anchorId, content)
         presentContent(content)
       }
     } else if (originalActive && tabs.getById(originalActive)) {
@@ -543,7 +547,7 @@ async function bootstrap(): Promise<void> {
     const active = tabs.getActive()
     if (active) {
       const content = tabs.getContent(active.id)
-      editor.setValue(content)
+      editor.openTab(active.id, content)
       presentContent(content)
     }
   } else {
@@ -553,7 +557,7 @@ async function bootstrap(): Promise<void> {
     })
     tabs.setActive(tab.id)
     const content = tabs.getContent(tab.id)
-    editor.setValue(content)
+    editor.openTab(tab.id, content)
     presentContent(content)
   }
   cache.start()
@@ -571,7 +575,7 @@ async function bootstrap(): Promise<void> {
   function newFile(): void {
     const tab = tabs.create({ title: '未命名' })
     tabs.setActive(tab.id)
-    editor.setValue('')
+    editor.openTab(tab.id, '')
     presentContent('')
     editor.focus()
   }
@@ -619,7 +623,7 @@ async function bootstrap(): Promise<void> {
   onBtnId('btn-tab-new', () => {
     const tab = tabs.create({ title: '未命名' })
     tabs.setActive(tab.id)
-    editor.setValue('')
+    editor.openTab(tab.id, '')
     presentContent('')
     editor.focus()
   })
@@ -695,7 +699,7 @@ async function bootstrap(): Promise<void> {
       case 'tab-new': {
         const tab = tabs.create({ title: '未命名' })
         tabs.setActive(tab.id)
-        editor.setValue('')
+        editor.openTab(tab.id, '')
         presentContent('')
         editor.focus()
         break
@@ -829,7 +833,7 @@ async function bootstrap(): Promise<void> {
     const tab = tabs.reopenLast()
     if (!tab) return
     const content = tabs.getContent(tab.id)
-    editor.setValue(content)
+    editor.openTab(tab.id, content)
     presentContent(content)
   }
 
@@ -989,7 +993,7 @@ async function bootstrap(): Promise<void> {
       evt.preventDefault()
       const tab = tabs.create({ title: '未命名' })
       tabs.setActive(tab.id)
-      editor.setValue('')
+      editor.openTab(tab.id, '')
       presentContent('')
     } else if (key === 'tab') {
       evt.preventDefault()
@@ -1001,7 +1005,7 @@ async function bootstrap(): Promise<void> {
       const next = all[(curIdx + dir + all.length) % all.length]
       ctx.store.activeTabId.set(next.id)
       const content = tabs.getContent(next.id)
-      editor.setValue(content)
+      editor.openTab(next.id, content)
       presentContent(content)
     } else if (key >= '1' && key <= '9') {
       evt.preventDefault()
@@ -1108,7 +1112,7 @@ async function bootstrap(): Promise<void> {
     const tab = tabs.create({ title: titleFromPath(name) || '未命名', filePath, content })
     tabs.setActive(tab.id)
     tabs.markModified(tab.id, false)
-    editor.setValue(content)
+    editor.openTab(tab.id, content)
     presentContent(content)
     void recent.add(filePath)
   })

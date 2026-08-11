@@ -102,6 +102,7 @@ export interface BaseExtensionsOpts {
   theme: Extension
   lineNumbers?: boolean
   folding?: boolean
+  typewriter?: boolean
 }
 
 export function buildBaseExtensions(opts: BaseExtensionsOpts): Extension[] {
@@ -114,7 +115,7 @@ export function buildBaseExtensions(opts: BaseExtensionsOpts): Extension[] {
     placeholderExt(opts.placeholder ?? '开始写作…'),
     langCompartment.of(markdown({ base: markdownLanguage, codeLanguages: languages })),
     themeCompartment.of(opts.theme),
-    typewriterCompartment.of(typewriterExt(false)),
+    typewriterCompartment.of(typewriterExt(opts.typewriter ?? false)),
     cmZhPhrases,
     tableKeymap,
     continueListKeymap,
