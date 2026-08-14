@@ -91,6 +91,9 @@ export type Result<T extends object = object> = (T & { success: true }) | ErrorR
 
 export interface FileReadResult {
   content: string
+  /** Post-read mtime/size so callers can prime a file-sync baseline in one round-trip. */
+  mtimeMs: number
+  size: number
 }
 
 export interface FileStatResult {

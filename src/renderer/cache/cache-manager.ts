@@ -52,8 +52,11 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
     try {
       const snapshot = buildSnapshot()
       const result = await deps.ctx.api.storeSet('cache', snapshot)
-      if (!result.success) console.warn('[cache] persist failed:', result.error)
-      dirty = false
+      // Only clear the dirty flag on a successful write. Clearing it on
+      // failure would make the next interval skip the retry, leaving these
+      // edits only in memory (lost on crash). Keep dirty to re-attempt.
+      if (result.success) dirty = false
+      else console.warn('[cache] persist failed:', result.error)
     } finally {
       persistLock = false
     }

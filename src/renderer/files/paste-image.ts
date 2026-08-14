@@ -2,6 +2,7 @@ import type { AppContext } from '../context'
 import type { EditorApi } from '../editor/editor-api'
 import type { TabManager } from '../tabs/tab-manager'
 import { compressImage, type CompressOptions } from '../lib/image-compress'
+import { showToast } from '../ui/toast'
 
 export interface PasteOpts {
   ctx: AppContext
@@ -24,6 +25,7 @@ export async function insertImageBlob(blob: Blob, opts: PasteOpts): Promise<bool
   const result = await opts.ctx.api.imageSave({ baseDir, fileName, dataBase64, imageDir })
   if (!result.success) {
     console.error('[image] save failed:', result.error)
+    showToast(`图片保存失败: ${result.error}`, 'error')
     return false
   }
   opts.editor.insertText(`![](${result.relPath})`)
@@ -72,7 +74,12 @@ export function attachImagePaste(opts: PasteOpts): () => void {
     const blob = image.getAsFile()
     if (!blob) return
     evt.preventDefault()
-    await insertImageBlob(blob, opts)
+    try {
+      await insertImageBlob(blob, opts)
+    } catch (err) {
+      console.error('[image] paste failed:', err)
+      showToast(`图片插入失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
+    }
   }
 
   const target = opts.ctx.dom.editorContainer

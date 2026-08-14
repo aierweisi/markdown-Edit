@@ -163,7 +163,14 @@ export const StoreKeySchema = z.enum(STORE_KEYS)
 
 export const FileReadReqSchema = z.string().min(1)
 export const FileStatReqSchema = z.string().min(1)
-export const FileSaveReqSchema = z.object({ filePath: z.string().min(1), content: z.string() })
+export const FileSaveReqSchema = z.object({
+  filePath: z.string().min(1),
+  content: z.string(),
+  /** Allow creating a NEW file at the path. Defaults to false: writing a path
+   *  that doesn't exist (externally moved/deleted) fails with `moved: true`
+   *  instead of silently resurrecting the file. */
+  create: z.boolean().default(false),
+})
 export const FileRenameReqSchema = z.object({ oldPath: z.string().min(1), newPath: z.string().min(1) })
 
 export const ImageSaveReqSchema = z.object({
@@ -292,7 +299,12 @@ export const UpdateTitlebarReqSchema = z.object({
 export type StoreSetResult = Result<{ key: string }>
 export type FileReadResp = Result<FileReadResult>
 export type FileStatResp = Result<FileStatResult>
-export type FileSaveResp = Result<FileSaveResult>
+// Failure branch carries `moved: true` when the write was refused because the
+// target path vanished (externally moved/deleted) — lets callers offer
+// save-as instead of a generic error.
+export type FileSaveResp =
+  | (FileSaveResult & { success: true })
+  | { success: false; error: string; moved?: boolean }
 export type FileRenameResp = Result<FileRenameResult>
 
 export type ImageSaveResp = ImageSaveResult | { success: false; error: string }
@@ -321,7 +333,7 @@ export interface Api {
   // File ops
   fileRead(filePath: string): Promise<FileReadResp>
   fileStat(filePath: string): Promise<FileStatResp>
-  fileSave(filePath: string, content: string): Promise<FileSaveResp>
+  fileSave(filePath: string, content: string, create?: boolean): Promise<FileSaveResp>
   fileRename(oldPath: string, newPath: string): Promise<FileRenameResp>
   imageSave(req: ImageSaveRequest): Promise<ImageSaveResp>
 

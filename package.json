@@ -47,6 +47,7 @@
     "electron-vite": "^5.0.0",
     "eslint": "^10.8.0",
     "globals": "^17.8.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.4.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.65.0",

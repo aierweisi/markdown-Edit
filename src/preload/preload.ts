@@ -29,7 +29,7 @@ const api: Api = {
 
   fileRead: (filePath) => ipcRenderer.invoke(CH.FILE_READ, filePath),
   fileStat: (filePath) => ipcRenderer.invoke(CH.FILE_STAT, filePath),
-  fileSave: (filePath, content) => ipcRenderer.invoke(CH.FILE_SAVE, filePath, content),
+  fileSave: (filePath, content, create) => ipcRenderer.invoke(CH.FILE_SAVE, filePath, content, create),
   fileRename: (oldPath, newPath) => ipcRenderer.invoke(CH.FILE_RENAME, oldPath, newPath),
   imageSave: (req) => ipcRenderer.invoke(CH.IMAGE_SAVE, req),
 

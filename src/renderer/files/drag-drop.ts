@@ -9,7 +9,9 @@ interface DragDropOpts {
   ctx: AppContext
   tabs: TabManager
   editor: EditorApi
-  onAfterOpen?(content: string): void
+  /** Mirrors OpenDeps.onContentLoaded — stat carries the post-read mtime/size
+   *  so the caller can prime a file-sync baseline. */
+  onAfterOpen?(content: string, stat?: { mtimeMs: number; size: number }): void
 }
 
 export function attachDragDrop(opts: DragDropOpts): () => void {

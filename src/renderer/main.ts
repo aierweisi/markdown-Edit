@@ -82,9 +82,13 @@ async function loadSettings(): Promise<Settings> {
 
 async function bootstrap(): Promise<void> {
   const dom = collectDomRefs()
-  const settings = await loadSettings()
-  const dividerPos = (await window.api.storeGet('dividerPos')) ?? 0
-  const store = createAppStore(settings, dividerPos)
+  // Fetch settings + dividerPos in parallel — independent IPC round-trips,
+  // serializing them only adds latency to first paint.
+  const [settings, dividerPos] = await Promise.all([
+    loadSettings(),
+    window.api.storeGet('dividerPos'),
+  ])
+  const store = createAppStore(settings, dividerPos ?? 0)
   const ctx = createAppContext(store, dom)
 
   applyThemeSideEffects(ctx, settings.theme)
@@ -202,7 +206,7 @@ async function bootstrap(): Promise<void> {
   // recent, drag-drop, file-sync reload) so the outline + status bar stay in
   // sync — editor.setValue() is programmatic and does not fire onChange, so
   // without this the outline would keep the previous document's headings.
-  function presentContent(content: string): void {
+  function presentContent(content: string, stat?: { mtimeMs: number; size: number }): void {
     // Document switch → hard-reset the preview first so it re-renders from an
     // empty body rather than morphdom-diffing against the previous document
     // (which on large files left stale content at the top after switching).
@@ -210,6 +214,15 @@ async function bootstrap(): Promise<void> {
     preview.render(content)
     statusBar.setText(content)
     if (activitybar.isActive('outline')) outline.refresh(content)
+    // Prime the file-sync baseline synchronously from the read result. Without
+    // this, the async recordMtime (fired by the tabs subscription) may not have
+    // landed before the first checkTab, and checkTab would treat the post-open
+    // disk state as the baseline — silently swallowing any external edit made
+    // between open and that first check.
+    if (stat) {
+      const active = tabs.getActive()
+      if (active?.filePath) fileSync.noteSaved(active.id, stat.mtimeMs, stat.size)
+    }
   }
   // Reload a tab from disk when its file is modified externally (file-sync.ts).
   function reloadTabContent(tab: TabState, content: string): void {
@@ -265,7 +278,9 @@ async function bootstrap(): Promise<void> {
       if (tab && !tab.modified) tabs.markModified(id, true)
     }
     preview.render(value)
-    statusBar.setText(value)
+    // status-bar text stats update via the debounced `updateStatus` subscriber
+    // registered below (300ms) — running countWords/countChars synchronously on
+    // every keystroke is the hot path that made large docs laggy.
     cache.markDirty()
     // schedule autosave to file for tabs with a real path
     scheduleAutosave()
@@ -277,6 +292,8 @@ async function bootstrap(): Promise<void> {
 
   // ── Autosave: debounced per current autoSaveInterval setting ────────
   let autosaveTimer: ReturnType<typeof setTimeout> | null = null
+  // tabId → 失效时已警告过的 filePath;换路径后 key 错配自动重置,无需订阅清理
+  const autosaveStaleWarned = new Map<string, string>()
   function scheduleAutosave(): void {
     if (autosaveTimer) clearTimeout(autosaveTimer)
     const ms = ctx.store.autosaveMs()
@@ -288,9 +305,19 @@ async function bootstrap(): Promise<void> {
     const tab = tabs.getActive()
     if (!tab || !tab.filePath || !tab.modified) return
     if (ctx.store.saving()) return
+    // Snapshot this tab's content BEFORE any await. An await yields to the
+    // event loop, and the user may switch or close the tab during that gap —
+    // reading editor.getValue() *after* the await would capture the now-active
+    // tab's text and write it into THIS tab's file (cross-file corruption).
+    // getContent(id) always holds this tab's own text (switchActive stores it
+    // back on the way out), so it's safe across the await below.
+    const content = tabs.getContent(tab.id)
     ctx.store.saving.set(true)
     try {
-      const result = await ctx.api.fileSave(tab.filePath, editor.getValue())
+      // create:false — fileSave refuses vanished paths (moved: true) instead
+      // of resurrecting the file at the old location; one IPC round-trip, no
+      // renderer-side pre-stat race window.
+      const result = await ctx.api.fileSave(tab.filePath, content)
       if (result.success) {
         tabs.markModified(tab.id, false)
         // Stamp the baseline with the post-write mtime/size straight from the
@@ -299,6 +326,12 @@ async function bootstrap(): Promise<void> {
         // false-fire "外部已更新".
         fileSync.noteSaved(tab.id, result.mtimeMs, result.size)
         // "已保存 时间" 由 status-bar 订阅 saving signal(saving→false)统一驱动
+      } else if (result.moved) {
+        // 原路径已被外部移动/删除:静默跳过,每个失效片段仅提示一次。
+        if (autosaveStaleWarned.get(tab.id) !== tab.filePath) {
+          autosaveStaleWarned.set(tab.id, tab.filePath)
+          showToast(`“${tab.title}” 的原路径已不存在,已跳过自动保存。请按 Ctrl+S 手动另存。`, 'error')
+        }
       } else {
         showToast(`自动保存失败: ${result.error}`, 'error')
       }
@@ -363,7 +396,11 @@ async function bootstrap(): Promise<void> {
       })
       if (choice === 'cancel') return false
       if (choice === 'save') {
-        const ok = await save(false)
+        // The modal only traps keyboard focus — the user can still click another
+        // tab while it is open. Switch back so they see what is being saved;
+        // the save itself is bound to `id`, so it targets this tab regardless.
+        if (ctx.store.activeTabId() !== id) switchActive(id)
+        const ok = await save(false, id)
         if (!ok) return false
       }
     }
@@ -403,7 +440,10 @@ async function bootstrap(): Promise<void> {
         })
         if (choice === 'cancel') break
         if (choice === 'save') {
-          const ok = await save(false)
+          // Same re-assert as closeTabAndUpdate: show what is being saved; the
+          // save is bound to `id` regardless of the active tab.
+          if (ctx.store.activeTabId() !== id) switchActive(id)
+          const ok = await save(false, id)
           if (!ok) break
         }
       }
@@ -584,21 +624,19 @@ async function bootstrap(): Promise<void> {
       ctx,
       tabs,
       editor,
-      onContentLoaded(content) {
-        presentContent(content)
+      onContentLoaded(content, stat) {
+        presentContent(content, stat)
         const active = tabs.getActive()
         if (active?.filePath) void recent.add(active.filePath)
       },
     })
   }
-  async function save(saveAs = false): Promise<boolean> {
-    const result = await saveActiveTab({
-      ctx,
-      tabs,
-      getCurrentContent: () => editor.getValue(),
-    }, saveAs)
+  /** Save the active tab, or an explicit tab by id (close-tab confirm flows —
+   *  the save stays bound to that tab even if the user switches mid-flow). */
+  async function save(saveAs = false, tabId?: string): Promise<boolean> {
+    const result = await saveActiveTab({ ctx, tabs, tabId }, saveAs)
     if (result?.success) {
-      const tab = tabs.getActive()
+      const tab = tabId ? tabs.getById(tabId) : tabs.getActive()
       if (tab?.filePath) {
         await recent.add(tab.filePath)
         fileSync.noteSaved(tab.id, result.mtimeMs, result.size)

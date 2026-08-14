@@ -98,7 +98,7 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
       if (disposed || !st.success) return
       if (!st.exists) {
         mtimes.delete(tab.id)
-        showToast(`"${tab.title}" 已被删除`, 'error')
+        showToast(`"${tab.title}" 已移动或删除`, 'error')
         return
       }
       const last = mtimes.get(tab.id)

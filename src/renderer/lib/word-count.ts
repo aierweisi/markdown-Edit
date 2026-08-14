@@ -25,12 +25,10 @@ export interface CharCounts {
 
 export function countChars(text: string): CharCounts {
   if (!text) return { total: 0, noWhitespace: 0 }
-  let noWs = 0
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    if (ch && !/\s/.test(ch)) noWs++
-  }
-  return { total: text.length, noWhitespace: noWs }
+  // One regex pass instead of a per-character regex test: O(n) with a single
+  // matcher allocation rather than text.length separate ones.
+  const whitespace = text.match(/\s/g)?.length ?? 0
+  return { total: text.length, noWhitespace: text.length - whitespace }
 }
 
 export function estimateReadingMinutes(wordCount: number): number {

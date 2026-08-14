@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify'
+
 type MermaidApi = typeof import('mermaid').default
 
 let cached: Promise<MermaidApi> | null = null
@@ -46,7 +48,13 @@ export async function renderMermaidIn(host: HTMLElement, isStale: () => boolean 
       if (isStale() || !pre.isConnected) continue
       const wrap = document.createElement('div')
       wrap.className = 'mermaid-block'
-      wrap.innerHTML = svg
+      // Defense-in-depth: mermaid runs securityLevel:'strict', but this SVG is
+      // injected via innerHTML AFTER DOMPurify's main pass on the body, so it
+      // would bypass sanitization if a future mermaid/config drift emitted
+      // <script>/event handlers. Sanitize with the SVG profile before injecting.
+      wrap.innerHTML = DOMPurify.sanitize(svg, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+      })
       pre.replaceWith(wrap)
     } catch (err) {
       if (!pre.isConnected) continue

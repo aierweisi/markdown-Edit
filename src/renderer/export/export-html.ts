@@ -2,6 +2,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { AppContext } from '../context'
 import { escHtml } from '../lib/fs-paths'
+import { ALLOWED_URI_REGEXP } from '../preview/uri-policy'
 import { showToast } from '../ui/toast'
 import { resolveExportDialog } from './export-dialog'
 
@@ -41,7 +42,10 @@ export async function exportHtml(deps: ExportDeps): Promise<boolean> {
   if (!filePath) return false
 
   const rendered = String(await marked.parse(deps.content))
-  const safe = DOMPurify.sanitize(rendered, { ADD_ATTR: ['target', 'rel'] })
+  // Same URI policy as the live preview (uri-policy.ts). DOMPurify's default
+  // whitelist has no file: scheme, so without this the export silently drops
+  // file:// image srcs that the preview renders fine.
+  const safe = DOMPurify.sanitize(rendered, { ADD_ATTR: ['target', 'rel'], ALLOWED_URI_REGEXP })
   const style = deps.theme === 'dark' ? STYLE_DARK : STYLE_LIGHT
 
   const html =
@@ -49,7 +53,8 @@ export async function exportHtml(deps: ExportDeps): Promise<boolean> {
     `<title>${escHtml(deps.title || 'Markdown')}</title><style>${style}</style></head>` +
     `<body>\n${safe}\n</body></html>\n`
 
-  const result = await deps.ctx.api.fileSave(filePath, html)
+  // create:true — the dialog path is always a fresh output file.
+  const result = await deps.ctx.api.fileSave(filePath, html, true)
   if (!result.success) {
     showToast(`导出失败: ${result.error}`, 'error')
     return false

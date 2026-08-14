@@ -8,7 +8,8 @@ interface OpenDeps {
   ctx: AppContext
   tabs: TabManager
   editor: EditorApi
-  onContentLoaded?(content: string): void
+  /** stat carries the post-read mtime/size so the caller can prime a file-sync baseline. */
+  onContentLoaded?(content: string, stat?: { mtimeMs: number; size: number }): void
 }
 
 /**
@@ -48,7 +49,7 @@ export async function openFileByPath(deps: OpenDeps, filePath: string): Promise<
   deps.tabs.markModified(tab.id, false)
   deps.editor.openTab(tab.id, read.content)
   deps.editor.focus()
-  deps.onContentLoaded?.(read.content)
+  deps.onContentLoaded?.(read.content, { mtimeMs: read.mtimeMs, size: read.size })
 }
 
 function closeBlankDraftIfAny(deps: OpenDeps): void {

@@ -48,7 +48,8 @@ describe('fs IPC: FILE_READ', () => {
 })
 
 describe('fs IPC: FILE_SAVE', () => {
-  const save = (p: unknown, c: unknown) => handles.get(CH.FILE_SAVE)!({} as never, p, c)
+  const save = (p: unknown, c: unknown, create?: unknown) =>
+    handles.get(CH.FILE_SAVE)!({} as never, p, c, create)
 
   it('rejects non-string content (zod)', async () => {
     await expect(save(join(cwd, 'x.md'), 123)).resolves.toMatchObject({
@@ -64,10 +65,27 @@ describe('fs IPC: FILE_SAVE', () => {
     })
   })
 
-  it('writes atomically and reads back', async () => {
+  it('overwrites an existing file in place and reads back', async () => {
     const target = tmpFile()
+    await fsp.writeFile(target, 'old')
     await expect(save(target, 'hello world')).resolves.toMatchObject({ success: true })
     expect(readFileSync(target, 'utf-8')).toBe('hello world')
+    await fsp.unlink(target)
+  })
+
+  // A vanished path (externally moved/deleted) must NOT be silently
+  // resurrected by a routine save — the handler refuses with moved:true and
+  // the renderer offers save-as instead.
+  it('refuses a vanished path with moved:true (no silent resurrect)', async () => {
+    const target = tmpFile()
+    await expect(save(target, 'x')).resolves.toMatchObject({ success: false, moved: true })
+    await expect(fsp.stat(target)).rejects.toThrow()
+  })
+
+  it('creates a new file when create:true (save-as / export path)', async () => {
+    const target = tmpFile()
+    await expect(save(target, 'new content', true)).resolves.toMatchObject({ success: true })
+    expect(readFileSync(target, 'utf-8')).toBe('new content')
     await fsp.unlink(target)
   })
 })
