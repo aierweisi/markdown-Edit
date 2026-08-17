@@ -77,9 +77,26 @@ body:has(.sidebar-host.resizing) .tabbar {
   z-index: 31;
   background: transparent;
 }
-.sidebar-resizer:hover,
-.sidebar-host.resizing .sidebar-resizer {
-  background: var(--accent-light);
+/* Hover/drag highlight: match the editor/preview divider — a bright accent
+   line with glow. The 7px element is only the hit area; paint a centered 3px
+   line via ::before so the highlight reads as a crisp divider, not a wide band. */
+.sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px; /* center a 3px line inside the 7px hit area */
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition:
+    background 0.18s var(--ease),
+    box-shadow 0.18s var(--ease);
+}
+.sidebar-resizer:hover::before,
+.sidebar-host.resizing .sidebar-resizer::before {
+  background: var(--accent-2-grad);
+  box-shadow: 0 0 18px rgba(6, 182, 212, 0.5);
 }
 
 /* Activity bar: a constant 48px column on the far left, from the title toolbar
