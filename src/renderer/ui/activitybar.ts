@@ -46,7 +46,11 @@ export function createActivitybar(opts: ActivitybarOpts): ActivitybarApi {
     const olOn = activeView === 'outline' && sidebarOpen
     abItems().forEach((b) => {
       const v = b.dataset.view
-      b.classList.toggle('active', (v === 'workspace' && wsOn) || (v === 'outline' && olOn))
+      const on = (v === 'workspace' && wsOn) || (v === 'outline' && olOn)
+      b.classList.toggle('active', on)
+      // aria-expanded describes the toggled sidebar; aria-pressed would also
+      // work, but the button really does expand/collapse a panel here.
+      b.setAttribute('aria-expanded', String(on))
     })
     // Keep the format-toolbar entry buttons in sync (they route here too).
     document.getElementById('btn-workspace')?.classList.toggle('active', wsOn)

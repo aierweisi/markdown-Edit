@@ -170,11 +170,20 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
       view.focus()
     },
     insertText(text) {
-      const range = view.state.selection.main
-      view.dispatch({
-        changes: { from: range.from, to: range.to, insert: text },
-        selection: { anchor: range.from + text.length },
-      })
+      view.focus()
+      // Insert through Chromium's editing pipeline instead of dispatching a
+      // raw transaction. A programmatic DOM change behind the IME's back makes
+      // Microsoft Pinyin drop to English mode (shows up after async inserts
+      // like paste-image), while execCommand notifies TSF like real typing.
+      // CM6's DOM observer picks the insertion up and applies it as a normal
+      // change; keep the dispatch path as fallback for non-standard embedders.
+      if (!document.execCommand('insertText', false, text)) {
+        const range = view.state.selection.main
+        view.dispatch({
+          changes: { from: range.from, to: range.to, insert: text },
+          selection: { anchor: range.from + text.length },
+        })
+      }
     },
     getScrollTop: () => view.scrollDOM.scrollTop,
     setScrollTop(n) {

@@ -71,11 +71,24 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
 
   function readForm(): Settings {
     const activeTheme = document.querySelector<HTMLElement>('.theme-toggle-btn.active')
+    // Clamp numeric inputs to their HTML min/max and write the corrected value
+    // back so the user sees what was actually saved (empty/NaN → default).
+    const num = (id: string, fallback: number, isFloat = false): number => {
+      const el = document.getElementById(id) as HTMLInputElement | null
+      const min = el ? parseFloat(el.min) : NaN
+      const max = el ? parseFloat(el.max) : NaN
+      const raw = el?.value.trim() ?? ''
+      let v = (isFloat ? parseFloat(raw) : parseInt(raw, 10)) || fallback
+      if (!Number.isNaN(min)) v = Math.max(min, v)
+      if (!Number.isNaN(max)) v = Math.min(max, v)
+      if (el) el.value = isFloat ? String(v) : String(Math.round(v))
+      return isFloat ? v : Math.round(v)
+    }
     return {
       theme: (activeTheme?.dataset.theme as Theme) ?? 'light',
-      fontSize: parseInt(getVal('setting-fontsize') || '15', 10),
+      fontSize: num('setting-fontsize', DEFAULT_SETTINGS.fontSize),
       editorFont: getVal('setting-editorfont') || DEFAULT_SETTINGS.editorFont,
-      autoSaveInterval: parseInt(getVal('setting-autosave') || '10', 10),
+      autoSaveInterval: num('setting-autosave', DEFAULT_SETTINGS.autoSaveInterval),
       exportDir: getVal('setting-exportdir'),
       exportNamingRule: getVal('setting-namingrule').trim() || '{title}_{date}',
       imageSaveDir: getVal('setting-imagedir').trim() || 'assets',
@@ -83,8 +96,12 @@ export function createSettingsPanel(ctx: AppContext): SettingsPanelApi {
       lineNumbers: getChecked('setting-linenumbers'),
       codeFolding: getChecked('setting-codefolding'),
       imageCompressEnabled: getChecked('setting-imgcompress-enabled'),
-      imageCompressMaxSize: parseInt(getVal('setting-imgcompress-size') || '1920', 10),
-      imageCompressQuality: parseFloat(getVal('setting-imgcompress-quality') || '0.85'),
+      imageCompressMaxSize: num('setting-imgcompress-size', DEFAULT_SETTINGS.imageCompressMaxSize),
+      imageCompressQuality: num(
+        'setting-imgcompress-quality',
+        DEFAULT_SETTINGS.imageCompressQuality,
+        true,
+      ),
       statusBar: {
         cursor: getChecked('setting-status-cursor'),
         selection: getChecked('setting-status-selection'),

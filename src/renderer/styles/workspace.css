@@ -64,6 +64,20 @@ body:has(.sidebar-host.open) .tabbar {
 body:has(.sidebar-host.resizing) .tabbar {
   transition: none;
 }
+/* Body-level drag affordances, mirroring divider-dragging (v1.css): keep the
+   col-resize cursor app-wide and suppress text selection while dragging. */
+body.ws-resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+body.ws-resizing .sidebar-host,
+body.ws-resizing .main-area {
+  pointer-events: none;
+}
+/* The resizer itself must stay interactive — it holds the pointer capture. */
+body.ws-resizing #ws-resizer {
+  pointer-events: auto;
+}
 
 /* Right-edge drag handle to resize the sidebar width. */
 .sidebar-resizer {

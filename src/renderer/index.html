@@ -119,7 +119,8 @@
       </svg>
       <span class="toolbar-action-label">模板</span>
     </button><!-- Export -->
-    <div class="export-wrap"><button class="toolbar-btn toolbar-action-btn" id="btn-export" title="导出文件"><svg
+    <div class="export-wrap"><button class="toolbar-btn toolbar-action-btn" id="btn-export" title="导出文件"
+        aria-haspopup="menu" aria-expanded="false"><svg
           aria-hidden="true" viewBox="0 0 24 24" style="
               width: 13px;
               height: 13px;
@@ -146,34 +147,38 @@
             ">
           <polyline points="6 9 12 15 18 9" />
         </svg></button>
-      <div class="export-menu" id="export-menu">
-        <div class="export-item" data-type="md"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <div class="export-menu" id="export-menu" role="menu">
+        <button type="button" class="export-item" data-type="md" role="menuitem"><svg aria-hidden="true"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
           </svg>
-          导出 Markdown </div>
-        <div class="export-item" data-type="html"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          导出 Markdown </button>
+        <button type="button" class="export-item" data-type="html" role="menuitem"><svg aria-hidden="true"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
             <polyline points="16 18 22 12 16 6" />
             <polyline points="8 6 2 12 8 18" />
           </svg>
-          导出 HTML </div>
-        <div class="export-item" data-type="pdf"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          导出 HTML </button>
+        <button type="button" class="export-item" data-type="pdf" role="menuitem"><svg aria-hidden="true"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
             <line x1="9" y1="15" x2="15" y2="15" />
           </svg>
-          导出 PDF </div>
+          导出 PDF </button>
         <div class="export-separator"></div>
-        <div class="export-item" data-type="settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="export-item" data-type="settings" role="menuitem"><svg aria-hidden="true"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.07 4.93a10 10 0 0 1 1.41 13.37" />
           </svg>
           导出设置...
-        </div>
+        </button>
       </div>
     </div>
     <div class="toolbar-separator"></div><!-- View toggle --><button class="toolbar-btn" id="btn-view-toggle"
@@ -215,6 +220,16 @@
           aria-hidden="true" viewBox="0 0 10 10" width="10" height="10">
           <path d="M0 0l10 10M10 0l-10 10" stroke="currentColor" stroke-width="1" />
         </svg></button></div>
+    <!-- Toolbar overflow "⋯": buttons that no longer fit the row land here
+         (managed by toolbar-overflow.ts). Hidden entirely when everything fits. -->
+    <button class="toolbar-btn" id="btn-toolbar-overflow" type="button" title="更多工具"
+      aria-haspopup="menu" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="5" cy="12" r="0.5" fill="currentColor" />
+        <circle cx="12" cy="12" r="0.5" fill="currentColor" />
+        <circle cx="19" cy="12" r="0.5" fill="currentColor" />
+      </svg></button>
+    <div class="toolbar-overflow-menu" id="toolbar-overflow-menu" role="menu"></div>
   </div><!-- ── Tab Bar ──────────────────────────────────────────── -->
   <div class="tabbar" id="tabbar">
     <div class="tabs-container" id="tabs-container"></div><button class="tab-new-btn" id="btn-tab-new"
@@ -351,7 +366,8 @@
             关闭</span></div>
       </div>
     </div>
-    <div class="divider" id="divider"></div>
+    <div class="divider" id="divider" role="separator" aria-orientation="vertical" tabindex="0"
+      aria-label="拖动调整编辑与预览比例（方向键微调，双击复位）"></div>
     <div class="preview-pane" id="preview-pane">
       <div class="pane-header"><span class="pane-label">预览</span><label class="sync-scroll-toggle"><input
             type="checkbox" id="sync-scroll" checked /><span>同步滚动</span></label></div>

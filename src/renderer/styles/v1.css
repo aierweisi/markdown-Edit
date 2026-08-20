@@ -60,33 +60,19 @@ select {
   flex-shrink: 0;
   -webkit-app-region: drag;
 }
-/* Responsive: as the window narrows, progressively hide lower-priority tools so
-   the title bar never overflows. Core ops (new/open/save/workspace), the most
-   common formats (heading/bold/italic), export and settings stay to the end. */
-@media (max-width: 1100px) {
-  #btn-swap-panes,
-  .fmt-btn[data-action='hr'] {
-    display: none !important;
-  }
+/* Toolbar overflow: JS (toolbar-overflow.ts) measures the row and moves buttons
+   that don't fit into the "⋯" dropdown — the visible set is stable at any given
+   width, no width-dependent hiding. This class marks the overflow toggle. */
+#btn-toolbar-overflow {
+  display: none;
 }
-@media (max-width: 950px) {
-  #btn-template,
-  #btn-theme,
-  .fmt-btn[data-action='strikethrough'],
-  .fmt-btn[data-action='quote'],
-  .fmt-btn[data-action='table'],
-  .fmt-btn[data-action='codeblock'] {
-    display: none !important;
-  }
+#btn-toolbar-overflow.has-overflow {
+  display: flex;
 }
-@media (max-width: 850px) {
-  .fmt-btn[data-action='ul'],
-  .fmt-btn[data-action='ol'],
-  .fmt-btn[data-action='code'],
-  .fmt-btn[data-action='image'],
-  .fmt-btn[data-action='link'] {
-    display: none !important;
-  }
+/* Buttons currently parked in the overflow menu. display:none keeps them out
+   of measurement; their click handlers stay live (menu items click them). */
+.toolbar-btn-hidden-overflow {
+  display: none !important;
 }
 .toolbar > * {
   -webkit-app-region: no-drag;
@@ -146,6 +132,9 @@ select {
   font-weight: 500;
   white-space: nowrap;
   position: relative;
+  /* Never squeeze — the overflow manager hides whole buttons instead of
+     letting them (or their labels) collapse mid-width. */
+  flex-shrink: 0;
 }
 .toolbar-btn:hover,
 input {
@@ -280,6 +269,51 @@ input {
   opacity: 0.6;
 }
 .export-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+/* "⋯" overflow dropdown for toolbar buttons that don't fit. Same glass language
+   as .export-menu; items carry the original button's icon + label. */
+.toolbar-overflow-menu {
+  display: none;
+  position: fixed;
+  background: var(--bg-modal);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 180px;
+  z-index: 1000;
+  overflow: hidden;
+  padding: 4px;
+}
+.toolbar-overflow-menu.open {
+  display: block;
+  animation: menu-in 0.12s ease;
+}
+.toolbar-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+}
+.toolbar-overflow-item:hover {
+  background: var(--bg-hover);
+}
+.toolbar-overflow-item svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.toolbar-overflow-sep {
   height: 1px;
   background: var(--border);
   margin: 4px 0;
@@ -573,6 +607,10 @@ input {
 .divider:hover {
   background: var(--divider-active);
   width: 4px;
+}
+.divider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .main-area.view-editor-only .divider,
 .main-area.view-editor-only .preview-pane,
@@ -884,6 +922,9 @@ input {
   font-size: 11px;
   color: var(--text-muted);
   flex-shrink: 0;
+  /* Line/column, char count and read time update constantly — tabular digits
+     keep the layout from jittering as they change. */
+  font-variant-numeric: tabular-nums;
 }
 .statusbar,
 .statusbar-left,
@@ -993,6 +1034,9 @@ input {
 .modal-body {
   padding: 18px;
   overflow-y: auto;
+  /* Scrolling to the end inside a modal must not chain into the page behind
+     the overlay — trap the overscroll here. */
+  overscroll-behavior: contain;
   flex: 1;
 }
 .modal-actions {
@@ -1026,6 +1070,7 @@ input {
 .tpl-list {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px 8px;
 }
 .tpl-sidebar-add {
@@ -1320,6 +1365,7 @@ input {
 .settings-panels {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0;
 }
 .settings-panel {
@@ -2672,7 +2718,12 @@ html {
   border: 1px solid var(--glass-border) !important;
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  transition: all 0.2s var(--ease);
+  transition:
+    background 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    color 0.2s var(--ease),
+    transform 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
 }
 .toolbar-action-btn:hover {
   background: var(--accent-soft) !important;
@@ -2753,7 +2804,7 @@ html {
 }
 .divider {
   background: var(--glass-border) !important;
-  transition: all 0.18s var(--ease);
+  transition: background 0.18s var(--ease);
 }
 .divider.dragging,
 .divider:hover,
@@ -3380,6 +3431,7 @@ body.has-unsaved #btn-save::after {
 .shortcuts-content {
   height: 100%;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px 0;
 }
 .shortcuts-panel-wrap {

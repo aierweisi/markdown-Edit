@@ -593,6 +593,9 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
   function setTitle(path: string): void {
     const el = document.querySelector('.sidebar-title-name')
     if (el) el.textContent = basename(path)
+    // The header shows only the basename — surface the full workspace path in
+    // the tooltip so long/ambiguous folder names are distinguishable.
+    document.getElementById('ws-title')?.setAttribute('title', path)
   }
   /** Expand ancestors of the active file and scroll it into view (no rerender). */
   async function revealActiveFile(): Promise<void> {
@@ -639,8 +642,12 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
       /* ignore — capture unavailable */
     }
     $host()?.classList.add('resizing')
+    document.body.classList.add('ws-resizing')
+    // The sidebar's left edge sits at the activity bar's right edge (48px), not
+    // x=0 — measure it so width = clientX - left tracks the cursor with no jump.
+    const startLeft = $host()?.getBoundingClientRect().left ?? 0
     const onMove = (ev: PointerEvent): void => {
-      curWidth = clampWidth(ev.clientX)
+      curWidth = clampWidth(ev.clientX - startLeft)
       applyWidth(curWidth)
     }
     const onUp = (ev: PointerEvent): void => {
@@ -653,6 +660,7 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
         /* ignore */
       }
       $host()?.classList.remove('resizing')
+      document.body.classList.remove('ws-resizing')
       void persistWidth()
     }
     resizer.addEventListener('pointermove', onMove)

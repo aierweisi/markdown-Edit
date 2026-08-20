@@ -23,6 +23,7 @@ import { createWorkspacePanel } from './ui/workspace-panel'
 import { createActivitybar, type ActivitybarApi } from './ui/activitybar'
 import { createTemplatesPanel } from './ui/templates-panel'
 import { openTableGrid } from './ui/table-grid-popover'
+import { initToolbarOverflow } from './ui/toolbar-overflow'
 import { createStatusBar } from './ui/status-bar'
 import { attachWelcome } from './ui/welcome'
 import { attachWindowControls } from './ui/window-controls'
@@ -674,18 +675,37 @@ async function bootstrap(): Promise<void> {
     ctx.store.paneOrder.set(next)
   })
   onBtnId('status-palette-hint', () => palette.open())
+  // The hint ships as ⌘P; show Ctrl+P on the platforms whose keyboards have it.
+  dom.statusPaletteHint.textContent = ctx.api.platform === 'darwin' ? '⌘P' : 'Ctrl+P'
 
   // v1 export menu (.export-wrap → .export-menu .export-item[data-type])
   const exportBtn = document.getElementById('btn-export')
   const exportMenu = document.getElementById('export-menu')
+  function setExportMenuOpen(open: boolean): void {
+    exportMenu?.classList.toggle('open', open)
+    exportBtn?.setAttribute('aria-expanded', String(open))
+    if (open) {
+      // Focus the first item so arrow/Esc work immediately; return focus to the
+      // toggle on close so keyboard users aren't dropped at the document root.
+      exportMenu?.querySelector<HTMLElement>('.export-item')?.focus()
+    } else if (document.activeElement instanceof HTMLElement && exportMenu?.contains(document.activeElement)) {
+      exportBtn?.focus()
+    }
+  }
   exportBtn?.addEventListener('click', (evt) => {
     evt.stopPropagation()
-    exportMenu?.classList.toggle('open')
+    setExportMenuOpen(!exportMenu?.classList.contains('open'))
   })
-  document.addEventListener('click', () => exportMenu?.classList.remove('open'))
+  exportMenu?.addEventListener('keydown', (evt) => {
+    if (evt.key === 'Escape') {
+      evt.stopPropagation()
+      setExportMenuOpen(false)
+    }
+  })
+  document.addEventListener('click', () => setExportMenuOpen(false))
   document.querySelectorAll<HTMLElement>('.export-item').forEach((item) => {
     item.addEventListener('click', () => {
-      exportMenu?.classList.remove('open')
+      setExportMenuOpen(false)
       const type = item.dataset.type
       const content = editor.getValue()
       const title = tabs.getActive()?.title ?? '未命名'
@@ -861,11 +881,51 @@ async function bootstrap(): Promise<void> {
       document.addEventListener('pointermove', onMove)
       document.addEventListener('pointerup', onUp)
     })
+    // Keyboard nudge (arrows ±2%, Home/End to the clamp bounds) and double-click
+    // reset — mirroring the workspace resizer's dblclick-to-default behavior.
+    const nudgeDivider = (delta: number | 'home' | 'end'): void => {
+      if (ctx.store.viewMode() !== 'split') return
+      const cur = lastDragFrac > 0 ? lastDragFrac : ctx.store.dividerPos() || 0.5
+      const next =
+        delta === 'home' ? 0.15 : delta === 'end' ? 0.85 : Math.max(0.15, Math.min(0.85, cur + delta))
+      lastDragFrac = next
+      applyDivider(next)
+      ctx.store.dividerPos.set(next)
+    }
+    dividerEl?.addEventListener('keydown', (e) => {
+      const step = e.shiftKey ? 0.05 : 0.02
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault()
+          nudgeDivider(-step)
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          nudgeDivider(step)
+          break
+        case 'Home':
+          e.preventDefault()
+          nudgeDivider('home')
+          break
+        case 'End':
+          e.preventDefault()
+          nudgeDivider('end')
+          break
+      }
+    })
+    dividerEl?.addEventListener('dblclick', () => {
+      lastDragFrac = 0.5
+      applyDivider(0.5)
+      ctx.store.dividerPos.set(0.5)
+    })
   }
 
   // ── Find ────────────────────────────────────────────────────────────
   const find = attachFind(editor.view)
   installModalFocusTrap()
+  // Overflow "⋯" for toolbar buttons that don't fit the row (after all buttons
+  // above are bound, since menu items re-dispatch clicks on the originals).
+  initToolbarOverflow()
 
   function reopenClosedTab(): void {
     const tab = tabs.reopenLast()

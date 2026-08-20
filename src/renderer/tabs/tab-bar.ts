@@ -41,6 +41,12 @@ export function mountTabBar(opts: TabBarOpts): () => void {
         `<button type="button" class="tab-close" data-action="tab-close">✕</button>`
       container!.appendChild(el)
     }
+    // Keep the active tab in view when tabs overflow — switching via click,
+    // keyboard (Ctrl+Tab) or close should never leave it scrolled offscreen.
+    const activeEl = activeId
+      ? container!.querySelector<HTMLElement>(`.tab[data-tab-id="${activeId}"]`)
+      : null
+    activeEl?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }
 
   function findTabEl(target: EventTarget | null): HTMLElement | null {
@@ -164,6 +170,17 @@ export function mountTabBar(opts: TabBarOpts): () => void {
   container.addEventListener('dragleave', onDragLeave)
   container.addEventListener('drop', onDrop)
 
+  // The tab strip scrolls horizontally but the scrollbar is hidden, so plain
+  // wheel input does nothing. Forward vertical wheel to horizontal scroll.
+  function onWheel(evt: WheelEvent): void {
+    if (container!.scrollWidth <= container!.clientWidth) return // nothing to scroll
+    // Let Shift+wheel (native horizontal) pass through untouched.
+    if (evt.shiftKey || evt.deltaX !== 0) return
+    container!.scrollLeft += evt.deltaY
+    evt.preventDefault()
+  }
+  container.addEventListener('wheel', onWheel, { passive: false })
+
   const unsubs = [
     opts.ctx.store.tabs.subscribe(render),
     opts.ctx.store.activeTabId.subscribe(render),
@@ -181,6 +198,7 @@ export function mountTabBar(opts: TabBarOpts): () => void {
     container!.removeEventListener('dragover', onDragOver)
     container!.removeEventListener('dragleave', onDragLeave)
     container!.removeEventListener('drop', onDrop)
+    container!.removeEventListener('wheel', onWheel)
     unsubs.forEach((u) => u())
   }
 }
