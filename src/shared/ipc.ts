@@ -11,6 +11,7 @@ import type {
   ImageSaveRequest,
   ImageSaveResult,
   OpenFileErrorPayload,
+  SearchHit,
   OpenFileFromOSPayload,
   Result,
   SaveDialogOptions,
@@ -45,7 +46,6 @@ export const STORE_KEYS = [
   'dividerPos',
   'templates',
   'recentFiles',
-  'tabOrder',
   'pdfOptions',
   'workspacePath',
   'workspaceCollapsed',
@@ -78,12 +78,11 @@ export interface StoreSchema {
   dividerPos: number
   templates: Template[]
   recentFiles: RecentFile[]
-  tabOrder: string[]
   pdfOptions: PdfExportOptions
   workspacePath: string | null
   workspaceCollapsed: boolean
   workspaceClosed: boolean
-  sidebarActiveView: 'workspace' | 'outline'
+  sidebarActiveView: 'workspace' | 'outline' | 'search'
   sidebarOpen: boolean
   workspaceWidth: number
   statusBar: StatusBarConfig
@@ -106,7 +105,6 @@ export const CH = {
   SHELL_SHOW_ITEM: 'shell:show-item',
   CLEAR_CACHE: 'system:clear-cache',
   FOCUS_WINDOW: 'window:focus',
-  UPDATE_TITLEBAR: 'window:update-titlebar',
   WIN_MINIMIZE: 'window:minimize',
   WIN_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
   WIN_CLOSE: 'window:close',
@@ -114,6 +112,7 @@ export const CH = {
   HAS_PENDING_FILE: 'system:has-pending-file',
   REQUEST_PENDING_FILE: 'system:request-pending-file',
   WORKSPACE_LIST: 'workspace:list',
+  WORKSPACE_SEARCH: 'workspace:search',
   FILE_CREATE: 'file:create',
   FILE_DELETE: 'file:delete',
   WORKSPACE_RESOLVE_WIKI: 'workspace:resolve-wiki',
@@ -242,6 +241,10 @@ export const TabSnapshotSchema = z.object({
   content: z.string(),
   modified: z.boolean(),
   scrollTop: z.number(),
+  // Disk baseline at flush time (session-restore change detection); absent in
+  // older caches and never-saved tabs — keep optional so old caches validate.
+  diskMtimeMs: z.number().optional(),
+  diskSize: z.number().optional(),
 })
 
 export const CacheEntrySchema = z.object({
@@ -269,12 +272,11 @@ export const STORE_SCHEMAS: Record<StoreKey, z.ZodTypeAny> = {
   dividerPos: z.number(),
   templates: z.array(TemplateSchema),
   recentFiles: z.array(RecentFileSchema),
-  tabOrder: z.array(z.string()),
   pdfOptions: PdfExportOptionsSchema,
   workspacePath: z.string().nullable(),
   workspaceCollapsed: z.boolean(),
   workspaceClosed: z.boolean(),
-  sidebarActiveView: z.enum(['workspace', 'outline']),
+  sidebarActiveView: z.enum(['workspace', 'outline', 'search']),
   sidebarOpen: z.boolean(),
   workspaceWidth: z.number(),
   statusBar: StatusBarConfigSchema,
@@ -286,14 +288,11 @@ export const DirListReqSchema = z.string().min(1)
 export const FileCreateReqSchema = z.object({ path: z.string().min(1), isDir: z.boolean() })
 export const FileDeleteReqSchema = z.object({ path: z.string().min(1), isDir: z.boolean() })
 export const ResolveWikiReqSchema = z.string().min(1)
+export const WorkspaceSearchReqSchema = z.object({ query: z.string().trim().min(1).max(200) })
 
 export type WorkspaceListResp = Result<{ entries: DirEntry[] }>
 export type WorkspaceResolveResp = Result<{ path: string }>
-
-export const UpdateTitlebarReqSchema = z.object({
-  color: z.string().min(1),
-  symbolColor: z.string().min(1),
-})
+export type WorkspaceSearchResp = Result<{ hits: SearchHit[]; truncated: boolean }>
 
 // ── Result helpers ──────────────────────────────────────────────────────
 export type StoreSetResult = Result<{ key: string }>
@@ -351,6 +350,7 @@ export interface Api {
   fileCreate(path: string, isDir: boolean): Promise<Result>
   fileDelete(path: string, isDir: boolean): Promise<Result>
   workspaceResolveWiki(name: string): Promise<WorkspaceResolveResp>
+  workspaceSearch(query: string): Promise<WorkspaceSearchResp>
   clearCache(): Promise<ClearCacheResp>
   focusWindow(): Promise<void>
   hasPendingFile(): Promise<boolean>
@@ -358,7 +358,6 @@ export interface Api {
   getFilePath(file: File): string
 
   // Window controls
-  updateTitleBar(opts: { color: string; symbolColor: string }): Promise<void>
   winMinimize(): Promise<void>
   winToggleMaximize(): Promise<boolean>
   winClose(): Promise<void>

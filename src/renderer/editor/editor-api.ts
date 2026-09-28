@@ -21,6 +21,11 @@ export interface EditorApi {
    *  Use when the content is replaced wholesale from an external source (disk
    *  reload, template apply) and the prior history no longer applies. */
   swapDoc(text: string): void
+  /** Drop the cached state for a tab whose content was replaced externally
+   *  while it was in the background (swapDoc only covers the active tab), so a
+   *  later openTab builds a fresh state from the new text instead of restoring
+   *  the pre-reload document over it. */
+  invalidateTab(tabId: string): void
   /** Drop the cached state for a tab that was closed (frees its history). */
   closeTab(tabId: string): void
   setTheme(theme: Theme): void
@@ -128,7 +133,20 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
       suppressChange = true
       try {
         const saved = tabId === null ? undefined : docStates.get(tabId)
-        view.setState(saved ?? EditorState.create({ doc: text, extensions: buildExtensions() }))
+        let state = saved ?? EditorState.create({ doc: text, extensions: buildExtensions() })
+        if (saved) {
+          // A cached state carries the compartments it was built with — replay
+          // the CURRENT theme/gutter/typewriter config, or changing a setting
+          // and returning to a previously-open tab resurrects the old look.
+          state = state.update({
+            effects: [
+              themeCompartment.reconfigure(themeExt(curTheme)),
+              gutterCompartment.reconfigure(buildGutter(curLineNumbers, curFolding)),
+              typewriterCompartment.reconfigure(typewriterExt(curTypewriter)),
+            ],
+          }).state
+        }
+        view.setState(state)
       } finally {
         suppressChange = false
       }
@@ -143,6 +161,9 @@ export function createEditor(opts: CreateEditorOpts): EditorApi {
       } finally {
         suppressChange = false
       }
+    },
+    invalidateTab(tabId) {
+      docStates.delete(tabId)
     },
     closeTab(tabId) {
       docStates.delete(tabId)

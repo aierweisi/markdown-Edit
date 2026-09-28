@@ -10,6 +10,8 @@
  *
  * Accepted shapes:
  *  - a known safe scheme followed by `:`           → https:, file:, mailto:, …
+ *  - `data:image/…` (base64-embedded images; `data:` at large stays rejected —
+ *    `data:text/html` is an XSS vector) and `blob:` (opaque session URLs)
  *  - a value that does NOT start with a letter      → `/abs`, `./rel`, `#frag` (the
  *                                                     leading char itself matches `[^a-z]`)
  *  - a letter/dot/plus/hyphen run NOT followed by `:` → `a.png`, `assets/x.png`
@@ -24,4 +26,4 @@
  * Rejected: `javascript:`, `vbscript:`, and any other `scheme:` not whitelisted.
  */
 export const ALLOWED_URI_REGEXP =
-  /^(?:(?:(?:f|ht)tps?|file|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i
+  /^(?:(?:(?:f|ht)tps?|file|mailto|tel|callto|cid|xmpp):|data:image\/|blob:|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i

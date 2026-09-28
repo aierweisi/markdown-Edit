@@ -19,6 +19,20 @@ export function loadKatex(): Promise<KatexApi> {
 const INLINE_RE = /\$([^\n$]+?)\$/
 const BLOCK_RE = /\$\$([\s\S]+?)\$\$/
 
+// Rendered-HTML cache, keyed by (mode, tex). The preview re-renders on every
+// debounced pass while typing, and morphdom can't align a previously rendered
+// span.math-inline with the incoming raw "$…$" text node — every formula would
+// be destroyed and re-parsed on each pass. With the cache the repeat cost is
+// an innerHTML assignment instead of a full KaTeX render.
+const htmlCache = new Map<string, string>()
+const HTML_CACHE_MAX = 500
+
+function cacheTrim(): void {
+  // FIFO trim; document formula counts rarely approach the cap.
+  const oldest = htmlCache.keys().next().value
+  if (oldest !== undefined) htmlCache.delete(oldest)
+}
+
 function hasMath(text: string): boolean {
   return INLINE_RE.test(text) || BLOCK_RE.test(text)
 }
@@ -38,7 +52,8 @@ function walkAndReplace(node: Node, katex: KatexApi): void {
     if (!hasMath(text)) return
     const parent = node.parentNode
     if (!parent) return
-    if ((parent as HTMLElement).closest?.('code, pre')) return
+    // Skip code AND rendered SVG internals (mermaid labels may contain $…$).
+    if ((parent as HTMLElement).closest?.('code, pre, svg')) return
 
     const fragment = document.createDocumentFragment()
     let cursor = 0
@@ -50,10 +65,18 @@ function walkAndReplace(node: Node, katex: KatexApi): void {
       const tex = isBlock ? match[1] : match[2]
       const span = document.createElement(isBlock ? 'div' : 'span')
       span.className = isBlock ? 'math-block' : 'math-inline'
-      try {
-        katex.render(tex, span, { displayMode: isBlock, throwOnError: false })
-      } catch {
-        span.textContent = match[0]
+      const key = `${isBlock ? 'B' : 'I'}|${tex}`
+      const hit = htmlCache.get(key)
+      if (hit !== undefined) {
+        span.innerHTML = hit
+      } else {
+        try {
+          katex.render(tex, span, { displayMode: isBlock, throwOnError: false })
+        } catch {
+          span.textContent = match[0]
+        }
+        if (htmlCache.size >= HTML_CACHE_MAX) cacheTrim()
+        htmlCache.set(key, span.innerHTML)
       }
       fragment.appendChild(span)
       cursor = match.index + match[0].length

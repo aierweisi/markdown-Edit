@@ -1,8 +1,9 @@
 import type { AppContext } from '../context'
 import type { WorkspacePanelApi } from './workspace-panel'
 import type { OutlineApi } from './outline-panel'
+import type { SearchPanelApi } from './search-panel'
 
-export type SidebarView = 'workspace' | 'outline'
+export type SidebarView = 'workspace' | 'outline' | 'search'
 
 export interface ActivitybarApi {
   /** Click an activity icon: collapse if it's the active open view, else open+switch. */
@@ -23,6 +24,7 @@ interface ActivitybarOpts {
   ctx: AppContext
   workspace: WorkspacePanelApi
   outline: OutlineApi
+  search: SearchPanelApi
   /** Current editor text, used to refresh the outline when its view opens. */
   getEditorText(): string
 }
@@ -42,19 +44,16 @@ export function createActivitybar(opts: ActivitybarOpts): ActivitybarApi {
     Array.from(document.querySelectorAll<HTMLElement>('.ab-item'))
 
   function syncButtons(): void {
-    const wsOn = activeView === 'workspace' && sidebarOpen
-    const olOn = activeView === 'outline' && sidebarOpen
     abItems().forEach((b) => {
-      const v = b.dataset.view
-      const on = (v === 'workspace' && wsOn) || (v === 'outline' && olOn)
+      const on = sidebarOpen && activeView === (b.dataset.view as SidebarView | undefined)
       b.classList.toggle('active', on)
       // aria-expanded describes the toggled sidebar; aria-pressed would also
       // work, but the button really does expand/collapse a panel here.
       b.setAttribute('aria-expanded', String(on))
     })
     // Keep the format-toolbar entry buttons in sync (they route here too).
-    document.getElementById('btn-workspace')?.classList.toggle('active', wsOn)
-    document.getElementById('btn-outline')?.classList.toggle('active', olOn)
+    document.getElementById('btn-workspace')?.classList.toggle('active', sidebarOpen && activeView === 'workspace')
+    document.getElementById('btn-outline')?.classList.toggle('active', sidebarOpen && activeView === 'outline')
   }
 
   function applyState(): void {
@@ -72,7 +71,8 @@ export function createActivitybar(opts: ActivitybarOpts): ActivitybarApi {
     void ctx.api.storeSet('sidebarActiveView', view)
     void ctx.api.storeSet('sidebarOpen', true)
     if (view === 'workspace') await workspace.reveal()
-    else outline.refresh(opts.getEditorText())
+    else if (view === 'outline') outline.refresh(opts.getEditorText())
+    else opts.search.focus()
   }
 
   function close(): void {
@@ -98,7 +98,7 @@ export function createActivitybar(opts: ActivitybarOpts): ActivitybarApi {
 
   async function init(): Promise<void> {
     const storedView = await ctx.api.storeGet('sidebarActiveView')
-    activeView = storedView === 'outline' ? 'outline' : 'workspace'
+    activeView = storedView === 'outline' || storedView === 'search' ? storedView : 'workspace'
     // sidebarOpen is backfilled by the store migration (with legacy mapping),
     // so it is always defined here.
     sidebarOpen = (await ctx.api.storeGet('sidebarOpen')) === true
@@ -115,6 +115,8 @@ export function createActivitybar(opts: ActivitybarOpts): ActivitybarApi {
   document.getElementById('ws-close')?.addEventListener('click', () => close())
   // The outline view's own close button likewise.
   document.querySelector('.outline-pane__close')?.addEventListener('click', () => close())
+  // And the search view's.
+  document.getElementById('sp-close')?.addEventListener('click', () => close())
 
   return {
     toggleView,

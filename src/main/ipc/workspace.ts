@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
-import { readdirSync, statSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
+import { readdirSync, statSync, realpathSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
+import { readdir, stat, readFile, realpath } from 'node:fs/promises'
 import { join, basename, extname } from 'node:path'
 import type Store from 'electron-store'
 import {
@@ -8,12 +9,14 @@ import {
   FileCreateReqSchema,
   FileDeleteReqSchema,
   ResolveWikiReqSchema,
+  WorkspaceSearchReqSchema,
   type Result,
   type StoreSchema,
   type WorkspaceListResp,
   type WorkspaceResolveResp,
+  type WorkspaceSearchResp,
 } from '@shared/ipc'
-import type { DirEntry } from '@shared/types'
+import type { DirEntry, SearchHit } from '@shared/types'
 import { isPathSafe } from '../security/isPathSafe'
 import { MD_EXTENSIONS } from '@shared/paths'
 
@@ -93,14 +96,119 @@ export function registerWorkspaceIpc(store: Store<StoreSchema>): void {
     const found = findByName(r, parsed.data)
     return found ? { success: true, path: found } : { success: false, error: 'not found' }
   })
+
+  ipcMain.handle(CH.WORKSPACE_SEARCH, async (_e, raw: unknown): Promise<WorkspaceSearchResp> => {
+    const parsed = WorkspaceSearchReqSchema.safeParse(raw)
+    if (!parsed.success) return { success: false, error: 'invalid request' }
+    const r = root()
+    if (!r) return { success: false, error: 'no workspace' }
+    return searchWorkspace(r, parsed.data.query)
+  })
 }
 
-/** Depth-first search for the first markdown file whose basename matches `name`. */
+// ── Full-text search ────────────────────────────────────────────────────
+// Async (never blocks the main process's sync IPC surface), symlink-cycle
+// safe via realpath dedup (same discipline as findByName), and capped so a
+// huge workspace can't produce an unbounded response.
+const MAX_SEARCH_FILES = 2000
+const MAX_SEARCH_HITS = 500
+const MAX_LINE_LEN = 200
+
+async function searchWorkspace(rootDir: string, query: string): Promise<WorkspaceSearchResp> {
+  const needle = query.toLowerCase()
+  const hits: SearchHit[] = []
+  const visited = new Set<string>()
+  let truncated = false
+  let files = 0
+
+  const queue: string[] = [rootDir]
+  while (queue.length > 0) {
+    const dir = queue.shift()!
+    let names: string[]
+    try {
+      names = await readdir(dir)
+    } catch {
+      continue
+    }
+    for (const n of names) {
+      if (n.startsWith('.') || IGNORED.has(n)) continue
+      const full = join(dir, n)
+      let isDir: boolean
+      try {
+        isDir = (await stat(full)).isDirectory()
+      } catch {
+        continue
+      }
+      if (isDir) {
+        let real: string
+        try {
+          real = await realpath(full)
+        } catch {
+          continue
+        }
+        if (visited.has(real)) continue // symlink cycle / re-entry
+        visited.add(real)
+        queue.push(full)
+        continue
+      }
+      if (!isMarkdown(n)) continue
+      files++
+      if (files > MAX_SEARCH_FILES) {
+        truncated = true
+        break
+      }
+      let text: string
+      try {
+        text = await readFile(full, 'utf-8')
+      } catch {
+        continue
+      }
+      let lineStart = 0
+      let lineNum = 1
+      for (let i = 0; i <= text.length; i++) {
+        if (i === text.length || text[i] === '\n') {
+          const line = text.slice(lineStart, i)
+          if (line.toLowerCase().includes(needle)) {
+            hits.push({
+              path: full,
+              line: lineNum,
+              text: line.length > MAX_LINE_LEN ? line.slice(0, MAX_LINE_LEN) + '…' : line,
+            })
+            if (hits.length >= MAX_SEARCH_HITS) return { success: true, hits, truncated: true }
+          }
+          lineStart = i + 1
+          lineNum++
+        }
+      }
+    }
+  }
+  return { success: true, hits, truncated }
+}
+
+/** Depth-first search for the first markdown file whose basename matches `name`.
+ *  `statSync` follows symlinks, so a symlink cycle inside the workspace would
+ *  otherwise loop forever and hang the main process (all IPC). Each directory
+ *  is canonicalized with realpath and tracked in a visited set; depth and total
+ *  directory caps bound pathological trees. */
+const MAX_WIKI_RESOLVE_DEPTH = 24
+const MAX_WIKI_RESOLVE_DIRS = 10_000
+
 function findByName(rootDir: string, name: string): string | null {
   const target = name.toLowerCase()
-  const stack = [rootDir]
+  const visited = new Set<string>()
+  const stack: Array<{ dir: string; depth: number }> = [{ dir: rootDir, depth: 0 }]
   while (stack.length > 0) {
-    const dir = stack.pop()!
+    const { dir, depth } = stack.pop()!
+    if (depth >= MAX_WIKI_RESOLVE_DEPTH) continue
+    let real: string
+    try {
+      real = realpathSync(dir)
+    } catch {
+      continue
+    }
+    if (visited.has(real)) continue
+    if (visited.size >= MAX_WIKI_RESOLVE_DIRS) return null
+    visited.add(real)
     let names: string[]
     try {
       names = readdirSync(dir)
@@ -117,7 +225,7 @@ function findByName(rootDir: string, name: string): string | null {
         continue
       }
       if (isDir) {
-        stack.push(full)
+        stack.push({ dir: full, depth: depth + 1 })
         continue
       }
       if (isMarkdown(n) && basename(n, extname(n)).toLowerCase() === target) return full

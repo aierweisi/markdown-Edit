@@ -18,8 +18,20 @@ describe('ALLOWED_URI_REGEXP (DOMPurify preview URI policy)', () => {
     'http://example.com/x.png',
     'file:///C:/Users/me/notes/assets/x.png',
     'mailto:me@example.com',
+    'data:image/png;base64,iVBORw0KGgo=',
+    'data:image/svg+xml;base64,PHN2Zy8+',
+    'data:image/gif,RAW',
+    'blob:fileroom/f49d1a9b-0000-0000-0000-000000000000',
   ]
-  const reject = ['javascript:alert(1)', 'JavaScript:alert(1)', 'vbscript:msgbox', 'javascript:alert(1)//']
+  const reject = [
+    'javascript:alert(1)',
+    'JavaScript:alert(1)',
+    'vbscript:msgbox',
+    'javascript:alert(1)//',
+    'data:text/html;base64,PGI+hi<svg onload=alert(1)>',
+    'data:application/javascript,alert(1)',
+    'data:,oops',
+  ]
 
   it.each(accept)('accepts %s', (uri) => {
     expect(ALLOWED_URI_REGEXP.test(uri)).toBe(true)

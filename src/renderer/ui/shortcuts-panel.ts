@@ -21,6 +21,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { key: 'Ctrl+H', label: '替换' },
       { key: 'F3', label: '查找下一个' },
       { key: 'Shift+F3', label: '查找上一个' },
+      { key: 'Ctrl+Shift+H', label: '搜索工作区内容' },
     ],
   },
   {
@@ -51,6 +52,9 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { key: 'Ctrl+Shift+L', label: '切换主题' },
       { key: 'Ctrl+Shift+O', label: '文章大纲' },
       { key: 'Ctrl+Shift+/', label: '快捷键展示' },
+      { key: 'Ctrl+= / Ctrl+-', label: '放大 / 缩小编辑器字号' },
+      { key: 'Ctrl+0', label: '重置编辑器字号' },
+      { key: 'Ctrl+滚轮', label: '调整编辑器字号' },
     ],
   },
   {
@@ -68,6 +72,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
     items: [
       { key: 'Ctrl+Shift+P', label: '命令面板' },
       { key: 'Ctrl+,', label: '打开设置' },
+      { key: 'Ctrl+Alt+C', label: '复制为富文本' },
       { key: 'F11', label: '切换全屏' },
     ],
   },

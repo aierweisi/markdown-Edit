@@ -49,14 +49,9 @@ export function bindPersistence(store: AppStore): () => void {
     ),
   )
 
-  unsubs.push(
-    store.tabs.subscribe(
-      debounce((tabs) => {
-        const order = tabs.map((t) => t.id)
-        persist('tabOrder', order)
-      }, PERSIST_DEBOUNCE_MS),
-    ),
-  )
+  // NOTE: tab order is intentionally NOT persisted here — session restore
+  // takes its order from the `cache` entry's tab ids, and persisting tabOrder
+  // separately only produced config.json writes on every dirty toggle.
 
   return () => unsubs.forEach((u) => u())
 }

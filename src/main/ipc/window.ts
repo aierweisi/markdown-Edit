@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import { CH, UpdateTitlebarReqSchema } from '@shared/ipc'
+import { CH } from '@shared/ipc'
 
 export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle(CH.WIN_MINIMIZE, () => {
@@ -22,18 +22,6 @@ export function registerWindowIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle(CH.WIN_IS_MAXIMIZED, () => getWindow()?.isMaximized() ?? false)
-
-  ipcMain.handle(CH.UPDATE_TITLEBAR, (_event, raw: unknown) => {
-    const parsed = UpdateTitlebarReqSchema.safeParse(raw)
-    if (!parsed.success) return
-    const win = getWindow()
-    if (!win || process.platform !== 'win32') return
-    try {
-      win.setTitleBarOverlay({ ...parsed.data, height: 46 })
-    } catch {
-      /* setTitleBarOverlay may throw if titlebar overlay not enabled */
-    }
-  })
 
   ipcMain.handle(CH.FOCUS_WINDOW, () => {
     const win = getWindow()

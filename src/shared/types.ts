@@ -59,6 +59,12 @@ export interface TabSnapshot {
   content: string
   modified: boolean
   scrollTop: number
+  /** Disk mtime/size at flush time, from the file-sync baseline. Seeding the
+   *  restored tab's baseline from these (instead of live-stat'ing the file)
+   *  lets the first activation check detect external changes made while the
+   *  app was closed. Absent in older caches / never-saved tabs. */
+  diskMtimeMs?: number
+  diskSize?: number
 }
 
 export interface CacheEntry {
@@ -115,6 +121,15 @@ export interface DirEntry {
   name: string
   path: string
   isDir: boolean
+}
+
+/** One content-search match inside a workspace markdown file. */
+export interface SearchHit {
+  path: string
+  /** 1-based source line of the match. */
+  line: number
+  /** Trimmed source line (for the results preview). */
+  text: string
 }
 
 export interface PdfExportOptions {

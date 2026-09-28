@@ -16,6 +16,52 @@ interface SaveDeps {
   tabId?: string
 }
 
+/** Per-tab save serialization shared by manual save (saveActiveTab) and
+ *  autosave. Concurrent non-atomic writeFile calls to the same path can
+ *  interleave or let an older snapshot land after a newer one — while the
+ *  dirty flag is already cleared, so nothing corrects the divergence. Savers
+ *  for one tab queue behind the in-flight write instead of overlapping it.
+ *  The chain entry self-cleans once idle. */
+const saveChains = new Map<string, Promise<unknown>>()
+
+export function serializeSave<T>(tabId: string, run: () => Promise<T>): Promise<T> {
+  const prev = saveChains.get(tabId) ?? Promise.resolve()
+  const next = prev.then(run, run)
+  // The stored chain only orders contenders, never propagates their errors.
+  const chain = next.catch(() => {})
+  saveChains.set(tabId, chain)
+  void chain.then(() => {
+    if (saveChains.get(tabId) === chain) saveChains.delete(tabId)
+  })
+  return next
+}
+
+/** The exclusive write for one tab: flips the saving signal, performs the IPC
+ *  write and the post-save bookkeeping. Runs one-at-a-time per tab (queued by
+ *  serializeSave). */
+async function writeTab(
+  deps: SaveDeps,
+  tabId: string,
+  filePath: string,
+  content: string,
+  create: boolean,
+): Promise<FileSaveResp> {
+  deps.ctx.store.saving.set(true)
+  try {
+    const result = await deps.ctx.api.fileSave(filePath, content, create)
+    if (result.success) {
+      deps.tabs.setTitle(tabId, titleFromPath(filePath), filePath)
+      // Clear the dirty flag only when the tab still holds exactly what we
+      // wrote: keystrokes typed during the await must keep their "modified"
+      // state, or no later autosave would consider them un-persisted.
+      if (deps.tabs.getContent(tabId) === content) deps.tabs.markModified(tabId, false)
+    }
+    return result
+  } finally {
+    deps.ctx.store.saving.set(false)
+  }
+}
+
 /** Returns the save outcome (carrying post-write mtime/size on success), or
  *  `null` when the user canceled the save-as dialog. Callers treat anything
  *  non-null as "a save was attempted" and read `.success`. */
@@ -52,31 +98,24 @@ export async function saveActiveTab(deps: SaveDeps, saveAs = false): Promise<Fil
     if (dir) await deps.ctx.api.storeSet('exportDir', dir)
   }
 
-  deps.ctx.store.saving.set(true)
-  try {
-    const result = await deps.ctx.api.fileSave(filePath, content, create)
-    if (!result.success) {
-      // 原路径已被外部移动/删除:fileSave 拒绝写回旧路径"复活"文件(moved:true),
-      // 引导用户另存为新文件(递归走 save-as 流程,create:true)。
-      if (result.moved && !saveAs) {
-        const ok = await showConfirm({
-          title: '文件已移动或删除',
-          message: `“${tab.title}” 的原路径已不存在,是否另存为新文件?`,
-          okText: '另存为',
-          cancelText: '取消',
-          danger: true,
-        })
-        if (!ok) return null
-        return saveActiveTab(deps, true)
-      }
-      console.error('[save] fileSave failed:', result.error)
-      showToast(`保存失败: ${result.error}`, 'error')
-      return result
+  const result = await serializeSave(tab.id, () => writeTab(deps, tab.id, filePath, content, create))
+  if (!result.success) {
+    // 原路径已被外部移动/删除:fileSave 拒绝写回旧路径"复活"文件(moved:true),
+    // 引导用户另存为新文件(递归走 save-as 流程,create:true)。重试在序列化区
+    // 之外进行——否则递归的 serializeSave 会排队等待自己,死锁。
+    if (result.moved && !saveAs) {
+      const ok = await showConfirm({
+        title: '文件已移动或删除',
+        message: `“${tab.title}” 的原路径已不存在,是否另存为新文件?`,
+        okText: '另存为',
+        cancelText: '取消',
+        danger: true,
+      })
+      if (!ok) return null
+      return saveActiveTab(deps, true)
     }
-    deps.tabs.setTitle(tab.id, titleFromPath(filePath), filePath)
-    deps.tabs.markModified(tab.id, false)
-    return result
-  } finally {
-    deps.ctx.store.saving.set(false)
+    console.error('[save] fileSave failed:', result.error)
+    showToast(`保存失败: ${result.error}`, 'error')
   }
+  return result
 }

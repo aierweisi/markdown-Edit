@@ -23,7 +23,6 @@ export const defaults: StoreSchema = {
   dividerPos: 0,
   templates: [],
   recentFiles: [],
-  tabOrder: [],
   pdfOptions: DEFAULT_PDF_OPTIONS,
   workspacePath: null,
   workspaceCollapsed: false,
@@ -40,7 +39,8 @@ export const defaults: StoreSchema = {
  *  - Promote `tpl_v2` → `templates` (v1 wrote the user list under `tpl_v2`).
  *  - Drop the obsolete `_pendingOpenFile` and `_pendingOSFile` keys; v2 carries
  *    those as transient module state inside src/main/os-file.ts.
- *  - Backfill missing v1 keys (dividerPos / imageSaveDir / tabOrder) from defaults.
+ *  - Backfill missing v1 keys (dividerPos / imageSaveDir / …) from defaults.
+ *  - Drop the never-read `tabOrder` key (restore order comes from `cache`).
  */
 export function migrateStore(store: Store<StoreSchema>): void {
   // Promote tpl_v2 → templates
@@ -62,11 +62,13 @@ export function migrateStore(store: Store<StoreSchema>): void {
   // Drop legacy pending-file keys
   rawStore.delete('_pendingOpenFile')
   rawStore.delete('_pendingOSFile')
+  // tabOrder was written on every tabs mutation but never read — restore
+  // order comes from the cache entry's tab ids.
+  rawStore.delete('tabOrder')
 
   // Backfill new defaults if absent
   if (!rawStore.has('dividerPos')) store.set('dividerPos', defaults.dividerPos)
   if (!rawStore.has('imageSaveDir')) store.set('imageSaveDir', defaults.imageSaveDir)
-  if (!rawStore.has('tabOrder')) store.set('tabOrder', defaults.tabOrder)
   if (!rawStore.has('lineNumbers')) store.set('lineNumbers', defaults.lineNumbers)
   if (!rawStore.has('codeFolding')) store.set('codeFolding', defaults.codeFolding)
   if (!rawStore.has('imageCompressEnabled')) store.set('imageCompressEnabled', defaults.imageCompressEnabled)

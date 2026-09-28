@@ -10,6 +10,10 @@ interface CacheDeps {
   ctx: AppContext
   tabs: TabManager
   editor: EditorApi
+  /** File-sync baseline lookup (tabId → last known disk mtime/size), captured
+   *  into each snapshot so session restore can detect external changes made
+   *  while the app was closed. Optional for tests. */
+  diskBaseline?: (tabId: string) => { mtimeMs: number; size: number } | undefined
 }
 
 export interface CacheManager {
@@ -32,16 +36,21 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
     const editorContent = deps.editor.getValue()
     const activeId = deps.ctx.store.activeTabId()
 
-    const snapshots: TabSnapshot[] = tabs.map((t) => ({
-      id: t.id,
-      title: t.title,
-      filePath: t.filePath,
-      // For the active tab, always read the live editor content so we don't
-      // race with the editor-onChange → tab.setContent debounce.
-      content: t.id === activeId ? editorContent : deps.tabs.getContent(t.id),
-      modified: t.modified,
-      scrollTop: t.id === activeId ? deps.editor.getScrollTop() : 0,
-    }))
+    const snapshots: TabSnapshot[] = tabs.map((t) => {
+      const disk = deps.diskBaseline?.(t.id)
+      return {
+        id: t.id,
+        title: t.title,
+        filePath: t.filePath,
+        // For the active tab, always read the live editor content so we don't
+        // race with the editor-onChange → tab.setContent debounce.
+        content: t.id === activeId ? editorContent : deps.tabs.getContent(t.id),
+        modified: t.modified,
+        scrollTop: t.id === activeId ? deps.editor.getScrollTop() : 0,
+        diskMtimeMs: disk?.mtimeMs,
+        diskSize: disk?.size,
+      }
+    })
 
     return { version: CACHE_VERSION, tabs: snapshots, activeTabId: activeId, savedAt: Date.now() }
   }

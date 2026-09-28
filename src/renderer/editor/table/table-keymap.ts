@@ -4,7 +4,7 @@ import {
   cellRanges,
   cellIndexAt,
   cellContentPos,
-  findTableRange,
+  findTableRangeAt,
   isSeparatorRow,
 } from './table-parser'
 
@@ -23,11 +23,13 @@ function moveCell(view: EditorView, forward: boolean): boolean {
   const head = state.selection.main.head
   const lineObj = state.doc.lineAt(head)
   const lineIdx = lineObj.number - 1
-  const lines = state.doc.toString().split('\n')
-  const range = findTableRange(lines, lineIdx)
+  // Read lines through doc.line() instead of doc.toString().split('\n') — the
+  // split copies the whole document and builds a line array per keypress.
+  const getLine = (i: number): string => state.doc.line(i + 1).text
+  const range = findTableRangeAt(getLine, state.doc.lines, lineIdx)
   if (!range) return false
 
-  const text = lines[lineIdx]!
+  const text = lineObj.text
   const cells = cellRanges(text)
   const col = cellIndexAt(text, head - lineObj.from, cells)
   if (col < 0) return false
@@ -42,8 +44,8 @@ function moveCell(view: EditorView, forward: boolean): boolean {
   // 2) move to the neighbouring data row (skip separator), first/last cell
   const dir = forward ? 1 : -1
   for (let li = lineIdx + dir; li >= range.fromLine && li <= range.toLine; li += dir) {
-    if (isSeparatorRow(lines[li]!)) continue
-    const rtext = lines[li]!
+    const rtext = getLine(li)
+    if (isSeparatorRow(rtext)) continue
     const rcells = cellRanges(rtext)
     if (rcells.length === 0) continue
     const targetCol = forward ? 0 : rcells.length - 1

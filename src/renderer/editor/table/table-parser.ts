@@ -29,15 +29,26 @@ export interface LineRange {
  * (so a lone `| foo |` line isn't mistaken for a table).
  */
 export function findTableRange(lines: string[], lineIdx: number): LineRange | null {
-  if (lineIdx < 0 || lineIdx >= lines.length) return null
-  if (!isTableRow(lines[lineIdx]!)) return null
+  return findTableRangeAt((i) => lines[i]!, lines.length, lineIdx)
+}
+
+/** Accessor-based twin of {@link findTableRange} for callers holding a live
+ *  CodeMirror doc: `getLine(i)` yields line text so the caller can read lines
+ *  through `doc.line(n).text` instead of materializing the entire document. */
+export function findTableRangeAt(
+  getLine: (i: number) => string,
+  lineCount: number,
+  lineIdx: number,
+): LineRange | null {
+  if (lineIdx < 0 || lineIdx >= lineCount) return null
+  if (!isTableRow(getLine(lineIdx))) return null
   let from = lineIdx
-  while (from > 0 && isTableRow(lines[from - 1]!)) from--
+  while (from > 0 && isTableRow(getLine(from - 1))) from--
   let to = lineIdx
-  while (to < lines.length - 1 && isTableRow(lines[to + 1]!)) to++
+  while (to < lineCount - 1 && isTableRow(getLine(to + 1))) to++
   let hasSep = false
   for (let i = from; i <= to; i++) {
-    if (isSeparatorRow(lines[i]!)) {
+    if (isSeparatorRow(getLine(i))) {
       hasSep = true
       break
     }

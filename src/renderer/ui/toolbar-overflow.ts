@@ -40,10 +40,17 @@ const OVERFLOW_ORDER: ReadonlyArray<readonly [string, string]> = [
 ]
 
 export function initToolbarOverflow(): void {
-  const toolbar = document.getElementById('toolbar')
-  const toggle = document.getElementById('btn-toolbar-overflow')
-  const menu = document.getElementById('toolbar-overflow-menu')
-  if (!toolbar || !toggle || !menu) return
+  const toolbarEl = document.getElementById('toolbar')
+  const toggleEl = document.getElementById('btn-toolbar-overflow')
+  const menuEl = document.getElementById('toolbar-overflow-menu')
+  if (!toolbarEl || !toggleEl || !menuEl) return
+  // The helpers below are hoisted function declarations, which TypeScript
+  // treats as created before the guard — so they don't inherit its narrowing
+  // (that only holds for closures created after the narrowing point). Rebind
+  // to non-null consts the inner functions can capture without `!` noise.
+  const toolbar = toolbarEl
+  const toggle = toggleEl
+  const menu = menuEl
 
   /** How many entries (by index in OVERFLOW_ORDER) are currently overflowing. */
   let overflowCount = 0

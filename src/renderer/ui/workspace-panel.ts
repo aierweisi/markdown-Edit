@@ -593,9 +593,17 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
   function setTitle(path: string): void {
     const el = document.querySelector('.sidebar-title-name')
     if (el) el.textContent = basename(path)
-    // The header shows only the basename — surface the full workspace path in
-    // the tooltip so long/ambiguous folder names are distinguishable.
     document.getElementById('ws-title')?.setAttribute('title', path)
+    // Surface the workspace's actual location under the header — the title
+    // shows only the basename, which is ambiguous for same-named folders and
+    // gives no hint of where the workspace lives. Hover shows the full path;
+    // click opens the location in the OS file manager.
+    const pathEl = document.getElementById('ws-path')
+    if (pathEl) {
+      pathEl.textContent = path
+      pathEl.title = path
+      pathEl.hidden = false
+    }
   }
   /** Expand ancestors of the active file and scroll it into view (no rerender). */
   async function revealActiveFile(): Promise<void> {
@@ -611,6 +619,18 @@ export function createWorkspacePanel(deps: WorkspaceDeps): WorkspacePanelApi {
 
   // header buttons
   document.getElementById('ws-title')?.addEventListener('click', () => void open())
+  // The path line under the header: click/Enter → open the workspace folder's
+  // location in the OS file manager (same as the tree's 在资源管理器中显示).
+  const pathLine = document.getElementById('ws-path')
+  pathLine?.addEventListener('click', () => {
+    if (root) void deps.ctx.api.shellShowItem(root)
+  })
+  pathLine?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      if (root) void deps.ctx.api.shellShowItem(root)
+    }
+  })
   document.getElementById('ws-newfile')?.addEventListener('click', () => {
     if (root) void promptCreate(root, false)
   })

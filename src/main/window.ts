@@ -1,7 +1,7 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import type Store from 'electron-store'
 import { EV, type StoreSchema } from '@shared/ipc'
 
@@ -41,11 +41,28 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
   })
 
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
-  if (rendererUrl) {
-    void win.loadURL(rendererUrl)
-  } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'))
+  // A failed load otherwise yields a silent white window with no way forward.
+  const onLoadFailed = (err: unknown): void => {
+    console.error('[main] renderer load failed:', err)
+    if (win.isDestroyed()) return
+    void dialog
+      .showMessageBox(win, {
+        type: 'error',
+        title: '加载失败',
+        message: `界面加载失败：${err instanceof Error ? err.message : String(err)}`,
+        buttons: ['退出'],
+      })
+      .then(() => app.quit())
   }
+  if (rendererUrl) {
+    win.loadURL(rendererUrl).catch(onLoadFailed)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html')).catch(onLoadFailed)
+  }
+
+  // A local editor has no use for web permissions (geolocation, notifications,
+  // …); deny by default instead of Electron's approve-by-default.
+  win.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
 
   attachExternalLinkHandler(win, rendererUrl)
 
@@ -54,9 +71,18 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
     if (!app.isPackaged) win.webContents.openDevTools({ mode: 'detach' })
   })
 
+  // Debounced: `resize` fires continuously while dragging, and electron-store
+  // writes are synchronous main-process disk I/O — one write per drag gesture,
+  // not per tick. A trailing write on close still flushes the final size via
+  // the timer (the store outlives the window).
+  let boundsTimer: ReturnType<typeof setTimeout> | null = null
   win.on('resize', () => {
-    const [width, height] = win.getSize()
-    opts.store.set('windowBounds', { width, height })
+    if (boundsTimer != null) clearTimeout(boundsTimer)
+    boundsTimer = setTimeout(() => {
+      boundsTimer = null
+      const [width, height] = win.getSize()
+      opts.store.set('windowBounds', { width, height })
+    }, 500)
   })
 
   win.on('maximize', () => win.webContents.send(EV.WIN_MAXIMIZED, true))
@@ -73,10 +99,16 @@ export function createMainWindow(opts: WindowOpts): BrowserWindow {
  * The app itself only ever stays on its own renderer URL.
  */
 function attachExternalLinkHandler(win: BrowserWindow, rendererUrl: string | undefined): void {
+  // The packaged entry point's canonical file:// URL — must match what
+  // `loadFile(join(__dirname, '../renderer/index.html'))` actually loaded.
+  // Compare against THIS exact URL, never a loose "/index.html" suffix: a
+  // crafted `file:` link in a malicious note could otherwise navigate the
+  // window to an attacker-controlled local page that still runs our preload.
+  const appFileUrl = pathToFileURL(join(__dirname, '../renderer/index.html')).href
   const isAppUrl = (target: string): boolean => {
     if (rendererUrl && target.startsWith(rendererUrl)) return true
-    if (target.startsWith('file://') && target.endsWith('/index.html')) return true
-    return target === 'about:blank'
+    // Allow self-reload and same-page fragment navigation (index.html#anchor).
+    return target === appFileUrl || target.startsWith(`${appFileUrl}#`) || target === 'about:blank'
   }
 
   const openExternal = (target: string): void => {

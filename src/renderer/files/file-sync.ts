@@ -23,6 +23,15 @@ export interface FileSyncApi {
   /** Stat the active tab's file and reload/prompt if it changed on disk.
    *  Pull-based — no background watcher. Safe to call any time. */
   checkActiveTab(): Promise<void>
+  /** Current disk baseline for a tab (post-write or post-stat), if any. Used
+   *  by the cache manager to persist the baseline into the session snapshot. */
+  getBaseline(tabId: string): { mtimeMs: number; size: number } | undefined
+  /** Seed the baseline from a session-cache snapshot (mtime/size captured at
+   *  flush time) instead of live-stat'ing the file. Must run BEFORE the
+   *  restored tab is created: the tabs subscription would otherwise adopt the
+   *  file's current on-disk state as the baseline, blinding the first
+   *  activation check to external changes made while the app was closed. */
+  seedFromSnapshot(tabId: string, filePath: string, mtimeMs: number, size: number): void
   dispose(): void
 }
 
@@ -44,6 +53,11 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
   const mtimes = new Map<string, { mtimeMs: number; size: number }>()
   // tabId → filePath we last baselined (detect save-as / external move)
   const knownPaths = new Map<string, string>()
+  // tabId → filePath we already toasted "已移动或删除" for. Without this, a
+  // vanished file re-toasts on every tab activation AND every window focus,
+  // with no way to dismiss — once per vanished path is enough. Cleared when
+  // the file reappears or the tab's path changes, so a later vanish re-warns.
+  const vanishedWarned = new Map<string, string>()
   // tabs whose check is already in flight (avoid re-entrancy on rapid switches)
   const inflight = new Set<string>()
 
@@ -94,13 +108,18 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
     if (inflight.has(tab.id)) return
     inflight.add(tab.id)
     try {
-      const st = await ctx.api.fileStat(tab.filePath)
+      const filePath = tab.filePath
+      const st = await ctx.api.fileStat(filePath)
       if (disposed || !st.success) return
       if (!st.exists) {
         mtimes.delete(tab.id)
-        showToast(`"${tab.title}" 已移动或删除`, 'error')
+        if (vanishedWarned.get(tab.id) !== filePath) {
+          vanishedWarned.set(tab.id, filePath)
+          showToast(`"${tab.title}" 已移动或删除`, 'error')
+        }
         return
       }
+      vanishedWarned.delete(tab.id)
       const last = mtimes.get(tab.id)
       if (!last) {
         // No baseline yet (recordMtime is async and may not have landed). Stamp
@@ -141,6 +160,7 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
       if (!live.has(id)) {
         knownPaths.delete(id)
         mtimes.delete(id)
+        vanishedWarned.delete(id)
       }
     }
   })
@@ -154,12 +174,20 @@ export function createFileSync(deps: FileSyncDeps): FileSyncApi {
       if (t?.filePath) knownPaths.set(tabId, t.filePath)
     },
     checkActiveTab,
+    getBaseline(tabId) {
+      return mtimes.get(tabId)
+    },
+    seedFromSnapshot(tabId, filePath, mtimeMs, size) {
+      knownPaths.set(tabId, filePath)
+      mtimes.set(tabId, { mtimeMs, size })
+    },
     dispose() {
       disposed = true
       unsubTabs()
       unsubActive()
       mtimes.clear()
       knownPaths.clear()
+      vanishedWarned.clear()
     },
   }
 }

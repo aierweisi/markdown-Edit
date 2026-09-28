@@ -22,7 +22,7 @@ export function registerAllIpc(ctx: IpcContext): void {
   registerStoreIpc(ctx.store)
   registerFsIpc()
   registerImageIpc()
-  registerDialogIpc(ctx.getWindow)
+  registerDialogIpc(ctx.getWindow, ctx.store)
   registerExportIpc(ctx.getWindow)
   registerShellIpc()
   registerWindowIpc(ctx.getWindow)

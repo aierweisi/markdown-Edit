@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import ElectronStore from 'electron-store'
 import type { StoreSchema } from '@shared/ipc'
 import type { MenuEventName } from '@shared/ipc'
@@ -17,6 +17,16 @@ import {
 
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
+
+// Last-resort handlers: without these, a rejected promise or thrown error on
+// the main process crashes the event loop's error reporting silently (or, for
+// a startup failure, leaves a windowless zombie process running in the tray).
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] unhandled rejection:', reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaught exception:', err)
+})
 
 // clearInvalidConfig makes electron-store reset a corrupted config.json to
 // defaults instead of throwing; the try/catch guards any remaining failure
@@ -103,14 +113,39 @@ if (!gotLock) {
   })
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) void createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      void createWindow()
+      return
+    }
+    // close-to-tray hides instead of destroying, so the hidden window still
+    // counts as "existing" — restore it, or clicking the dock icon could
+    // never bring the app back (only the tray could).
+    const win = getWindow()
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      if (!win.isVisible()) win.show()
+      win.focus()
+    }
   })
 
-  void app.whenReady().then(async () => {
-    const initial = extractFileArg(process.argv)
-    if (initial) setPending(initial)
+  app
+    .whenReady()
+    .then(async () => {
+      const initial = extractFileArg(process.argv)
+      if (initial) setPending(initial)
 
-    registerAllIpc({ store, getWindow, hasPendingFile, flushPendingFile: () => flushPendingFile(getWindow()) })
-    await createWindow()
-  })
+      registerAllIpc({ store, getWindow, hasPendingFile, flushPendingFile: () => flushPendingFile(getWindow()) })
+      await createWindow()
+    })
+    .catch((err) => {
+      console.error('[main] startup failed:', err)
+      void dialog
+        .showMessageBox({
+          type: 'error',
+          title: '启动失败',
+          message: `应用启动时出错：${err instanceof Error ? err.message : String(err)}`,
+          buttons: ['退出'],
+        })
+        .then(() => app.quit())
+    })
 }

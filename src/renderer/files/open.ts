@@ -22,7 +22,25 @@ export async function openFileViaDialog(deps: OpenDeps): Promise<void> {
   await openFileByPath(deps, result.filePaths[0])
 }
 
-export async function openFileByPath(deps: OpenDeps, filePath: string): Promise<void> {
+// In-flight open dedup: the workspace/recent panels fire onOpenFile per click
+// with no double-click suppression, and two rapid clicks for the same path
+// both pass the "already open?" check (it runs before the fileRead await) and
+// create duplicate tabs — each with its own file-sync baseline, prompting
+// "外部已修改" against the other. Concurrent opens of one path now share a
+// single flight; the second caller just awaits the first one's tab.
+const inFlightOpens = new Map<string, Promise<void>>()
+
+export function openFileByPath(deps: OpenDeps, filePath: string): Promise<void> {
+  const existingFlight = inFlightOpens.get(filePath)
+  if (existingFlight) return existingFlight
+  const flight = openFileByPathInner(deps, filePath).finally(() => {
+    inFlightOpens.delete(filePath)
+  })
+  inFlightOpens.set(filePath, flight)
+  return flight
+}
+
+async function openFileByPathInner(deps: OpenDeps, filePath: string): Promise<void> {
   const existing = deps.tabs.getAll().find((t) => t.filePath === filePath)
   if (existing) {
     deps.tabs.setActive(existing.id)

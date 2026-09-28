@@ -141,19 +141,13 @@ export function createPreview(opts: PreviewOpts): PreviewApi {
     const tmp = document.createElement('article')
     tmp.className = opts.body.className
     tmp.innerHTML = clean
-    morphdom(opts.body, tmp, {
-      childrenOnly: true,
-      onBeforeElUpdated(fromEl, toEl) {
-        // Preserve already-rendered mermaid blocks
-        if (
-          (fromEl as HTMLElement).classList?.contains('mermaid-block') &&
-          fromEl.isEqualNode(toEl as Node) === false
-        ) {
-          return false
-        }
-        return true
-      },
-    })
+    // No mermaid/math preservation hook here: morphdom matches nodes by tag,
+    // so an incoming <pre> (mermaid source) or raw "$…$" text node can never
+    // update the previously rendered div/span in place — a hook would only
+    // ever fire on unrelated same-tag elements and skip their real updates.
+    // Rendered nodes are instead cheaply re-created each pass from the
+    // module-level HTML caches in lazy-mermaid / lazy-katex.
+    morphdom(opts.body, tmp, { childrenOnly: true })
   }
 
   function reset(): void {

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Quality gate — commit 635ac64 shipped with 18 typecheck errors because this
+# check only ran when remembered. Keep it between the developer and git.
+npm run typecheck || {
+  echo "pre-commit: typecheck failed — fix errors before committing" >&2
+  exit 1
+}
+npx eslint src/ || {
+  echo "pre-commit: eslint failed — fix errors before committing" >&2
+  exit 1
+}

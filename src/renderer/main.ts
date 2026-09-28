@@ -9,18 +9,20 @@ import { mountTabBar } from './tabs/tab-bar'
 import { createCacheManager, exposeForMainProcess } from './cache/cache-manager'
 import { createRecentManager } from './recent/recent-files'
 import { openFileByPath, openFileViaDialog } from './files/open'
-import { saveActiveTab } from './files/save'
+import { saveActiveTab, serializeSave } from './files/save'
 import { createFileSync } from './files/file-sync'
 import { attachDragDrop } from './files/drag-drop'
 import { attachImagePaste } from './files/paste-image'
 import { exportMarkdown } from './export/export-md'
 import { exportHtml } from './export/export-html'
 import { exportPdf } from './export/export-pdf'
+import { copyRichText } from './export/copy-rich'
 import { createPalette } from './ui/palette'
 import { createSettingsPanel } from './ui/settings-panel'
 import { createRecentPanel } from './ui/recent-panel'
 import { createWorkspacePanel } from './ui/workspace-panel'
 import { createActivitybar, type ActivitybarApi } from './ui/activitybar'
+import { createSearchPanel } from './ui/search-panel'
 import { createTemplatesPanel } from './ui/templates-panel'
 import { openTableGrid } from './ui/table-grid-popover'
 import { initToolbarOverflow } from './ui/toolbar-overflow'
@@ -147,8 +149,6 @@ async function bootstrap(): Promise<void> {
   attachImageLightbox(dom.previewBody)
 
   const recent = createRecentManager(ctx)
-  const cache = createCacheManager({ ctx, tabs, editor })
-  exposeForMainProcess(cache)
 
   const statusBar = createStatusBar({ ctx })
   const palette = createPalette()
@@ -189,12 +189,24 @@ async function bootstrap(): Promise<void> {
       editor.jumpToLine(line)
     },
   })
+  const searchPanel = createSearchPanel({
+    ctx,
+    // Open the hit's file (switching to its tab if already open), then put
+    // the cursor on the matched line — jumpToLine also focuses the editor.
+    onOpenHit: (path, line) => {
+      void openFileByPath(
+        { ctx, tabs, editor, onContentLoaded: presentContent },
+        path,
+      ).then(() => editor.jumpToLine(line))
+    },
+  })
   // Reflect the heading currently in view as the active outline item.
   if (dom.previewContainer) outline.attachScrollSpy(dom.previewContainer)
   const activitybar = createActivitybar({
     ctx,
     workspace: workspacePanel,
     outline,
+    search: searchPanel,
     getEditorText: () => editor.getValue(),
   })
   activitybarRef.api = activitybar
@@ -228,13 +240,24 @@ async function bootstrap(): Promise<void> {
   // Reload a tab from disk when its file is modified externally (file-sync.ts).
   function reloadTabContent(tab: TabState, content: string): void {
     tabs.setContent(tab.id, content)
-    if (tabs.getActive()?.id !== tab.id) return
+    if (tabs.getActive()?.id !== tab.id) {
+      // Background tab: swapDoc only covers the active one, so explicitly drop
+      // the editor's cached state — otherwise switching back would restore the
+      // pre-reload document over the fresh content and a later save would
+      // silently overwrite the external change.
+      editor.invalidateTab(tab.id)
+      return
+    }
     const top = editor.getScrollTop()
     editor.swapDoc(content)
     editor.setScrollTop(top) // out-of-range values are clamped by the scroller
     presentContent(content)
   }
   const fileSync = createFileSync({ ctx, tabs, editor, reloadTab: reloadTabContent })
+  // Created after fileSync so the snapshot can embed each tab's disk baseline
+  // (see TabSnapshot.diskMtimeMs) — the first use is far below, at markDirty.
+  const cache = createCacheManager({ ctx, tabs, editor, diskBaseline: fileSync.getBaseline })
+  exposeForMainProcess(cache)
   const refreshOutlineDebounced = debounce((text: string) => {
     if (activitybar.isActive('outline')) outline.refresh(text)
   }, 150)
@@ -313,24 +336,36 @@ async function bootstrap(): Promise<void> {
     // getContent(id) always holds this tab's own text (switchActive stores it
     // back on the way out), so it's safe across the await below.
     const content = tabs.getContent(tab.id)
-    ctx.store.saving.set(true)
+    const filePath = tab.filePath
+    const tabId = tab.id
     try {
-      // create:false — fileSave refuses vanished paths (moved: true) instead
-      // of resurrecting the file at the old location; one IPC round-trip, no
-      // renderer-side pre-stat race window.
-      const result = await ctx.api.fileSave(tab.filePath, content)
+      // serializeSave queues behind any manual save still writing this tab —
+      // overlapping non-atomic writes could interleave or let the older
+      // snapshot land last. create:false — fileSave refuses vanished paths
+      // (moved: true) instead of resurrecting the file at the old location;
+      // one IPC round-trip, no renderer-side pre-stat race window.
+      const result = await serializeSave(tabId, async () => {
+        ctx.store.saving.set(true)
+        try {
+          return await ctx.api.fileSave(filePath, content)
+        } finally {
+          ctx.store.saving.set(false)
+        }
+      })
       if (result.success) {
-        tabs.markModified(tab.id, false)
+        // Only clear the dirty flag when the tab still holds the snapshot —
+        // keystrokes during the write must stay "modified" for the next pass.
+        if (tabs.getContent(tabId) === content) tabs.markModified(tabId, false)
         // Stamp the baseline with the post-write mtime/size straight from the
         // save result — synchronously, no second stat — so a focus-triggered
         // check can't slip in between the write and the baseline refresh and
         // false-fire "外部已更新".
-        fileSync.noteSaved(tab.id, result.mtimeMs, result.size)
+        fileSync.noteSaved(tabId, result.mtimeMs, result.size)
         // "已保存 时间" 由 status-bar 订阅 saving signal(saving→false)统一驱动
       } else if (result.moved) {
         // 原路径已被外部移动/删除:静默跳过,每个失效片段仅提示一次。
-        if (autosaveStaleWarned.get(tab.id) !== tab.filePath) {
-          autosaveStaleWarned.set(tab.id, tab.filePath)
+        if (autosaveStaleWarned.get(tabId) !== filePath) {
+          autosaveStaleWarned.set(tabId, filePath)
           showToast(`“${tab.title}” 的原路径已不存在,已跳过自动保存。请按 Ctrl+S 手动另存。`, 'error')
         }
       } else {
@@ -338,8 +373,6 @@ async function bootstrap(): Promise<void> {
       }
     } catch (err) {
       showToast(`自动保存失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
-    } finally {
-      ctx.store.saving.set(false)
     }
   }
 
@@ -366,6 +399,27 @@ async function bootstrap(): Promise<void> {
     document.documentElement.style.setProperty('--font-mono', next.editorFont)
     editor.setGutter(next.lineNumbers, next.codeFolding)
   })
+
+  // ── Editor font size: Ctrl+= / Ctrl+- / Ctrl+0 and Ctrl+wheel ───────
+  const FONT_MIN = 12
+  const FONT_MAX = 28
+  function setFontSize(next: number): void {
+    const s = ctx.store.settings()
+    const clamped = Math.min(FONT_MAX, Math.max(FONT_MIN, Math.round(next)))
+    if (clamped === s.fontSize) return
+    // settings.set drives the subscriber above (CSS var) and persistence is
+    // debounced by bindPersistence — nothing extra to do here.
+    ctx.store.settings.set({ ...s, fontSize: clamped })
+  }
+  document.getElementById('editor-pane')?.addEventListener(
+    'wheel',
+    (evt) => {
+      if (!evt.ctrlKey && !evt.metaKey) return
+      evt.preventDefault() // pinch-zoom / Ctrl+wheel would otherwise zoom the page
+      setFontSize(ctx.store.settings().fontSize + (evt.deltaY < 0 ? 1 : -1))
+    },
+    { passive: false },
+  )
 
   // ── Focus mode → hide chrome + typewriter scrolling ─────────────────
   ctx.store.focusMode.subscribe((on) => {
@@ -584,6 +638,21 @@ async function bootstrap(): Promise<void> {
   // ── Restore from cache or create blank tab ──────────────────────────
   const snapshot = await cache.loadSnapshot()
   if (snapshot && snapshot.tabs.length > 0) {
+    // Seed file-sync baselines from the flush-time disk state BEFORE the tabs
+    // are created. applySnapshot's tab creations fire the file-sync
+    // subscription, which live-stats each file and would adopt its current
+    // on-disk state as the baseline — blind to changes made while the app
+    // was closed. With the seed, the first activation check compares disk
+    // against the flush-time state and runs the normal reload/prompt flow.
+    for (const snap of snapshot.tabs) {
+      if (
+        snap.filePath &&
+        typeof snap.diskMtimeMs === 'number' &&
+        typeof snap.diskSize === 'number'
+      ) {
+        fileSync.seedFromSnapshot(snap.id, snap.filePath, snap.diskMtimeMs, snap.diskSize)
+      }
+    }
     cache.applySnapshot(snapshot)
     const active = tabs.getActive()
     if (active) {
@@ -676,7 +745,9 @@ async function bootstrap(): Promise<void> {
   })
   onBtnId('status-palette-hint', () => palette.open())
   // The hint ships as ⌘P; show Ctrl+P on the platforms whose keyboards have it.
-  dom.statusPaletteHint.textContent = ctx.api.platform === 'darwin' ? '⌘P' : 'Ctrl+P'
+  if (dom.statusPaletteHint) {
+    dom.statusPaletteHint.textContent = ctx.api.platform === 'darwin' ? '⌘P' : 'Ctrl+P'
+  }
 
   // v1 export menu (.export-wrap → .export-menu .export-item[data-type])
   const exportBtn = document.getElementById('btn-export')
@@ -1030,6 +1101,17 @@ async function bootstrap(): Promise<void> {
     },
   })
   palette.register({
+    id: 'edit.copy-rich',
+    group: '导出',
+    title: '复制为富文本（可粘贴到公众号/Word）',
+    hint: 'Ctrl+Alt+C',
+    run: () =>
+      void copyRichText({
+        ctx,
+        getContent: () => editor.getValue(),
+      }),
+  })
+  palette.register({
     id: 'view.focus',
     group: '视图',
     title: '专注模式',
@@ -1042,6 +1124,13 @@ async function bootstrap(): Promise<void> {
     title: '收起/展开工作区面板',
     hint: 'Ctrl+Shift+E',
     run: () => activitybar.toggleView('workspace'),
+  })
+  palette.register({
+    id: 'workspace.search',
+    group: '工作区',
+    title: '搜索工作区内容…',
+    hint: 'Ctrl+Shift+H',
+    run: () => activitybar.openView('search'),
   })
   palette.register({
     id: 'workspace.openFolder',
@@ -1062,7 +1151,23 @@ async function bootstrap(): Promise<void> {
 
     if (key === 's') {
       evt.preventDefault()
+      // OS key auto-repeat fires keydown ~30/s; a save per event would stack
+      // concurrent writes. The in-flight save already has the latest content.
+      if (evt.repeat) return
       void save(evt.shiftKey)
+    } else if (key === '=' || key === '+') {
+      evt.preventDefault()
+      setFontSize(ctx.store.settings().fontSize + 1)
+    } else if (key === '-') {
+      evt.preventDefault()
+      setFontSize(ctx.store.settings().fontSize - 1)
+    } else if (key === '0') {
+      evt.preventDefault()
+      setFontSize(DEFAULT_SETTINGS.fontSize)
+    } else if (key === 'c' && evt.altKey) {
+      // Ctrl+Alt+C — 复制为富文本 (Ctrl+C stays the native plain copy)
+      evt.preventDefault()
+      void copyRichText({ ctx, getContent: () => editor.getValue() })
     } else if (key === 'n' && !evt.shiftKey) {
       evt.preventDefault()
       newFile()
@@ -1131,6 +1236,9 @@ async function bootstrap(): Promise<void> {
     } else if (evt.shiftKey && key === 'o') {
       evt.preventDefault()
       activitybar.toggleView('outline')
+    } else if (evt.shiftKey && key === 'h') {
+      evt.preventDefault()
+      activitybar.openView('search')
     }
   })
 

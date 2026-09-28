@@ -249,6 +249,11 @@
         <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
         <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
         <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
+      </svg></button><button class="ab-item" id="ab-search" data-view="search" type="button"
+      title="搜索 (Ctrl+Shift+H)" aria-label="搜索工作区内容"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
       </svg></button></aside>
   <aside class="sidebar-host" id="sidebar-host">
     <section class="sidebar-view sidebar-view--workspace" data-view="workspace">
@@ -279,6 +284,7 @@
           </svg></button>
       </div>
     </div>
+    <div class="sidebar-path" id="ws-path" title="在资源管理器中显示工作区位置" role="button" tabindex="0" hidden></div>
     <div class="sidebar-search">
       <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21"
           x2="16.65" y2="16.65" /></svg><span class="sidebar-search-spinner" aria-hidden="true"></span><input
@@ -290,6 +296,25 @@
     <div class="sidebar-tree" id="file-tree"></div>
     </section>
     <section class="sidebar-view sidebar-view--outline" data-view="outline" id="outline-view"></section>
+    <section class="sidebar-view sidebar-view--search" data-view="search">
+      <div class="sidebar-header">
+        <button class="sidebar-title" id="sp-title" type="button" title="在工作区 Markdown 文件内容中搜索"><span
+            class="sidebar-title-name">搜索</span></button>
+        <div class="sidebar-actions">
+          <button class="sidebar-btn" id="sp-close" title="收起" aria-label="收起搜索"><svg aria-hidden="true"
+              viewBox="0 0 24 24">
+              <polyline points="15 18 9 12 15 6" />
+            </svg></button>
+        </div>
+      </div>
+      <div class="sidebar-search">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21"
+            x2="16.65" y2="16.65" /></svg><span class="sidebar-search-spinner" aria-hidden="true"></span><input
+          type="search" id="sp-input" class="sidebar-filter-input" placeholder="搜索工作区内容" aria-label="搜索工作区内容"
+          autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="sidebar-tree" id="sp-results"></div>
+    </section>
     <div class="sidebar-resizer" id="ws-resizer" role="separator" aria-orientation="vertical"
       aria-label="拖动调整工作区宽度"></div>
   </aside><!-- ── Main Area ───────────────────────────────────────── -->

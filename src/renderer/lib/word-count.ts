@@ -5,16 +5,50 @@
  * else. Digits, punctuation, whitespace, and non-CJK Unicode (e.g. Korean,
  * emoji) do not contribute.
  *
- * Two single-pass regex scans keep this O(n) and predictable for documents
- * up to a few MB; status bar callers debounce before invoking.
+ * Counted via char-code scans rather than text.match(): a match() result
+ * materializes an array with one single-char string per CJK character —
+ * megabytes of garbage per call on large Chinese documents. One O(n) pass,
+ * zero allocations; status bar callers debounce before invoking.
  */
-const CJK_RE = /[一-龥]/g
-const LATIN_WORD_RE = /[A-Za-z]+/g
+
+// CJK range [一-龥] = U+4E00..U+9FA5, as char codes.
+function isCjkCode(c: number): boolean {
+  return c >= 0x4e00 && c <= 0x9fa5
+}
+
+function isLatinCode(c: number): boolean {
+  return (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a)
+}
+
+// The exact set JS regex \s matches (code units), kept as a char-code test.
+function isWhitespaceCode(c: number): boolean {
+  return (
+    c === 0x20 ||
+    (c >= 0x09 && c <= 0x0d) ||
+    c === 0xa0 ||
+    c === 0x1680 ||
+    (c >= 0x2000 && c <= 0x200a) ||
+    c === 0x2028 ||
+    c === 0x2029 ||
+    c === 0x202f ||
+    c === 0x205f ||
+    c === 0x3000 ||
+    c === 0xfeff
+  )
+}
 
 export function countWords(text: string): number {
   if (!text) return 0
-  const cjk = text.match(CJK_RE)?.length ?? 0
-  const latin = text.match(LATIN_WORD_RE)?.length ?? 0
+  let cjk = 0
+  let latin = 0
+  let prevLatin = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    if (isCjkCode(c)) cjk++
+    const latinNow = isLatinCode(c)
+    if (latinNow && !prevLatin) latin++
+    prevLatin = latinNow
+  }
   return cjk + latin
 }
 
@@ -25,9 +59,10 @@ export interface CharCounts {
 
 export function countChars(text: string): CharCounts {
   if (!text) return { total: 0, noWhitespace: 0 }
-  // One regex pass instead of a per-character regex test: O(n) with a single
-  // matcher allocation rather than text.length separate ones.
-  const whitespace = text.match(/\s/g)?.length ?? 0
+  let whitespace = 0
+  for (let i = 0; i < text.length; i++) {
+    if (isWhitespaceCode(text.charCodeAt(i))) whitespace++
+  }
   return { total: text.length, noWhitespace: text.length - whitespace }
 }
 

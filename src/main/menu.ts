@@ -11,6 +11,16 @@ export function setupApplicationMenu(opts: MenuOpts): void {
     opts.sendToRenderer(channel)
   }
 
+  // Dev tools are development-only: in a packaged build they let anyone
+  // execute arbitrary JS in the renderer, which reaches the full fs IPC.
+  const devToolsItems: MenuItemConstructorOptions[] = app.isPackaged
+    ? []
+    : [
+        { type: 'separator' },
+        { role: 'reload', label: '刷新' },
+        { role: 'toggleDevTools', label: '开发者工具' },
+      ]
+
   const template: MenuItemConstructorOptions[] = [
     {
       label: '文件',
@@ -52,9 +62,8 @@ export function setupApplicationMenu(opts: MenuOpts): void {
         { label: '切换视图模式', accelerator: 'CmdOrCtrl+\\', click: dispatch(EV.MENU_TOGGLE_VIEW) },
         { label: '专注模式', accelerator: 'CmdOrCtrl+Shift+F', click: dispatch(EV.MENU_TOGGLE_FOCUS) },
         { label: '打开/切换工作区文件夹', click: dispatch(EV.MENU_OPEN_WORKSPACE) },
+        ...devToolsItems,
         { type: 'separator' },
-        { role: 'reload', label: '刷新' },
-        { role: 'toggleDevTools', label: '开发者工具' },
         { role: 'togglefullscreen', label: '全屏' },
       ],
     },
