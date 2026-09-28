@@ -38,6 +38,7 @@ import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
 import { attachFind } from './find/find-panel'
 import { attachTableMenu } from './editor/table/table-menu'
+import { showHistoryModal } from './ui/history-modal'
 import { debounce } from './lib/debounce'
 import { titleFromPath, getFileName, getDirAndSep, getExtension, sanitizeFileName } from './lib/fs-paths'
 import { refreshMermaidTheme } from './preview/lazy-mermaid'
@@ -189,6 +190,12 @@ async function bootstrap(): Promise<void> {
     onJump(line) {
       editor.jumpToLine(line)
     },
+    onOpenBacklink: (path, line) => {
+      void openFileByPath(
+        { ctx, tabs, editor, onContentLoaded: presentContent },
+        path,
+      ).then(() => editor.jumpToLine(line))
+    },
   })
   const searchPanel = createSearchPanel({
     ctx,
@@ -268,6 +275,12 @@ async function bootstrap(): Promise<void> {
   }
   ctx.store.activeTabId.subscribe(syncOutlineTitle)
   ctx.store.tabs.subscribe(syncOutlineTitle)
+  // Backlinks follow the active file (path changes fire the tabs signal too).
+  const refreshBacklinks = (): void => {
+    outline.refreshBacklinks(tabs.getActive()?.filePath ?? null)
+  }
+  ctx.store.activeTabId.subscribe(refreshBacklinks)
+  ctx.store.tabs.subscribe(refreshBacklinks)
   ctx.store.activeTabId.subscribe(() => {
     const t = tabs.getActive()
     activitybar.onActiveTabChange(t?.filePath ?? null)
@@ -541,6 +554,26 @@ async function bootstrap(): Promise<void> {
     onActivate: switchActive,
     onClose: closeTabAndUpdate,
     onNewTab: () => newFile(),
+    onShowHistory(id) {
+      const tab = tabs.getById(id)
+      if (!tab?.filePath) return
+      showHistoryModal(
+        {
+          ctx,
+          tabs,
+          onRestored: (restoredId, content) => {
+            // Refresh the live editor/preview only when that tab is showing.
+            if (ctx.store.activeTabId() === restoredId) {
+              editor.swapDoc(content)
+              presentContent(content)
+            }
+          },
+        },
+        id,
+        tab.filePath,
+        tab.title,
+      )
+    },
     onCloseOthers(id) {
       void closeMultiple(
         tabs

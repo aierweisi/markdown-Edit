@@ -114,6 +114,9 @@ export const CH = {
   WORKSPACE_LIST: 'workspace:list',
   WORKSPACE_SEARCH: 'workspace:search',
   WORKSPACE_LIST_ALL: 'workspace:list-all',
+  WORKSPACE_BACKLINKS: 'workspace:backlinks',
+  HISTORY_LIST: 'history:list',
+  HISTORY_READ: 'history:read',
   FILE_CREATE: 'file:create',
   FILE_DELETE: 'file:delete',
   WORKSPACE_RESOLVE_WIKI: 'workspace:resolve-wiki',
@@ -290,11 +293,20 @@ export const FileCreateReqSchema = z.object({ path: z.string().min(1), isDir: z.
 export const FileDeleteReqSchema = z.object({ path: z.string().min(1), isDir: z.boolean() })
 export const ResolveWikiReqSchema = z.string().min(1)
 export const WorkspaceSearchReqSchema = z.object({ query: z.string().trim().min(1).max(200) })
+export const HistoryReadReqSchema = z.object({ filePath: z.string().min(1), ts: z.number().int().nonnegative() })
 
 export type WorkspaceListResp = Result<{ entries: DirEntry[] }>
 export type WorkspaceResolveResp = Result<{ path: string }>
 export type WorkspaceSearchResp = Result<{ hits: SearchHit[]; truncated: boolean }>
 export type WorkspaceListAllResp = Result<{ root: string; files: string[]; truncated: boolean }>
+export type WorkspaceBacklinksResp = Result<{ hits: SearchHit[] }>
+export interface HistoryVersion {
+  /** mtime (ms) of the archived version — also its file name in the store. */
+  ts: number
+  size: number
+}
+export type HistoryListResp = Result<{ versions: HistoryVersion[] }>
+export type HistoryReadResp = Result<{ content: string }>
 
 // ── Result helpers ──────────────────────────────────────────────────────
 export type StoreSetResult = Result<{ key: string }>
@@ -354,6 +366,9 @@ export interface Api {
   workspaceResolveWiki(name: string): Promise<WorkspaceResolveResp>
   workspaceSearch(query: string): Promise<WorkspaceSearchResp>
   workspaceListAll(): Promise<WorkspaceListAllResp>
+  workspaceBacklinks(filePath: string): Promise<WorkspaceBacklinksResp>
+  historyList(filePath: string): Promise<HistoryListResp>
+  historyRead(filePath: string, ts: number): Promise<HistoryReadResp>
   clearCache(): Promise<ClearCacheResp>
   focusWindow(): Promise<void>
   hasPendingFile(): Promise<boolean>

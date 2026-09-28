@@ -13,6 +13,7 @@ import {
   type FileStatResp,
 } from '@shared/ipc'
 import { isPathSafe } from '../security/isPathSafe'
+import { archivePreviousVersion } from '../history'
 
 export function registerFsIpc(): void {
   ipcMain.handle(CH.FILE_READ, async (_event, filePath: unknown): Promise<FileReadResp> => {
@@ -58,6 +59,9 @@ export function registerFsIpc(): void {
             throw err
           }
         }
+        // Archive the on-disk version before it is overwritten (local history;
+        // throttled + content-deduped inside, best-effort — never blocks save).
+        await archivePreviousVersion(resolved)
         // Overwrite in place instead of write-temp + rename. A same-directory
         // temp file (xxx.md.tmp) surfaces a "new file" shell notification on
         // shell folders (e.g. Desktop); with auto-arrange on, that snaps the

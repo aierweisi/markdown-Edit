@@ -9,11 +9,15 @@ export interface OutlineApi {
   reRender(): void
   /** Highlight the item for the heading currently scrolled into view. */
   attachScrollSpy(scrollContainer: HTMLElement): () => void
+  /** Load the [[wiki]] backlinks for the active file (debounced, hidden when none). */
+  refreshBacklinks(filePath: string | null): void
 }
 
 interface OutlineOpts {
   ctx: AppContext
   onJump(line: number): void
+  /** A backlink was clicked — open its file at the linking line. */
+  onOpenBacklink?(path: string, line: number): void
   /** Called when the outline's own close button is clicked. */
   onClose?(): void
 }
@@ -31,6 +35,10 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
       <button type="button" class="outline-pane__close" title="收起">✕</button>
     </div>
     <div class="outline-pane__list" data-slot="list"></div>
+    <div class="outline-backlinks" data-slot="backlinks" hidden>
+      <div class="outline-backlinks__title">反向链接 <span data-slot="backlinks-count"></span></div>
+      <div class="outline-backlinks__list" data-slot="backlinks-list"></div>
+    </div>
   `
   // Mount into the sidebar host's outline view (the <section> in index.html).
   document.getElementById('outline-view')?.appendChild(panel)
@@ -44,6 +52,12 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
     const t = evt.target as HTMLElement
     if (t.closest('.outline-pane__close')) {
       opts.onClose?.()
+      return
+    }
+    const bt = t.closest<HTMLElement>('[data-bt-path]')
+    if (bt) {
+      const line = parseInt(bt.dataset.btLine ?? '0', 10)
+      opts.onOpenBacklink?.(bt.dataset.btPath ?? '', line)
       return
     }
     const item = t.closest<HTMLElement>('[data-line]')
@@ -138,6 +152,46 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
     highlightLine(activeLine)
   }
 
+  // ── Backlinks ([[wiki]] links pointing at the active file) ────────────
+  const backlinksEl = panel.querySelector<HTMLElement>('[data-slot="backlinks"]')!
+  const backlinksCountEl = panel.querySelector<HTMLElement>('[data-slot="backlinks-count"]')!
+  const backlinksListEl = panel.querySelector<HTMLElement>('[data-slot="backlinks-list"]')!
+  let backlinksToken = 0
+  let backlinksTimer: ReturnType<typeof setTimeout> | null = null
+
+  function refreshBacklinks(filePath: string | null): void {
+    if (backlinksTimer) clearTimeout(backlinksTimer)
+    if (!filePath) {
+      backlinksEl.hidden = true
+      return
+    }
+    const path = filePath
+    backlinksTimer = setTimeout(() => void loadBacklinks(path), 400)
+  }
+
+  async function loadBacklinks(filePath: string): Promise<void> {
+    const token = ++backlinksToken
+    const res = await opts.ctx.api.workspaceBacklinks(filePath)
+    if (token !== backlinksToken) return // superseded by a newer tab/path
+    if (!res.success || res.hits.length === 0) {
+      backlinksEl.hidden = true
+      return
+    }
+    backlinksEl.hidden = false
+    backlinksCountEl.textContent = `(${res.hits.length})`
+    backlinksListEl.innerHTML = res.hits
+      .map((h) => {
+        const name = h.path.replace(/\\/g, '/').split('/').pop() ?? h.path
+        return `<div class="backlink-item" data-bt-path="${escHtml(h.path)}" data-bt-line="${
+          h.line
+        }" title="${escHtml(h.path)}:${h.line}">
+          <span class="backlink-file">${escHtml(name)}</span>
+          <span class="backlink-text">${escHtml(h.text)}</span>
+        </div>`
+      })
+      .join('')
+  }
+
   return {
     refresh(text) {
       render(parseHeadings(text))
@@ -149,6 +203,7 @@ export function createOutlinePanel(opts: OutlineOpts): OutlineApi {
     reRender() {
       render(lastHeadings)
     },
+    refreshBacklinks,
     attachScrollSpy(scrollContainer: HTMLElement): () => void {
       spyEl = scrollContainer
       const onScroll = (): void => {

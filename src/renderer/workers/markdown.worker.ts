@@ -118,8 +118,29 @@ marked.use({
 
 // [[wiki link]] / [[target|alias]] → clickable link resolved against the
 // open workspace (see preview/render.ts click handler → workspaceResolveWiki).
+// Plus ==highlight== → <mark> (DOMPurify allows <mark> by default).
 marked.use({
   extensions: [
+    {
+      name: 'highlight',
+      level: 'inline',
+      start(src: string): number {
+        return src.indexOf('==')
+      },
+      tokenizer(src: string) {
+        // Non-space content only, so "a == b == c" prose stays untouched.
+        const m = src.match(/^==(?=\S)([\s\S]*?\S)==/)
+        if (!m) return undefined
+        return {
+          type: 'highlight',
+          raw: m[0],
+          tokens: this.lexer.inlineTokens(m[1]),
+        }
+      },
+      renderer(token): string {
+        return `<mark>${this.parser.parseInline(token.tokens ?? [])}</mark>`
+      },
+    },
     {
       name: 'wikiLink',
       level: 'inline',
@@ -153,11 +174,37 @@ function escape(s: string): string {
   })
 }
 
+// ── YAML front matter ───────────────────────────────────────────────────
+// Rendered as a key/value info box ABOVE the body instead of letting marked
+// see it (where `---` would become a thematic break / setext heading). The
+// block is stripped from the parsed text, so heading/task line pairing with
+// the source (which still counts the front matter lines) is unaffected —
+// front matter contributes no headings either way.
+const FRONT_MATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
+
+function renderFrontMatter(fm: string): string {
+  const rows: string[] = []
+  for (const line of fm.split(/\r?\n/)) {
+    const kv = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/)
+    if (kv) {
+      rows.push(
+        `<div class="fm-row"><span class="fm-key">${escape(kv[1]!)}</span><span class="fm-val">${escape(
+          kv[2] ?? '',
+        )}</span></div>`,
+      )
+    }
+  }
+  return rows.length > 0 ? `<div class="front-matter">${rows.join('')}</div>` : ''
+}
+
 self.onmessage = async (evt: MessageEvent<RenderRequest>): Promise<void> => {
   const { id, text } = evt.data
   try {
-    const html = await marked.parse(text)
-    const response: RenderResponse = { id, html: typeof html === 'string' ? html : String(html) }
+    const fm = text.match(FRONT_MATTER_RE)
+    const body = fm ? text.slice(fm[0].length) : text
+    const html = await marked.parse(body)
+    const full = (fm ? renderFrontMatter(fm[1]!) : '') + (typeof html === 'string' ? html : String(html))
+    const response: RenderResponse = { id, html: full }
     ;(self as unknown as Worker).postMessage(response)
   } catch (err) {
     const response: RenderResponse = {

@@ -11,6 +11,7 @@ interface TabBarOpts {
   onCloseOthers?(id: string): void
   onCloseRight?(id: string): void
   onRename?(id: string): void
+  onShowHistory?(id: string): void
   onNewTab?(): void
 }
 
@@ -109,6 +110,7 @@ export function mountTabBar(opts: TabBarOpts): () => void {
       onCloseOthers: opts.onCloseOthers,
       onCloseRight: opts.onCloseRight,
       onRename: opts.onRename,
+      onShowHistory: opts.onShowHistory,
     })
   }
 

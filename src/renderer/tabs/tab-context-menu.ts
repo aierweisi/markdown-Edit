@@ -13,6 +13,8 @@ interface ShowOpts {
   onCloseOthers?(id: string): void
   onCloseRight?(id: string): void
   onRename?(id: string): void
+  /** Open the local-history modal for a file-backed tab. */
+  onShowHistory?(id: string): void
 }
 
 interface MenuItem {
@@ -70,6 +72,11 @@ function buildItems(opts: ShowOpts): MenuItem[] {
         const res = await opts.ctx.api.shellShowItem(tab.filePath)
         if (!res.success) showToast(`打开失败: ${res.error}`, 'error')
       },
+    },
+    {
+      label: '查看历史版本',
+      disabled: !tab.filePath,
+      run: () => opts.onShowHistory?.(opts.tabId),
     },
   ]
 }

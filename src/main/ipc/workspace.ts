@@ -1,13 +1,14 @@
 import { ipcMain } from 'electron'
 import { readdirSync, statSync, realpathSync, mkdirSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
 import { readdir, stat, readFile, realpath } from 'node:fs/promises'
-import { join, basename, extname } from 'node:path'
+import { join, basename, extname, resolve as pathResolve } from 'node:path'
 import type Store from 'electron-store'
 import {
   CH,
   DirListReqSchema,
   FileCreateReqSchema,
   FileDeleteReqSchema,
+  FileStatReqSchema,
   ResolveWikiReqSchema,
   WorkspaceSearchReqSchema,
   type Result,
@@ -16,6 +17,7 @@ import {
   type WorkspaceListAllResp,
   type WorkspaceResolveResp,
   type WorkspaceSearchResp,
+  type WorkspaceBacklinksResp,
 } from '@shared/ipc'
 import type { DirEntry, SearchHit } from '@shared/types'
 import { isPathSafe } from '../security/isPathSafe'
@@ -120,6 +122,56 @@ export function registerWorkspaceIpc(store: Store<StoreSchema>): void {
     }
     return { success: true, root: r, files, truncated }
   })
+
+  ipcMain.handle(CH.WORKSPACE_BACKLINKS, async (_e, raw: unknown): Promise<WorkspaceBacklinksResp> => {
+    const parsed = FileStatReqSchema.safeParse(raw)
+    if (!parsed.success) return { success: false, error: 'invalid request' }
+    const r = root()
+    if (!r) return { success: false, error: 'no workspace' }
+    const resolved = pathResolve(parsed.data)
+    if (!isPathSafe(resolved, r)) return { success: false, error: 'out of workspace' }
+    return collectBacklinks(r, resolved)
+  })
+}
+
+/** Which workspace files link TO `targetPath` via [[wiki]] links. Matching
+ *  mirrors findByName semantics: the link target equals the file's basename
+ *  without extension, case-insensitively. */
+const WIKI_LINK_RE = /\[\[([^\]\n]+)\]\]/g
+const MAX_BACKLINKS = 200
+
+async function collectBacklinks(rootDir: string, targetPath: string): Promise<WorkspaceBacklinksResp> {
+  const target = basename(targetPath, extname(targetPath)).toLowerCase()
+  const hits: SearchHit[] = []
+  for await (const full of iterMarkdownFiles(rootDir)) {
+    if (full === targetPath) continue
+    let text: string
+    try {
+      text = await readFile(full, 'utf-8')
+    } catch {
+      continue
+    }
+    let lineStart = 0
+    let lineNum = 1
+    for (let i = 0; i <= text.length; i++) {
+      if (i === text.length || text[i] === '\n') {
+        const line = text.slice(lineStart, i)
+        WIKI_LINK_RE.lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = WIKI_LINK_RE.exec(line))) {
+          const linkTarget = (m[1].split('|')[0] ?? '').trim().toLowerCase()
+          if (linkTarget === target) {
+            hits.push({ path: full, line: lineNum, text: line.trim().slice(0, MAX_LINE_LEN) })
+            if (hits.length >= MAX_BACKLINKS) return { success: true, hits }
+            break // one hit per line suffices
+          }
+        }
+        lineStart = i + 1
+        lineNum++
+      }
+    }
+  }
+  return { success: true, hits }
 }
 
 /** Shared async walk of workspace markdown files: symlink-cycle-safe (realpath

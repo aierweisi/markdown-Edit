@@ -92,3 +92,32 @@ describe('workspace IPC: WORKSPACE_SEARCH', () => {
     }
   })
 })
+
+describe('workspace IPC: WORKSPACE_BACKLINKS', () => {
+  const backlinks = (p: unknown) => handles.get(CH.WORKSPACE_BACKLINKS)!({} as never, p)
+
+  it('finds files linking to the target via [[wiki]] (case-insensitive, one hit per line)', async () => {
+    writeFileSync(
+      join(rootDir, 'linker.md'),
+      'see [[b]] and [[B|alias]] and [[nope]]\nplain [[b]] line\n',
+    )
+    try {
+      const res = (await backlinks(join(rootDir, 'sub', 'b.md'))) as unknown as {
+        success: boolean
+        hits: Array<{ path: string; line: number }>
+      }
+      expect(res.success).toBe(true)
+      expect(res.hits).toHaveLength(2)
+      expect(res.hits[0]).toMatchObject({ line: 1 })
+      expect(res.hits[0]!.path.endsWith('linker.md')).toBe(true)
+      expect(res.hits[1]).toMatchObject({ line: 2 })
+    } finally {
+      rmSync(join(rootDir, 'linker.md'), { force: true })
+    }
+  })
+
+  it('errors for a path outside the workspace', async () => {
+    const outside = join(tmpdir(), `vitest-outside-${Date.now()}.md`)
+    await expect(backlinks(outside)).resolves.toMatchObject({ success: false })
+  })
+})
