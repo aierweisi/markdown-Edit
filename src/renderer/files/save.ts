@@ -131,7 +131,10 @@ export async function saveActiveTab(deps: SaveDeps, saveAs = false): Promise<Fil
       return saveActiveTab(deps, true)
     }
     console.error('[save] fileSave failed:', result.error)
-    showToast(`保存失败: ${result.error}`, 'error')
+    showToast(`保存失败: ${result.error}`, 'error', {
+      label: '重试',
+      run: () => void saveActiveTab(deps, saveAs),
+    })
   }
   return result
 }

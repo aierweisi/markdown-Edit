@@ -53,7 +53,8 @@ function generateFileName(mime: string): string {
   return `paste-${ts}.${ext}`
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
+/** Base64-encode a blob (used by paste-image and the mermaid PNG export). */
+export async function blobToBase64(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer()
   let binary = ''
   const bytes = new Uint8Array(buffer)

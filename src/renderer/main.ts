@@ -383,10 +383,16 @@ async function bootstrap(): Promise<void> {
           showToast(`“${tab.title}” 的原路径已不存在,已跳过自动保存。请按 Ctrl+S 手动另存。`, 'error')
         }
       } else {
-        showToast(`自动保存失败: ${result.error}`, 'error')
+        showToast(`自动保存失败: ${result.error}`, 'error', {
+          label: '立即保存',
+          run: () => void save(false),
+        })
       }
     } catch (err) {
-      showToast(`自动保存失败: ${err instanceof Error ? err.message : String(err)}`, 'error')
+      showToast(`自动保存失败: ${err instanceof Error ? err.message : String(err)}`, 'error', {
+        label: '立即保存',
+        run: () => void save(false),
+      })
     }
   }
 

@@ -15,6 +15,7 @@ import { searchKeymap } from '@codemirror/search'
 import { continueList } from '../lib/markdown-inline'
 import { formatKeymap } from './format-keymap'
 import { tableKeymap } from './table/table-keymap'
+import { urlPaste } from './url-paste'
 
 /** Holds the theme compartment so callers can swap light↔dark at runtime. */
 export const themeCompartment = new Compartment()
@@ -120,6 +121,7 @@ export function buildBaseExtensions(opts: BaseExtensionsOpts): Extension[] {
     tableKeymap,
     continueListKeymap,
     formatKeymap,
+    urlPaste,
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
   ]
 }
