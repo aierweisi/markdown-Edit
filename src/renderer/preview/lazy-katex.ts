@@ -16,7 +16,9 @@ export function loadKatex(): Promise<KatexApi> {
 // NOTE: intentionally no `g` flag. These are used only with .test() in hasMath();
 // a global flag would advance lastIndex across calls and silently miss matches.
 // Global matching in walkAndReplace uses `combined` (a fresh RegExp) instead.
-const INLINE_RE = /\$([^\n$]+?)\$/
+// Inline math must not have whitespace touching either delimiter — this is
+// what keeps prose like "$5 … $10" (currency amounts) from rendering as math.
+const INLINE_RE = /\$(\S(?:[^\n$]*\S)?)\$/
 const BLOCK_RE = /\$\$([\s\S]+?)\$\$/
 
 // Rendered-HTML cache, keyed by (mode, tex). The preview re-renders on every

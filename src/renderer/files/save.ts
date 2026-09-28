@@ -36,6 +36,13 @@ export function serializeSave<T>(tabId: string, run: () => Promise<T>): Promise<
   return next
 }
 
+/** Resolve once no save for `tabId` is queued or in flight (best effort —
+ *  used by close-discard flows so a just-fired autosave can't land after the
+ *  user chose "不保存"). */
+export function whenTabSaveSettled(tabId: string): Promise<unknown> {
+  return saveChains.get(tabId) ?? Promise.resolve()
+}
+
 /** The exclusive write for one tab: flips the saving signal, performs the IPC
  *  write and the post-save bookkeeping. Runs one-at-a-time per tab (queued by
  *  serializeSave). */
@@ -75,22 +82,31 @@ export async function saveActiveTab(deps: SaveDeps, saveAs = false): Promise<Fil
   let create = false
 
   if (!filePath || saveAs) {
-    const exportDir = (await deps.ctx.api.storeGet('exportDir')) ?? ''
-    const namingRule = (await deps.ctx.api.storeGet('exportNamingRule')) ?? '{title}_{date}'
+    // Hold the saving signal while the dialog is open: a pending autosave
+    // firing mid-dialog would write the OLD path with the current content,
+    // defeating a "save a copy / fork" intent.
+    deps.ctx.store.saving.set(true)
+    let dialog: Awaited<ReturnType<typeof deps.ctx.api.dialogSaveFile>>
+    try {
+      const exportDir = (await deps.ctx.api.storeGet('exportDir')) ?? ''
+      const namingRule = (await deps.ctx.api.storeGet('exportNamingRule')) ?? '{title}_{date}'
 
-    const baseName =
-      tab.title && tab.title !== '未命名'
-        ? sanitizeFileName(tab.title)
-        : resolveNamingRule(namingRule, { content })
+      const baseName =
+        tab.title && tab.title !== '未命名'
+          ? sanitizeFileName(tab.title)
+          : resolveNamingRule(namingRule, { content })
 
-    const defaultPath = exportDir ? `${exportDir}/${baseName}.md` : `${baseName}.md`
+      const defaultPath = exportDir ? `${exportDir}/${baseName}.md` : `${baseName}.md`
 
-    const dialog = await deps.ctx.api.dialogSaveFile({
-      defaultPath,
-      filters: [
-        { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkdn', 'mkd', 'mdwn', 'txt'] },
-      ],
-    })
+      dialog = await deps.ctx.api.dialogSaveFile({
+        defaultPath,
+        filters: [
+          { name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkdn', 'mkd', 'mdwn', 'txt'] },
+        ],
+      })
+    } finally {
+      deps.ctx.store.saving.set(false)
+    }
     if (dialog.canceled || !dialog.filePath) return null
     filePath = dialog.filePath
     create = true // fresh path from the dialog → allowed to create

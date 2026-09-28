@@ -56,7 +56,9 @@ export interface TabSnapshot {
   id: string
   title: string
   filePath: string | null
-  content: string
+  /** Omitted when the snapshot budget was exceeded for an unmodified
+   *  file-backed tab — restore re-reads those from disk (see cache-manager). */
+  content?: string
   modified: boolean
   scrollTop: number
   /** Disk mtime/size at flush time, from the file-sync baseline. Seeding the

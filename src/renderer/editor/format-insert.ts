@@ -52,9 +52,13 @@ function insertAtLineStart(view: EditorView, prefix: string): void {
     const line = state.doc.lineAt(range.from)
     const lineText = state.sliceDoc(line.from, line.to)
     if (lineText.startsWith(prefix)) {
+      // Cursor may sit inside the prefix itself — clamp so the shifted
+      // selection can't land before this line (on the previous one).
+      const from = Math.max(line.from, range.from - prefix.length)
+      const to = Math.max(line.from, range.to - prefix.length)
       return {
         changes: { from: line.from, to: line.from + prefix.length, insert: '' },
-        range: EditorSelection.range(range.from - prefix.length, range.to - prefix.length),
+        range: EditorSelection.range(from, to),
       }
     }
     return {

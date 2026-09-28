@@ -9,7 +9,7 @@ import { mountTabBar } from './tabs/tab-bar'
 import { createCacheManager, exposeForMainProcess } from './cache/cache-manager'
 import { createRecentManager } from './recent/recent-files'
 import { openFileByPath, openFileViaDialog } from './files/open'
-import { saveActiveTab, serializeSave } from './files/save'
+import { saveActiveTab, serializeSave, whenTabSaveSettled } from './files/save'
 import { createFileSync } from './files/file-sync'
 import { attachDragDrop } from './files/drag-drop'
 import { attachImagePaste } from './files/paste-image'
@@ -37,6 +37,7 @@ import { installModalFocusTrap } from './ui/focus-trap'
 import { attachSyncScroll } from './preview/sync-scroll'
 import { attachImageLightbox } from './preview/image-lightbox'
 import { attachFind } from './find/find-panel'
+import { attachTableMenu } from './editor/table/table-menu'
 import { debounce } from './lib/debounce'
 import { titleFromPath, getFileName, getDirAndSep, getExtension, sanitizeFileName } from './lib/fs-paths'
 import { refreshMermaidTheme } from './preview/lazy-mermaid'
@@ -457,6 +458,10 @@ async function bootstrap(): Promise<void> {
         if (ctx.store.activeTabId() !== id) switchActive(id)
         const ok = await save(false, id)
         if (!ok) return false
+      } else {
+        // "不保存": let any in-flight/queued autosave for this tab drain
+        // first, so its write can't land after the user chose to discard.
+        await whenTabSaveSettled(id)
       }
     }
     tabs.close(id)
@@ -500,6 +505,8 @@ async function bootstrap(): Promise<void> {
           if (ctx.store.activeTabId() !== id) switchActive(id)
           const ok = await save(false, id)
           if (!ok) break
+        } else {
+          await whenTabSaveSettled(id)
         }
       }
       confirmed.push(id)
@@ -653,7 +660,7 @@ async function bootstrap(): Promise<void> {
         fileSync.seedFromSnapshot(snap.id, snap.filePath, snap.diskMtimeMs, snap.diskSize)
       }
     }
-    cache.applySnapshot(snapshot)
+    await cache.applySnapshot(snapshot)
     const active = tabs.getActive()
     if (active) {
       const content = tabs.getContent(active.id)
@@ -743,7 +750,7 @@ async function bootstrap(): Promise<void> {
     const next = ctx.store.paneOrder() === 'preview-first' ? 'editor-first' : 'preview-first'
     ctx.store.paneOrder.set(next)
   })
-  onBtnId('status-palette-hint', () => palette.open())
+  onBtnId('status-palette-hint', () => openPalette())
   // The hint ships as ⌘P; show Ctrl+P on the platforms whose keyboards have it.
   if (dom.statusPaletteHint) {
     dom.statusPaletteHint.textContent = ctx.api.platform === 'darwin' ? '⌘P' : 'Ctrl+P'
@@ -843,7 +850,7 @@ async function bootstrap(): Promise<void> {
         void recentPanel.open()
         break
       case 'palette':
-        palette.open()
+        openPalette()
         break
       case 'view-toggle': {
         const idx = VIEW_MODES.indexOf(ctx.store.viewMode())
@@ -993,6 +1000,8 @@ async function bootstrap(): Promise<void> {
 
   // ── Find ────────────────────────────────────────────────────────────
   const find = attachFind(editor.view)
+  // Right-click inside a GFM table → row/column/alignment menu.
+  attachTableMenu(editor.view)
   installModalFocusTrap()
   // Overflow "⋯" for toolbar buttons that don't fit the row (after all buttons
   // above are bound, since menu items re-dispatch clicks on the originals).
@@ -1132,6 +1141,49 @@ async function bootstrap(): Promise<void> {
     hint: 'Ctrl+Shift+H',
     run: () => activitybar.openView('search'),
   })
+
+  // ── Palette file quick-open ─────────────────────────────────────────
+  // Ctrl+P opens the palette; workspace markdown files are mixed into it as
+  // dynamic commands (fuzzy over their relative paths). Indexed lazily with
+  // a short TTL so tree changes surface without a per-keystroke IPC walk.
+  const QUICK_FILE_PREFIX = 'quickfile:'
+  const QUICK_FILE_TTL_MS = 30_000
+  const QUICK_FILE_CAP = 500
+  const quickFileIds = new Set<string>()
+  let quickFileIndexedAt = 0
+  function refreshQuickFileCommands(): Promise<void> {
+    if (Date.now() - quickFileIndexedAt < QUICK_FILE_TTL_MS) return Promise.resolve()
+    quickFileIndexedAt = Date.now() // pessimistic stamp: failures also wait out the TTL
+    return (async () => {
+      const res = await ctx.api.workspaceListAll()
+      if (!res.success) return
+      for (const id of quickFileIds) palette.unregister(id)
+      quickFileIds.clear()
+      const rootN = res.root.replace(/\\/g, '/').replace(/\/+$/, '') + '/'
+      for (const p of res.files.slice(0, QUICK_FILE_CAP)) {
+        const id = QUICK_FILE_PREFIX + p
+        const rel = p.replace(/\\/g, '/').startsWith(rootN)
+          ? p.replace(/\\/g, '/').slice(rootN.length)
+          : p
+        palette.register({
+          id,
+          group: '文件',
+          title: rel,
+          run: () =>
+            void openFileByPath({ ctx, tabs, editor, onContentLoaded: presentContent }, p),
+        })
+        quickFileIds.add(id)
+      }
+      // The palette may already be open — re-filter so the files show up now.
+      palette.refresh()
+    })().catch(() => {
+      /* index refresh is best-effort */
+    })
+  }
+  function openPalette(): void {
+    void refreshQuickFileCommands()
+    palette.open()
+  }
   palette.register({
     id: 'workspace.openFolder',
     group: '文件',
@@ -1180,7 +1232,7 @@ async function bootstrap(): Promise<void> {
     } else if (key === 'p' && evt.shiftKey) {
       // Ctrl+Shift+P → palette (Ctrl+K is reserved for link insert)
       evt.preventDefault()
-      palette.open()
+      openPalette()
     } else if (key === ',') {
       evt.preventDefault()
       settingsPanel.open()

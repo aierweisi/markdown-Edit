@@ -545,6 +545,11 @@ body.ws-resizing #ws-resizer {
   font-size: 13px;
   color: var(--text-primary);
 }
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--border);
+}
 .context-menu-item:hover {
   background: var(--bg-hover);
 }

@@ -14,6 +14,7 @@ export interface PasteOpts {
  *  insert a markdown image reference at the cursor. Returns false on save failure. */
 export async function insertImageBlob(blob: Blob, opts: PasteOpts): Promise<boolean> {
   const active = opts.tabs.getActive()
+  const activeTabId = active?.id ?? null
   const baseDir = active?.filePath
     ? active.filePath.replace(/[\\/][^\\/]*$/, '')
     : null
@@ -26,6 +27,14 @@ export async function insertImageBlob(blob: Blob, opts: PasteOpts): Promise<bool
   if (!result.success) {
     console.error('[image] save failed:', result.error)
     showToast(`图片保存失败: ${result.error}`, 'error')
+    return false
+  }
+  // Several awaits elapsed (settings, compression, base64, IPC write) — if the
+  // user switched tabs meanwhile, inserting would put the link into the wrong
+  // document with a relative path resolved against the old tab's directory.
+  // The image file is already saved; only the link insert is abandoned.
+  if (opts.tabs.getActive()?.id !== activeTabId) {
+    showToast('已取消插入图片链接：粘贴期间切换了标签页', 'info')
     return false
   }
   opts.editor.insertText(`![](${result.relPath})`)

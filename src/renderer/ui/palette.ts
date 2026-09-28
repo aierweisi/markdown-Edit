@@ -13,6 +13,9 @@ export interface PaletteApi {
   unregister(id: string): void
   open(): void
   close(): void
+  /** Re-run the filter against the current input — for late-registered
+   *  commands (e.g. the workspace file index landing after open()). */
+  refresh(): void
 }
 
 export function createPalette(): PaletteApi {
@@ -133,5 +136,6 @@ export function createPalette(): PaletteApi {
     },
     open,
     close,
+    refresh,
   }
 }

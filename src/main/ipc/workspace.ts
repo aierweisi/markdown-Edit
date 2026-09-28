@@ -13,6 +13,7 @@ import {
   type Result,
   type StoreSchema,
   type WorkspaceListResp,
+  type WorkspaceListAllResp,
   type WorkspaceResolveResp,
   type WorkspaceSearchResp,
 } from '@shared/ipc'
@@ -104,23 +105,27 @@ export function registerWorkspaceIpc(store: Store<StoreSchema>): void {
     if (!r) return { success: false, error: 'no workspace' }
     return searchWorkspace(r, parsed.data.query)
   })
+
+  ipcMain.handle(CH.WORKSPACE_LIST_ALL, async (): Promise<WorkspaceListAllResp> => {
+    const r = root()
+    if (!r) return { success: false, error: 'no workspace' }
+    const files: string[] = []
+    let truncated = false
+    for await (const full of iterMarkdownFiles(r)) {
+      if (files.length >= MAX_LIST_ALL_FILES) {
+        truncated = true
+        break
+      }
+      files.push(full)
+    }
+    return { success: true, root: r, files, truncated }
+  })
 }
 
-// ── Full-text search ────────────────────────────────────────────────────
-// Async (never blocks the main process's sync IPC surface), symlink-cycle
-// safe via realpath dedup (same discipline as findByName), and capped so a
-// huge workspace can't produce an unbounded response.
-const MAX_SEARCH_FILES = 2000
-const MAX_SEARCH_HITS = 500
-const MAX_LINE_LEN = 200
-
-async function searchWorkspace(rootDir: string, query: string): Promise<WorkspaceSearchResp> {
-  const needle = query.toLowerCase()
-  const hits: SearchHit[] = []
+/** Shared async walk of workspace markdown files: symlink-cycle-safe (realpath
+ *  dedup), skips dotfiles and IGNORED dirs, never blocks the sync IPC surface. */
+async function* iterMarkdownFiles(rootDir: string): AsyncGenerator<string> {
   const visited = new Set<string>()
-  let truncated = false
-  let files = 0
-
   const queue: string[] = [rootDir]
   while (queue.length > 0) {
     const dir = queue.shift()!
@@ -146,39 +151,58 @@ async function searchWorkspace(rootDir: string, query: string): Promise<Workspac
         } catch {
           continue
         }
-        if (visited.has(real)) continue // symlink cycle / re-entry
+        if (visited.has(real)) continue
         visited.add(real)
         queue.push(full)
         continue
       }
-      if (!isMarkdown(n)) continue
-      files++
-      if (files > MAX_SEARCH_FILES) {
-        truncated = true
-        break
-      }
-      let text: string
-      try {
-        text = await readFile(full, 'utf-8')
-      } catch {
-        continue
-      }
-      let lineStart = 0
-      let lineNum = 1
-      for (let i = 0; i <= text.length; i++) {
-        if (i === text.length || text[i] === '\n') {
-          const line = text.slice(lineStart, i)
-          if (line.toLowerCase().includes(needle)) {
-            hits.push({
-              path: full,
-              line: lineNum,
-              text: line.length > MAX_LINE_LEN ? line.slice(0, MAX_LINE_LEN) + '…' : line,
-            })
-            if (hits.length >= MAX_SEARCH_HITS) return { success: true, hits, truncated: true }
-          }
-          lineStart = i + 1
-          lineNum++
+      if (isMarkdown(n)) yield full
+    }
+  }
+}
+
+// ── Full-text search ────────────────────────────────────────────────────
+// Async (never blocks the main process's sync IPC surface), symlink-cycle
+// safe via the shared iterator, and capped so a huge workspace can't produce
+// an unbounded response.
+const MAX_SEARCH_FILES = 2000
+const MAX_SEARCH_HITS = 500
+const MAX_LINE_LEN = 200
+const MAX_LIST_ALL_FILES = 5000
+
+async function searchWorkspace(rootDir: string, query: string): Promise<WorkspaceSearchResp> {
+  const needle = query.toLowerCase()
+  const hits: SearchHit[] = []
+  let truncated = false
+  let files = 0
+
+  for await (const full of iterMarkdownFiles(rootDir)) {
+    files++
+    if (files > MAX_SEARCH_FILES) {
+      truncated = true
+      break
+    }
+    let text: string
+    try {
+      text = await readFile(full, 'utf-8')
+    } catch {
+      continue
+    }
+    let lineStart = 0
+    let lineNum = 1
+    for (let i = 0; i <= text.length; i++) {
+      if (i === text.length || text[i] === '\n') {
+        const line = text.slice(lineStart, i)
+        if (line.toLowerCase().includes(needle)) {
+          hits.push({
+            path: full,
+            line: lineNum,
+            text: line.length > MAX_LINE_LEN ? line.slice(0, MAX_LINE_LEN) + '…' : line,
+          })
+          if (hits.length >= MAX_SEARCH_HITS) return { success: true, hits, truncated: true }
         }
+        lineStart = i + 1
+        lineNum++
       }
     }
   }

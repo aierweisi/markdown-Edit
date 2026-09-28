@@ -45,6 +45,7 @@ const api: Api = {
   fileDelete: (path, isDir) => ipcRenderer.invoke(CH.FILE_DELETE, path, isDir),
   workspaceResolveWiki: (name) => ipcRenderer.invoke(CH.WORKSPACE_RESOLVE_WIKI, name),
   workspaceSearch: (query) => ipcRenderer.invoke(CH.WORKSPACE_SEARCH, { query }),
+  workspaceListAll: () => ipcRenderer.invoke(CH.WORKSPACE_LIST_ALL),
   clearCache: () => ipcRenderer.invoke(CH.CLEAR_CACHE),
   focusWindow: () => ipcRenderer.invoke(CH.FOCUS_WINDOW),
   hasPendingFile: () => ipcRenderer.invoke(CH.HAS_PENDING_FILE),

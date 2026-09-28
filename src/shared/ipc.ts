@@ -113,6 +113,7 @@ export const CH = {
   REQUEST_PENDING_FILE: 'system:request-pending-file',
   WORKSPACE_LIST: 'workspace:list',
   WORKSPACE_SEARCH: 'workspace:search',
+  WORKSPACE_LIST_ALL: 'workspace:list-all',
   FILE_CREATE: 'file:create',
   FILE_DELETE: 'file:delete',
   WORKSPACE_RESOLVE_WIKI: 'workspace:resolve-wiki',
@@ -238,7 +239,7 @@ export const TabSnapshotSchema = z.object({
   id: z.string(),
   title: z.string(),
   filePath: z.string().nullable(),
-  content: z.string(),
+  content: z.string().optional(),
   modified: z.boolean(),
   scrollTop: z.number(),
   // Disk baseline at flush time (session-restore change detection); absent in
@@ -293,6 +294,7 @@ export const WorkspaceSearchReqSchema = z.object({ query: z.string().trim().min(
 export type WorkspaceListResp = Result<{ entries: DirEntry[] }>
 export type WorkspaceResolveResp = Result<{ path: string }>
 export type WorkspaceSearchResp = Result<{ hits: SearchHit[]; truncated: boolean }>
+export type WorkspaceListAllResp = Result<{ root: string; files: string[]; truncated: boolean }>
 
 // ── Result helpers ──────────────────────────────────────────────────────
 export type StoreSetResult = Result<{ key: string }>
@@ -351,6 +353,7 @@ export interface Api {
   fileDelete(path: string, isDir: boolean): Promise<Result>
   workspaceResolveWiki(name: string): Promise<WorkspaceResolveResp>
   workspaceSearch(query: string): Promise<WorkspaceSearchResp>
+  workspaceListAll(): Promise<WorkspaceListAllResp>
   clearCache(): Promise<ClearCacheResp>
   focusWindow(): Promise<void>
   hasPendingFile(): Promise<boolean>

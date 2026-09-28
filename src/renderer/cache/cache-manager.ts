@@ -6,6 +6,13 @@ import type { CacheEntry, TabSnapshot } from '@shared/types'
 /** Bump when CacheEntry/TabSnapshot shape changes; old caches are discarded. */
 const CACHE_VERSION = 1
 
+/** Total content budget for one snapshot (UTF-16 code units as a proxy).
+ *  Beyond it, unmodified file-backed tabs are stored WITHOUT content and
+ *  re-read from disk on restore — their disk copy is authoritative anyway.
+ *  The active tab and anything with unsaved edits never gets trimmed, so no
+ *  unsaved work is ever dropped for the budget's sake. */
+const SNAPSHOT_BUDGET = 8 * 1024 * 1024
+
 interface CacheDeps {
   ctx: AppContext
   tabs: TabManager
@@ -22,7 +29,7 @@ export interface CacheManager {
   saveAll(): Promise<void>
   markDirty(): void
   loadSnapshot(): Promise<CacheEntry | null>
-  applySnapshot(entry: CacheEntry): void
+  applySnapshot(entry: CacheEntry): Promise<void>
 }
 
 export function createCacheManager(deps: CacheDeps): CacheManager {
@@ -36,15 +43,25 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
     const editorContent = deps.editor.getValue()
     const activeId = deps.ctx.store.activeTabId()
 
-    const snapshots: TabSnapshot[] = tabs.map((t) => {
+    // Budget order: must-keep tabs (active / unsaved / untitled) first, then
+    // the rest in recency order; sort is stable so same-rank tabs keep order.
+    const rank = (t: { id: string; filePath: string | null; modified: boolean }): number =>
+      t.id === activeId || t.modified || !t.filePath ? 1 : 0
+    const ordered = [...tabs].sort((a, b) => rank(b) - rank(a))
+
+    let budget = SNAPSHOT_BUDGET
+    const snapshots: TabSnapshot[] = ordered.map((t) => {
       const disk = deps.diskBaseline?.(t.id)
+      const content = t.id === activeId ? editorContent : deps.tabs.getContent(t.id)
+      // For the active tab, always read the live editor content so we don't
+      // race with the editor-onChange → tab.setContent debounce.
+      const keepContent = rank(t) === 1 || content.length <= budget
+      if (keepContent && rank(t) === 0) budget -= content.length
       return {
         id: t.id,
         title: t.title,
         filePath: t.filePath,
-        // For the active tab, always read the live editor content so we don't
-        // race with the editor-onChange → tab.setContent debounce.
-        content: t.id === activeId ? editorContent : deps.tabs.getContent(t.id),
+        content: keepContent ? content : undefined,
         modified: t.modified,
         scrollTop: t.id === activeId ? deps.editor.getScrollTop() : 0,
         diskMtimeMs: disk?.mtimeMs,
@@ -113,17 +130,29 @@ export function createCacheManager(deps: CacheDeps): CacheManager {
         return null
       return entry
     },
-    applySnapshot(entry) {
+    async applySnapshot(entry) {
       // Recreate each tab with its persisted id so active-tab matching (and
       // tab order) stays stable across restarts, instead of matching by title.
       for (const snap of entry.tabs) {
+        let content = snap.content
+        let modified = snap.modified
+        if (content === undefined) {
+          // Budget-trimmed snapshot of an unmodified file-backed tab — the
+          // disk copy is authoritative; re-read it. A vanished file skips the
+          // tab rather than restoring an empty shell over it.
+          if (!snap.filePath) continue
+          const read = await deps.ctx.api.fileRead(snap.filePath)
+          if (!read.success) continue
+          content = read.content
+          modified = false
+        }
         const tab = deps.tabs.create({
           id: snap.id,
           title: snap.title,
           filePath: snap.filePath,
-          content: snap.content,
+          content,
         })
-        deps.tabs.markModified(tab.id, snap.modified)
+        deps.tabs.markModified(tab.id, modified)
       }
       const all = deps.tabs.getAll()
       const activeMatch = entry.activeTabId ? all.find((t) => t.id === entry.activeTabId) : all[0]
